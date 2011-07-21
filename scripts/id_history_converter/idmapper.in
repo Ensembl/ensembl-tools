@@ -1,0 +1,13 @@
+# Example input file for the IDmapper.pl program.
+#
+# Using this file:
+#   ./IDmapper.pl -s human -f idmapper.in
+
+ENSG00000137360 # This stable ID should not return any history.
+ENSG00000137361
+ENSG00000137362
+ENSG00000161853
+ENSG00000187888
+ENSG00000206366
+ENSG00000206366
+ENSG00000206461

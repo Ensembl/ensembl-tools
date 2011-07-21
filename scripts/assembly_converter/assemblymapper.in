@@ -1,0 +1,31 @@
+# Example input file for the AssemblyMapper.pl program.
+#
+# Using this file:
+#
+#   ./AssemblyMapper.pl -s human -f assemblymapper.in
+#
+# Expected output (for Ensembl release 57):
+#
+# # chromosome:NCBI34:7:490000:500000:1
+# chromosome:NCBI34:7:490000:491083:1,chromosome:GRCh37:7:744919:746002:1
+# chromosome:NCBI34:7:491084:491139:1,chromosome:GRCh37:7:746004:746059:1
+# chromosome:NCBI34:7:491151:491313:1,chromosome:GRCh37:7:746060:746222:1
+# chromosome:NCBI34:7:491316:493838:1,chromosome:GRCh37:7:746223:748745:1
+# chromosome:NCBI34:7:493839:494098:1,chromosome:GRCh37:7:748749:749008:1
+# chromosome:NCBI34:7:494099:500000:1,chromosome:GRCh37:7:749010:754911:1
+#
+# # chromosome:NCBI35:7:490000:500000:1
+# chromosome:NCBI35:7:490000:498925:1,chromosome:GRCh37:7:715996:724921:1
+# chromosome:NCBI35:7:498926:499002:1,chromosome:GRCh37:7:724946:725022:1
+# chromosome:NCBI35:7:499007:500000:1,chromosome:GRCh37:7:725023:726016:1
+#
+# # chromosome:NCBI36:7:490000:500000:1
+# chromosome:NCBI36:7:490000:500000:1,chromosome:GRCh37:7:523474:533474:1
+#
+# # chromosome:GRCh37:7:490000:500000:1
+# chromosome:GRCh37:7:490000:500000:1,chromosome:GRCh37:7:490000:500000:1
+
+:NCBI34:7:490000:500000:    # a slice on chromosome 7 on the NCBI34 assembly
+:NCBI35:7:490000:500000:    # a slice on the NCBI35 assembly
+:NCBI36:7:490000:500000:    # etc.
+:GRCh37:7:490000:500000:
