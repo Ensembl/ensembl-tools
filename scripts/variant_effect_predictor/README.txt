@@ -35,8 +35,35 @@ http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 Changelog
 =========
 
-Version 2.1
------------
+Version 2.2 (September 2011)
+----------------------------
+
+- SIFT, PolyPhen and Condel predictions and regulatory features now accessible
+  from the cache
+
+- Support for calling consequences against RefSeq transcripts
+
+- Variant identifiers (e.g. dbSNP rsIDs) and HGVS notations supported as input
+  format
+
+- Variants can now be filtered by frequency in HapMap and 1000 genomes
+  populations
+
+- Script can be used to convert files between formats (Ensembl/VCF/Pileup/HGVS
+  to Ensembl/VCF/Pileup)
+
+- Large amount of code moved to API modules to ensure consistency between web
+  and script VEP
+  
+- Memory usage optimisations
+
+- VEP script moved to ensembl-tools CVS module
+
+- Added --canonical, --per_gene and --no_intergenic options
+
+
+Version 2.1 (June 2011)
+-----------------------
 
 - ability to use local file cache in place of or alongside connecting to an
   Ensembl database
@@ -55,8 +82,8 @@ Version 2.1
 - full documentation now online
 
 
-Version 2.0
------------
+Version 2.0 (April 2011)
+------------------------
 
 Version 2.0 of the Variant Effect Predictor script (VEP) constitutes a complete
 overhaul of both the script and the API behind it. It requires at least version
