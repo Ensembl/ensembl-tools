@@ -43,7 +43,6 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
     dump_adaptor_cache
     get_all_consequences
     get_slice
-    scan_file
     build_full_cache
     read_cache_info
     get_time
@@ -251,7 +250,6 @@ sub configure {
         'cache',                   # use cache
         'write_cache',             # enables writing to the cache
         'build=s',                 # builds cache from DB from scratch; arg is either all (all top-level seqs) or a list of chrs
-        'scan',                    # scan the whole input file at the beginning to get regions
         'prefetch',                # prefetch exons, translation, introns, codon table etc for each transcript
         'strip',                   # strips adaptors etc from objects before caching them
         'rebuild=s',               # rebuilds cache by reading in existing then redumping - probably don't need to use this any more
@@ -346,8 +344,8 @@ sub configure {
         die "ERROR: $tool not available in standalone mode\n" if defined($config->{standalone});
         
         # use V2 of the Condel algorithm, possibly gives fewer false positives
-        if($tool eq 'Condel' && $config->{lc($tool)} =~ /2$/) {
-            $Bio::EnsEMBL::Variation::Utils::Condel::USE_V2 = 1;
+        if($tool eq 'Condel' && $config->{lc($tool)} =~ /1$/) {
+            $Bio::EnsEMBL::Variation::Utils::Condel::USE_V2 = 0;
         }
     }
     
@@ -1061,7 +1059,8 @@ Options
 --sift=[p|s|b]         Add SIFT [p]rediction, [s]core or [b]oth [default: off]
 --polyphen=[p|s|b]     Add PolyPhen [p]rediction, [s]core or [b]oth [default: off]
 --condel=[p|s|b]       Add Condel SIFT/PolyPhen consensus [p]rediction, [s]core or
-                       [b]oth [default: off]
+                       [b]oth. Add 1 (e.g. b1) to option to use old Condel algorithm
+                       [default: off]
 
 NB: SIFT, PolyPhen and Condel predictions are currently available for human only
 
