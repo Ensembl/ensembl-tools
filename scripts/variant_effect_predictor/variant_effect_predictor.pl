@@ -476,11 +476,13 @@ INTRO
     if(defined($config->{regulatory})) {
         # do the use statements here so that users don't have to have the
         # funcgen API install to use the rest of the script
-        use Bio::EnsEMBL::Funcgen::DBSQL::RegulatoryFeatureAdaptor;
-        use Bio::EnsEMBL::Funcgen::DBSQL::MotifFeatureAdaptor;
-        use Bio::EnsEMBL::Funcgen::MotifFeature;
-        use Bio::EnsEMBL::Funcgen::RegulatoryFeature;
-        use Bio::EnsEMBL::Funcgen::BindingMatrix;
+        eval q{
+            use Bio::EnsEMBL::Funcgen::DBSQL::RegulatoryFeatureAdaptor;
+            use Bio::EnsEMBL::Funcgen::DBSQL::MotifFeatureAdaptor;
+            use Bio::EnsEMBL::Funcgen::MotifFeature;
+            use Bio::EnsEMBL::Funcgen::RegulatoryFeature;
+            use Bio::EnsEMBL::Funcgen::BindingMatrix;
+        };
     }
     
     # warn user cache directory doesn't exist
@@ -561,7 +563,7 @@ INTRO
         my $width;
         
         # module may not be installed
-        eval {
+        eval q{
             use Term::ReadKey;
         };
         
