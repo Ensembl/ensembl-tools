@@ -245,6 +245,7 @@ sub configure {
         'regulatory',              # enable regulatory stuff
         'convert=s',               # convert input to another format (doesn't run VEP)
         'no_intergenic',           # don't print out INTERGENIC consequences
+        'gvf',                     # produce gvf output
         
         # cache stuff
         'cache',                   # use cache
@@ -483,6 +484,10 @@ INTRO
             use Bio::EnsEMBL::Funcgen::RegulatoryFeature;
             use Bio::EnsEMBL::Funcgen::BindingMatrix;
         };
+        
+        if($@) {
+            die("ERROR: Ensembl Funcgen API must be installed to use --regulatory\n");
+        }
     }
     
     # warn user cache directory doesn't exist
@@ -812,6 +817,11 @@ sub get_out_file_handle {
         return $out_file_handle;
     }
     
+    # GVF output, no header
+    elsif(defined($config->{gvf})) {
+        return $out_file_handle;
+    }
+    
     # make header
     my $time = &get_time;
     my $db_string = $config->{mca}->dbc->dbname." on ".$config->{mca}->dbc->host if defined $config->{mca};
@@ -902,7 +912,7 @@ sub convert_to_vcf {
         my $prev_base = 'N';
         
         unless(defined($config->{cache})) {
-            my $slice = $vf->slice->sub_Slice($vf->start - 1, $vf->start -1);
+            my $slice = $vf->slice->sub_Slice($vf->start - 1, $vf->start - 1);
             $prev_base = $slice->seq if defined($slice);
         }
         
@@ -1007,13 +1017,21 @@ sub print_line {
     my $config = shift;
     my $line = shift;
     return unless defined($line);
-
-    $line->{Extra} = join ';', map { $_.'='.$line->{Extra}->{$_} } keys %{ $line->{Extra} || {} };
-
-    my $output = join "\t", map { $line->{$_} || '-' } @OUTPUT_COLS;
-
+    
+    my $output;
+    
+    # normal
+    if(ref($line) eq 'HASH') {
+        $line->{Extra} = join ';', map { $_.'='.$line->{Extra}->{$_} } keys %{ $line->{Extra} || {} };
+        $output = join "\t", map { $line->{$_} || '-' } @OUTPUT_COLS;
+    }
+    
+    # gvf
+    else {
+        $output = $line;
+    }
+    
     my $fh = $config->{out_file_handle};
-
     print $fh "$output\n";
 }
 
