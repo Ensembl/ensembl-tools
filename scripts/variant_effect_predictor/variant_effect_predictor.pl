@@ -94,9 +94,6 @@ sub main {
         # some lines (pileup) may actually parse out into more than one variant
         foreach my $vf(@{&parse_line($config, $_)}) {
             
-            # validate the VF
-            next unless validate_vf($config, $vf);
-            
             # now get the slice
             if(!defined($vf->{slice})) {
                 my $slice;
@@ -128,7 +125,10 @@ sub main {
                 
                 $vf->{slice} = $slice;
             }
-            
+           
+            # validate the VF
+            next unless validate_vf($config, $vf);
+ 
             # make a name if one doesn't exist
             $vf->{variation_name} ||= $vf->{chr}.'_'.$vf->{start}.'_'.$vf->{allele_string};
             
