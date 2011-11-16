@@ -182,6 +182,8 @@ sub configure {
     my $args = shift;
     
     my $config = {};
+
+    $config->{plugin} = [];
     
     GetOptions(
         $config,
@@ -266,6 +268,8 @@ sub configure {
         'count_queries',           # counts SQL queries executed
         'admin',                   # allows me to build off public hosts
         'debug',                   # print out debug info
+        
+        'plugin=s',
     );
     
     # print usage message if requested or no args supplied
@@ -355,7 +359,8 @@ sub configure {
         delete $config->{verbose} if defined($config->{verbose});
         $config->{quiet} = 1;
     }
-    
+
+   
     # summarise options if verbose
     if(defined $config->{verbose}) {
         my $header =<<INTRO;
@@ -636,7 +641,9 @@ INTRO
         
         $config->{chr} = \%chrs;
     }
-    
+   
+    configure_plugins($config);
+
     # get input file handle
     $config->{in_file_handle} = &get_in_file_handle($config);
     
@@ -644,6 +651,58 @@ INTRO
     $config->{out_file_handle} = &get_out_file_handle($config);
     
     return $config;
+}
+
+sub configure_plugins {
+
+    my $config = shift;
+
+    if (my @plugins = @{ $config->{plugin} }) {
+        
+        # we turn config->{plugin} into a hash of plugin 
+        # instances keyed by plugin name
+            
+        $config->{plugin} = {};
+
+        use lib "$ENV{HOME}/.vep/Plugins";
+        
+        for my $plugin (@plugins) {
+                
+            # first check we can use the module
+
+            eval qq{
+                use $plugin;
+            };
+            if ($@) {
+                die "Failed to compile plugin $plugin: $@";
+            }
+            
+            # now check we can instantiate it
+
+            my $instance;
+
+            eval {
+                $instance = $plugin->new($config);
+            };
+            if ($@) {
+                die "Failed to instantiate plugin $plugin: $@";
+            }
+
+            # and finally check that it implements all necessary methods
+                
+            for my $required qw(run prefetch get_header_info check_feature_type) {
+                unless ($plugin->can($required)) {
+                    die "$plugin doesn't implement a required plugin method '$required', does it inherit from BasePlugin?";
+                }
+            }
+
+            # all's good, so save the instance
+
+            $config->{plugin}->{$plugin} = $instance;
+        
+            print "Using plugin: $plugin\n" if $config->{verbose}; 
+        }
+    }
 }
 
 # connects to DBs; in standalone mode this just loads registry module
@@ -778,6 +837,24 @@ sub get_in_file_handle {
     return $in_file_handle;
 }
 
+sub get_plugin_headers {
+
+    my $config = shift;
+
+    my $header = "";
+
+    for my $plugin (keys %{ $config->{plugin} }) {
+        if (my $hdr = $plugin->get_header_info) {
+            for my $key (keys %$hdr) {
+                my $val = $hdr->{$key};
+                $header .= "## $key\t: $val\n";
+            }
+        }
+    }
+
+    return $header;
+}
+
 # gets file handle for output and adds header
 sub get_out_file_handle {
     my $config = shift;
@@ -847,7 +924,9 @@ sub get_out_file_handle {
 ## MATRIX       : The source and identifier of a transcription factor binding profile aligned at this position
 ## HIGH_INF_POS : A flag indicating if the variant falls in a high information position of a transcription factor binding profile
 HEAD
-    
+   
+    $header .= get_plugin_headers($config);
+
     # add headers
     print $out_file_handle $header;
     
