@@ -39,6 +39,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
     parse_line
     vf_to_consequences
     validate_vf
+    convert_to_vcf
     load_dumped_adaptor_cache
     dump_adaptor_cache
     get_all_consequences
@@ -49,10 +50,11 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
     debug
     @OUTPUT_COLS
     @REG_FEAT_TYPES
+    %FILTER_SHORTCUTS
 );
 
 # global vars
-my $VERSION = '2.2';
+my $VERSION = '2.3';
 
 # set output autoflush for progress bars
 $| = 1;
@@ -89,10 +91,20 @@ sub main {
         $config->{line_number}++;
         
         # header line?
-        next if /^\#/;
+        if(/^\#/) {
+            if(defined($config->{vcf})) {
+                push @{$config->{headers}}, $_;
+            }
+            next;
+        }
+        
+        # configure output file
+        $config->{out_file_handle} ||= &get_out_file_handle($config);
         
         # some lines (pileup) may actually parse out into more than one variant
         foreach my $vf(@{&parse_line($config, $_)}) {
+            
+            $vf->{_line} = $_ ;#if defined($config->{vcf}) || defined($config->{original});
             
             # now get the slice
             if(!defined($vf->{slice})) {
@@ -125,10 +137,10 @@ sub main {
                 
                 $vf->{slice} = $slice;
             }
-           
+            
             # validate the VF
             next unless validate_vf($config, $vf);
- 
+            
             # make a name if one doesn't exist
             $vf->{variation_name} ||= $vf->{chr}.'_'.$vf->{start}.'_'.$vf->{allele_string};
             
@@ -170,6 +182,8 @@ sub main {
         print_line($config, $_) foreach @{get_all_consequences($config, \@vfs, $tr_cache, $rf_cache)};
         
         debug("Processed $total_vf_count total variants") unless defined($config->{quiet});
+        
+        debug($config->{filter_count}, "/$total_vf_count variants remain after filtering") if defined($config->{filter}) && !defined($config->{quiet});
     }
     
     debug("Executed ", defined($Bio::EnsEMBL::DBSQL::StatementHandle::count_queries) ? $Bio::EnsEMBL::DBSQL::StatementHandle::count_queries : 'unknown number of', " SQL statements") if defined($config->{count_queries}) && !defined($config->{quiet});
@@ -182,8 +196,6 @@ sub configure {
     my $args = shift;
     
     my $config = {};
-
-    $config->{plugin} = [];
     
     GetOptions(
         $config,
@@ -232,11 +244,13 @@ sub configure {
         'no_progress',             # don't display progress bars
         
         # output options
-        'output_file=s',           # output file name
+        'output_file|o=s',           # output file name
         'force_overwrite',         # force overwrite of output file if already exists
         'terms=s',                 # consequence terms to use e.g. NCBI, SO
         'coding_only',             # only return results for consequences in coding regions
         'canonical',               # indicates if transcript is canonical
+        'ccds',                    # output CCDS identifer
+        'xref_refseq',             # output refseq mrna xref
         'protein',                 # add e! protein ID to extra column
         'hgnc',                    # add HGNC gene ID to extra column
         'hgvs',                    # add HGVS names to extra column
@@ -246,8 +260,12 @@ sub configure {
         'gene',                    # force gene column to be populated (disabled by default, enabled when using cache)
         'regulatory',              # enable regulatory stuff
         'convert=s',               # convert input to another format (doesn't run VEP)
+        'filter=s',                # run in filtering mode
         'no_intergenic',           # don't print out INTERGENIC consequences
         'gvf',                     # produce gvf output
+        'vcf',                     # produce vcf output
+        'original',                # produce output in input format
+        'no_consequences',         # don't calculate consequences
         
         # cache stuff
         'cache',                   # use cache
@@ -262,14 +280,15 @@ sub configure {
         'standalone',              # standalone mode uses minimal set of modules installed in same dir, no DB connection
         'skip_db_check',           # don't compare DB parameters with cached
         'compress=s',              # by default we use zcat to decompress; user may want to specify gzcat or "gzip -dc"
+        'custom=s' => ($config->{custom} ||= []), # specify custom tabixed bgzipped file with annotation
+        'tmpdir=s',                # tmp dir used for BigWig retrieval
+        'plugin=s' => ($config->{plugin} ||= []), # specify a method in a module in the plugins directory
         
         # debug
         'cluck',                   # these two need some mods to Bio::EnsEMBL::DBSQL::StatementHandle to work. Clucks callback trace and SQL
         'count_queries',           # counts SQL queries executed
         'admin',                   # allows me to build off public hosts
         'debug',                   # print out debug info
-        
-        'plugin=s',
     );
     
     # print usage message if requested or no args supplied
@@ -285,20 +304,27 @@ sub configure {
         
         while(<CONFIG>) {
             next if /^\#/;
-            my ($key, $value) = split /\s+|\=/;
+            my @split = split /\s+|\=/;
+            my $key = shift @split;            
             $key =~ s/^\-//g;
-            $config->{$key} = $value unless defined $config->{$key};
+            
+            if(defined($config->{$key}) && ref($config->{$key}) eq 'ARRAY') {
+                push @{$config->{$key}}, @split;
+            }
+            else {
+                $config->{$key} = $split[0];
+            }
         }
         
         close CONFIG;
     }
 
     # can't be both quiet and verbose
-    die "ERROR: Can't be both quiet and verbose!" if defined($config->{quiet}) && defined($config->{verbose});
+    die "ERROR: Can't be both quiet and verbose!\n" if defined($config->{quiet}) && defined($config->{verbose});
     
     # check file format
     if(defined $config->{format}) {
-        die "ERROR: Unrecognised input format specified \"".$config->{format}."\"\n" unless $config->{format} =~ /pileup|vcf|guess|hgvs|ensembl|id/i;
+        die "ERROR: Unrecognised input format specified \"".$config->{format}."\"\n" unless $config->{format} =~ /pileup|vcf|guess|hgvs|ensembl|id|vep/i;
     }
     
     # check convert format
@@ -321,7 +347,7 @@ sub configure {
     
     # refseq or core?
     if(defined($config->{refseq})) {
-        die "ERROR: SIFT, PolyPhen and Condel predictions not available fore RefSeq transcripts" if defined $config->{sift} || defined $config->{polyphen} || defined $config->{condel};
+        die "ERROR: SIFT, PolyPhen and Condel predictions not available fore RefSeq transcripts\n" if defined $config->{sift} || defined $config->{polyphen} || defined $config->{condel};
         
         $config->{core_type} = 'otherfeatures';
     }
@@ -359,8 +385,7 @@ sub configure {
         delete $config->{verbose} if defined($config->{verbose});
         $config->{quiet} = 1;
     }
-
-   
+    
     # summarise options if verbose
     if(defined $config->{verbose}) {
         my $header =<<INTRO;
@@ -380,10 +405,90 @@ INTRO
         my $max_length = (sort {$a <=> $b} map {length($_)} keys %$config)[-1];
         
         foreach my $key(sort keys %$config) {
-            print $key.(' ' x (($max_length - length($key)) + 4)).$config->{$key}."\n";
+            next if ref($config->{$key}) eq 'ARRAY' && scalar @{$config->{$key}} == 0;
+            print $key.(' ' x (($max_length - length($key)) + 4)).(ref($config->{$key}) eq 'ARRAY' ? join "\t", @{$config->{$key}} : $config->{$key})."\n";
         }
         
         print "\n".("-" x 20)."\n\n";
+    }
+    
+    # check custom annotations
+    for my $i(0..$#{$config->{custom}}) {
+        my $custom = $config->{custom}->[$i];
+        
+        my ($filepath, $shortname, $format, $type) = split /\,/, $custom;
+        $type ||= 'exact';
+        $format ||= 'bed';
+        
+        # check type
+        die "ERROR: Type $type for custom annotation file $filepath is not allowed (must be one of \"exact\", \"overlap\")\n" unless $type =~ /exact|overlap/;
+        
+        # check format
+        die "ERROR: Format $format for custom annotation file $filepath is not allowed (must be one of \"bed\", \"vcf\", \"gtf\", \"gff\", \"bigwig\")\n" unless $format =~ /bed|vcf|gff|gtf|bigwig/;
+        
+        # bigwig format
+        if($format eq 'bigwig') {
+            # check for bigWigToWig
+            die "ERROR: bigWigToWig does not seem to be in your path - this is required to use bigwig format custom annotations\n" unless `which bigWigToWig 2>&1` =~ /bigWigToWig$/;
+        }
+        
+        else {
+            # check for tabix
+            die "ERROR: tabix does not seem to be in your path - this is required to use custom annotations\n" unless `which tabix 2>&1` =~ /tabix$/;
+            
+            # remote files?
+            if($filepath =~ /tp\:\/\//) {
+                my $remote_test = `tabix $filepath 1:1-1 2>&1`;
+                if($remote_test =~ /fail/) {
+                    die "$remote_test\nERROR: Could not find file or index file for remote annotation file $filepath\n";
+                }
+                elsif($remote_test =~ /get_local_version/) {
+                    debug("Downloaded tabix index file for remote annotation file $filepath") unless defined($config->{quiet});
+                }
+            }
+        
+            # check files exist
+            else {
+                die "ERROR: Custom annotation file $filepath not found\n" unless -e $filepath;
+                die "ERROR: Tabix index file $filepath\.tbi not found - perhaps you need to create it first?\n" unless -e $filepath.'.tbi';
+            }
+        }
+        
+        $config->{custom}->[$i] = {
+            'file'   => $filepath,
+            'name'   => $shortname || 'CUSTOM'.($i + 1),
+            'type'   => $type,
+            'format' => $format,
+        };
+    }
+    
+    # check if using filter and original
+    die "ERROR: You must also provide output filters using --filter to use --original\n" if defined($config->{original}) && !defined($config->{filter});
+    
+    # filter by consequence?
+    if(defined($config->{filter})) {
+        
+        my %filters = map {$_ => 1} split /\,/, $config->{filter};
+        
+        # add in shortcuts
+        foreach my $filter(keys %filters) {
+            my $value = 1;
+            if($filter =~ /^no_/) {
+                delete $filters{$filter};
+                $filter =~ s/^no_//g;
+                $value = 0;
+                $filters{$filter} = $value;
+            }
+            
+            if(defined($FILTER_SHORTCUTS{$filter})) {
+                delete $filters{$filter};
+                $filters{$_} = $value for keys %{$FILTER_SHORTCUTS{$filter}};
+            }
+        }
+        
+        $config->{filter} = \%filters;
+        
+        $config->{filter_count} = 0;
     }
     
     # set defaults
@@ -394,15 +499,16 @@ INTRO
     $config->{tmpdir}            ||= '/tmp';
     $config->{format}            ||= 'guess';
     $config->{terms}             ||= 'display';
-    $config->{gene}              ||= 1 unless defined($config->{whole_genome});
+    $config->{gene}              ||= 1 unless defined($config->{whole_genome}) && !defined($config->{cache});
     $config->{cache_region_size} ||= 1000000;
     $config->{dir}               ||= join '/', ($ENV{'HOME'}, '.vep');
     $config->{compress}          ||= 'zcat';
+    $config->{tmpdir}            ||= '/tmp';
     
     # frequency filtering
     if(defined($config->{check_frequency})) {
         foreach my $flag(qw(freq_freq freq_filter freq_pop freq_gt_lt)) {
-            die "ERROR: To use --check_frequency you must also specify flag --$flag" unless defined $config->{$flag};
+            die "ERROR: To use --check_frequency you must also specify flag --$flag\n" unless defined $config->{$flag};
         }
         
         # need to set check_existing
@@ -430,10 +536,10 @@ INTRO
     if(defined($config->{standalone})) {
         $config->{cache} = 1;
         
-        die("ERROR: Cannot generate HGVS coordinates in standalone mode") if defined($config->{hgvs});
-        die("ERROR: Cannot use HGVS as input in standalone mode") if $config->{format} eq 'hgvs';
-        die("ERROR: Cannot use variant identifiers as input in standalone mode") if $config->{format} eq 'id';
-        die("ERROR: Cannot do frequency filtering in standalone mode") if defined($config->{check_frequency});
+        die("ERROR: Cannot generate HGVS coordinates in standalone mode\n") if defined($config->{hgvs});
+        die("ERROR: Cannot use HGVS as input in standalone mode\n") if $config->{format} eq 'hgvs';
+        die("ERROR: Cannot use variant identifiers as input in standalone mode\n") if $config->{format} eq 'id';
+        die("ERROR: Cannot do frequency filtering in standalone mode\n") if defined($config->{check_frequency});
     }
     
     # write_cache needs cache
@@ -481,7 +587,7 @@ INTRO
     # include regulatory modules if requested
     if(defined($config->{regulatory})) {
         # do the use statements here so that users don't have to have the
-        # funcgen API install to use the rest of the script
+        # funcgen API installed to use the rest of the script
         eval q{
             use Bio::EnsEMBL::Funcgen::DBSQL::RegulatoryFeatureAdaptor;
             use Bio::EnsEMBL::Funcgen::DBSQL::MotifFeatureAdaptor;
@@ -643,33 +749,31 @@ INTRO
     }
    
     configure_plugins($config);
-
+    
     # get input file handle
     $config->{in_file_handle} = &get_in_file_handle($config);
-    
-    # configure output file
-    $config->{out_file_handle} = &get_out_file_handle($config);
     
     return $config;
 }
 
+# configures custom VEP plugins
 sub configure_plugins {
 
     my $config = shift;
-
+    
     if (my @plugins = @{ $config->{plugin} }) {
         
         # we turn config->{plugin} into a hash of plugin 
         # instances keyed by plugin name
-            
+        
         $config->{plugin} = {};
-
+        
         use lib "$ENV{HOME}/.vep/Plugins";
         
         for my $plugin (@plugins) {
-                
+            
             # first check we can use the module
-
+            
             eval qq{
                 use $plugin;
             };
@@ -678,28 +782,28 @@ sub configure_plugins {
             }
             
             # now check we can instantiate it
-
+            
             my $instance;
-
+            
             eval {
                 $instance = $plugin->new($config);
             };
             if ($@) {
                 die "Failed to instantiate plugin $plugin: $@";
             }
-
+            
             # and finally check that it implements all necessary methods
-                
+            
             for my $required qw(run prefetch get_header_info check_feature_type) {
                 unless ($plugin->can($required)) {
                     die "$plugin doesn't implement a required plugin method '$required', does it inherit from BaseVepPlugin?";
                 }
             }
-
+            
             # all's good, so save the instance
-
+            
             $config->{plugin}->{$plugin} = $instance;
-        
+            
             print "Using plugin: $plugin\n" if $config->{verbose}; 
         }
     }
@@ -764,14 +868,16 @@ sub get_adaptors {
     die "ERROR: No registry" unless defined $config->{reg};
     
     $config->{vfa}   = $config->{reg}->get_adaptor($config->{species}, 'variation', 'variationfeature');
+    $config->{svfa}  = $config->{reg}->get_adaptor($config->{species}, 'variation', 'structuralvariationfeature');
     $config->{tva}   = $config->{reg}->get_adaptor($config->{species}, 'variation', 'transcriptvariation');
     $config->{pfpma} = $config->{reg}->get_adaptor($config->{species}, 'variation', 'proteinfunctionpredictionmatrix');
     $config->{va}    = $config->{reg}->get_adaptor($config->{species}, 'variation', 'variation');
     
     # get fake ones for species with no var DB
     if(!defined($config->{vfa})) {
-        $config->{vfa} = Bio::EnsEMBL::Variation::DBSQL::VariationFeatureAdaptor->new_fake($config->{species});
-        $config->{tva} = Bio::EnsEMBL::Variation::DBSQL::TranscriptVariationAdaptor->new_fake($config->{species});
+        $config->{vfa}  = Bio::EnsEMBL::Variation::DBSQL::VariationFeatureAdaptor->new_fake($config->{species});
+        $config->{svfa} = Bio::EnsEMBL::Variation::DBSQL::StructuralVariationFeatureAdaptor->new_fake($config->{species});
+        $config->{tva}  = Bio::EnsEMBL::Variation::DBSQL::TranscriptVariationAdaptor->new_fake($config->{species});
     }
     else {
         $config->{vfa}->db->include_failed_variations($config->{include_failed}) if defined($config->{vfa}->db) && $config->{vfa}->db->can('include_failed_variations');
@@ -837,24 +943,6 @@ sub get_in_file_handle {
     return $in_file_handle;
 }
 
-sub get_plugin_headers {
-
-    my $config = shift;
-
-    my $header = "";
-
-    for my $plugin (values %{ $config->{plugin} }) {
-        if (my $hdr = $plugin->get_header_info) {
-            for my $key (keys %$hdr) {
-                my $val = $hdr->{$key};
-                $header .= "## $key\t: $val\n";
-            }
-        }
-    }
-
-    return $header;
-}
-
 # gets file handle for output and adds header
 sub get_out_file_handle {
     my $config = shift;
@@ -874,20 +962,24 @@ sub get_out_file_handle {
         $out_file_handle->open(">".$config->{output_file}) or die("ERROR: Could not write to output file ", $config->{output_file}, "\n");
     }
     
+    # define headers for a VCF file
+    my @vcf_headers = (
+        '#CHROM',
+        'POS',
+        'ID',
+        'REF',
+        'ALT',
+        'QUAL',
+        'FILTER',
+        'INFO'
+    );
+    
     # file conversion, don't want to add normal headers
     if(defined($config->{convert})) {
         # header for VCF
         if($config->{convert} =~ /vcf/i) {
-            print $out_file_handle join "\t", (
-                '#CHROM',
-                'POS',
-                'ID',
-                'REF',
-                'ALT',
-                'QUAL',
-                'FILTER',
-                'INFO'
-            );
+            print $out_file_handle "##fileformat=VCFv4.0\n";
+            print $out_file_handle join "\t", @vcf_headers;
             print $out_file_handle "\n";
         }
         
@@ -895,7 +987,49 @@ sub get_out_file_handle {
     }
     
     # GVF output, no header
-    elsif(defined($config->{gvf})) {
+    elsif(defined($config->{gvf}) || defined($config->{original})) {
+        print $out_file_handle join "\n", @{$config->{headers}} if defined($config->{headers}) && defined($config->{original});
+        return $out_file_handle;
+    }
+    
+    elsif(defined($config->{vcf})) {
+        
+        # create an info string for the VCF header
+        my @vcf_info_strings = ('##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence type as predicted by VEP">');
+        
+        # add custom headers
+        foreach my $custom(@{$config->{custom}}) {
+            push @vcf_info_strings, '##INFO=<ID='.$custom->{name}.',Number=.,Type=String,Description="'.$custom->{file}.' ('.$custom->{type}.')">';
+        }
+        
+        # plugin headers
+        my $plugin_header = get_plugin_headers($config);
+        if(defined($plugin_header)) {
+            $plugin_header =~ s/\n$//g;
+            push @vcf_info_strings, $plugin_header;
+        }
+        
+        # if this is already a VCF file, we need to add extra headers in the right place
+        if(defined($config->{headers})) {
+            
+            for my $i(0..$#{$config->{headers}}) {
+                if($config->{headers}->[$i] =~ /^\#CHROM\s+POS\s+ID/) {
+                    splice(@{$config->{headers}}, $i, 0, @vcf_info_strings);
+                }
+            }
+            
+            print $out_file_handle join "\n", @{$config->{headers}};
+            print $out_file_handle "\n";
+        }
+        
+        else {
+            print $out_file_handle "##fileformat=VCFv4.0\n";
+            print $out_file_handle join "\n", @vcf_info_strings;
+            print $out_file_handle "\n";
+            print $out_file_handle join "\t", @vcf_headers;
+            print $out_file_handle "\n";
+        }
+        
         return $out_file_handle;
     }
     
@@ -914,6 +1048,7 @@ sub get_out_file_handle {
 ## $version_string
 ## Extra column keys:
 ## CANONICAL    : Indicates if transcript is canonical for this gene
+## CCDS         : Indicates if transcript is a CCDS transcript
 ## HGNC         : HGNC gene identifier
 ## ENSP         : Ensembl protein identifer
 ## HGVSc        : HGVS coding sequence name
@@ -925,16 +1060,47 @@ sub get_out_file_handle {
 ## HIGH_INF_POS : A flag indicating if the variant falls in a high information position of a transcription factor binding profile
 HEAD
    
-    $header .= get_plugin_headers($config);
-
+    $header .= get_plugin_headers($config) if ref($config->{plugin}) eq 'HASH';
+    
     # add headers
     print $out_file_handle $header;
+    
+    # add custom data defs
+    if(defined($config->{custom})) {
+        foreach my $custom(@{$config->{custom}}) {
+            print $out_file_handle '## '.$custom->{name}."\t: ".$custom->{file}.' ('.$custom->{type}.")\n";
+        }
+    }
     
     # add column headers
     print $out_file_handle '#', (join "\t", @OUTPUT_COLS);
     print $out_file_handle "\n";
     
     return $out_file_handle;
+}
+
+sub get_plugin_headers {
+
+    my $config = shift;
+
+    my $header = "";
+
+    for my $plugin (values %{ $config->{plugin} }) {
+        if (my $hdr = $plugin->get_header_info) {
+            for my $key (keys %$hdr) {
+                my $val = $hdr->{$key};
+                
+                if($config->{vcf}) {
+                    $header .= '##INFO=<ID='.$key.',Number=.,Type=String,Description="'.$val.'">\n';
+                }
+                else {
+                    $header .= "## $key\t: $val\n";
+                }
+            }
+        }
+    }
+
+    return $header;
 }
 
 # convert a variation feature to a line of output
@@ -967,61 +1133,6 @@ sub convert_to_ensembl {
         $vf->strand,
         $vf->variation_name
     ];
-}
-
-# converts to VCF format
-sub convert_to_vcf {
-    my $config = shift;
-    my $vf = shift;
-    
-    # look for imbalance in the allele string
-    my %allele_lengths;
-    my @alleles = split /\//, $vf->allele_string;
-    
-    foreach my $allele(@alleles) {
-        $allele =~ s/\-//g;
-        $allele_lengths{length($allele)} = 1;
-    }
-    
-    # in/del/unbalanced
-    if(scalar keys %allele_lengths > 1) {
-        
-        # we need the ref base before the variation
-        # default to N in case we can't get it
-        my $prev_base = 'N';
-        
-        unless(defined($config->{cache})) {
-            my $slice = $vf->slice->sub_Slice($vf->start - 1, $vf->start - 1);
-            $prev_base = $slice->seq if defined($slice);
-        }
-        
-        for my $i(0..$#alleles) {
-            $alleles[$i] =~ s/\-//g;
-            $alleles[$i] = $prev_base.$alleles[$i];
-        }
-        
-        return [
-            $vf->{chr} || $vf->seq_region_name,
-            $vf->start - 1,
-            $vf->variation_name,
-            shift @alleles,
-            (join ",", @alleles),
-            '.', '.', '.'
-        ];
-        
-    }
-    
-    # balanced sub
-    else {
-        return [
-            $vf->{chr} || $vf->seq_region_name,
-            $vf->start,
-            $vf->variation_name,
-            shift @alleles,
-            (join ",", @alleles),
-            '.', '.', '.'
-        ];
-    }
 }
 
 
@@ -1149,6 +1260,12 @@ Options
                        will force --quiet [default: "variant_effect_output.txt"]
 --force_overwrite      Force overwriting of output file [default: quit if file
                        exists]
+--original             Writes output as it was in input - must be used with --filter
+                       [default: off]
+--vcf                  Write output as VCF (forces --summary due to limit of one
+                       variant per line, you may also specify --most_severe to print
+                       only most severe consequence per variant) [default: off]
+--gvf                  Write output as GVF [default: off]
                        
 --species [species]    Species to use [default: "human"]
 
@@ -1171,16 +1288,23 @@ NB: SIFT, PolyPhen and Condel predictions are currently available for human only
                        
 NB: Regulatory consequences are currently available for human and mouse only
 
---hgnc                 If specified, HGNC gene identifiers are output alongside the
-                       Ensembl Gene identifier [default: off]
+--custom [file list]   Add custom annotations from tabix-indexed files. See
+                       documentation for full details [default: off]
+--hgnc                 Add HGNC gene identifiers to output [default: off]
 --hgvs                 Output HGVS identifiers (coding and protein). Requires database
                        connection [default: off]
+--ccds                 Output CCDS transcript identifiers [default: off]
+--xref_refseq          Output aligned RefSeq mRNA identifier for transcript. NB: the
+                       RefSeq and Ensembl transcripts aligned in this way MAY NOT, AND
+                       FREQUENCTLY WILL NOT, match exactly in sequence, exon structure
+                       and protein product [default: off]
 --protein              Output Ensembl protein identifer [default: off]
 --gene                 Force output of Ensembl gene identifer - disabled by default
                        unless using --cache or --no_whole_genome [default: off]
 --canonical            Indicate if the transcript for this consequence is the canonical
                        transcript for this gene [default: off]
 
+--no_intergenic        Excludes intergenic consequences from the output [default: off]
 --coding_only          Only return consequences that fall in the coding region of
                        transcripts [default: off]
 --most_severe          Ouptut only the most severe consequence per variation.
@@ -1201,8 +1325,13 @@ NB: Regulatory consequences are currently available for human and mouse only
                        are compared to the input; an existing variation will only
                        be reported if no novel allele is in the input (strand is
                        accounted for) [default: off]
-                       
---no_intergenic        Excludes intergenic consequences from the output [default: off]
+
+--filter [filters]     Filter output by consequence type. Use this to output only
+                       variants that have at least one consequence type matching the
+                       filter. Multiple filters can be used separated by ",". By
+                       combining this with --original it is possible to run the VEP
+                       iteratively to progressively filter a set of variants. See
+                       documentation for full details [default: off]
 
 --check_frequency      Turns on frequency filtering. Use this to include or exclude
                        variants based on the frequency of co-located existing
