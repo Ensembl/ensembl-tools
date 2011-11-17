@@ -763,10 +763,10 @@ sub configure_plugins {
     
     if (my @plugins = @{ $config->{plugin} }) {
         
+        $config->{plugin} = {};
+        
         # we turn config->{plugin} into a hash of plugin 
         # instances keyed by plugin name
-        
-        $config->{plugin} = {};
         
         use lib "$ENV{HOME}/.vep/Plugins";
         
@@ -832,6 +832,10 @@ sub configure_plugins {
             
             print "Using plugin: $plugin\n" if $config->{verbose}; 
         }
+    }
+    
+    else {
+        $config->{plugin} = {};
     }
 }
 
@@ -1086,7 +1090,7 @@ sub get_out_file_handle {
 ## HIGH_INF_POS : A flag indicating if the variant falls in a high information position of a transcription factor binding profile
 HEAD
    
-    $header .= get_plugin_headers($config) if ref($config->{plugin}) eq 'HASH';
+    $header .= get_plugin_headers($config);
     
     # add headers
     print $out_file_handle $header;
