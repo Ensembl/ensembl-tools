@@ -794,7 +794,11 @@ sub configure_plugins {
 
             # check that the versions match
             
-            my $plugin_version = $instance->version if $instance->can('version');
+            my $plugin_version;
+            
+            if ($instance->can('version')) {
+                $plugin_version = $instance->version;
+            }
             
             my $version_ok = 1;
 
