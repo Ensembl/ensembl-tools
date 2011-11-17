@@ -692,7 +692,7 @@ sub configure_plugins {
                 
             for my $required qw(run prefetch get_header_info check_feature_type) {
                 unless ($plugin->can($required)) {
-                    die "$plugin doesn't implement a required plugin method '$required', does it inherit from BasePlugin?";
+                    die "$plugin doesn't implement a required plugin method '$required', does it inherit from BaseVepPlugin?";
                 }
             }
 
@@ -843,7 +843,7 @@ sub get_plugin_headers {
 
     my $header = "";
 
-    for my $plugin (keys %{ $config->{plugin} }) {
+    for my $plugin (values %{ $config->{plugin} }) {
         if (my $hdr = $plugin->get_header_info) {
             for my $key (keys %$hdr) {
                 my $val = $hdr->{$key};
