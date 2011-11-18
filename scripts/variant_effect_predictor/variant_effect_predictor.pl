@@ -761,9 +761,9 @@ sub configure_plugins {
 
     my $config = shift;
     
+    $config->{plugins} = [];
+    
     if (my @plugins = @{ $config->{plugin} }) {
-        
-        $config->{plugin} = {};
         
         # we turn config->{plugin} into a hash of plugin 
         # instances keyed by plugin name
@@ -828,16 +828,12 @@ sub configure_plugins {
             
             # all's good, so save the instance
             
-            $config->{plugin}->{$plugin} = $instance;
+            push @{ $config->{plugins} }, $instance;
             
             print "Using plugin: $plugin\n" if $config->{verbose}; 
         }
     }
-    
-    else {
-        $config->{plugin} = {};
-    }
-}
+} 
 
 # connects to DBs; in standalone mode this just loads registry module
 sub connect_to_dbs {
@@ -1115,7 +1111,7 @@ sub get_plugin_headers {
 
     my $header = "";
 
-    for my $plugin (values %{ $config->{plugin} }) {
+    for my $plugin (@{ $config->{plugins} }) {
         if (my $hdr = $plugin->get_header_info) {
             for my $key (keys %$hdr) {
                 my $val = $hdr->{$key};
