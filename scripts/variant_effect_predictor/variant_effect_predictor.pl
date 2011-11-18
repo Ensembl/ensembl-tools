@@ -764,32 +764,33 @@ sub configure_plugins {
     $config->{plugins} = [];
     
     if (my @plugins = @{ $config->{plugin} }) {
-        
-        # we turn config->{plugin} into a hash of plugin 
-        # instances keyed by plugin name
-        
+
         use lib "$ENV{HOME}/.vep/Plugins";
         
         for my $plugin (@plugins) {
-            
-            # first check we can use the module
+
+            # parse out the module name and parameters
+
+            my ($module, @params) = split /,/, $plugin;
+
+            # check we can use the module
             
             eval qq{
-                use $plugin;
+                use $module;
             };
             if ($@) {
-                die "Failed to compile plugin $plugin: $@";
+                die "Failed to compile plugin $module: $@";
             }
             
-            # now check we can instantiate it
+            # now check we can instantiate it, passing any parameters to the constructor
             
             my $instance;
             
             eval {
-                $instance = $plugin->new($config);
+                $instance = $module->new($config, @params);
             };
             if ($@) {
-                die "Failed to instantiate plugin $plugin: $@";
+                die "Failed to instantiate plugin $module: $@";
             }
 
             # check that the versions match
@@ -821,12 +822,12 @@ sub configure_plugins {
             # and finally check that it implements all necessary methods
             
             for my $required qw(run prefetch get_header_info check_feature_type) {
-                unless ($plugin->can($required)) {
-                    die "$plugin doesn't implement a required plugin method '$required', does it inherit from BaseVepPlugin?";
+                unless ($instance->can($required)) {
+                    die "$module doesn't implement a required plugin method '$required', does it inherit from BaseVepPlugin?";
                 }
             }
             
-            # all's good, so save the instance
+            # all's good, so save the instance in our list of plugins
             
             push @{ $config->{plugins} }, $instance;
             
