@@ -583,6 +583,10 @@ INTRO
             debug("Read existing cache info") unless defined $config->{quiet};
         }
     }
+   
+    # we configure plugins here because they can sometimes switch on the 
+    # regulatory config option
+    configure_plugins($config);
     
     # include regulatory modules if requested
     if(defined($config->{regulatory})) {
@@ -597,7 +601,7 @@ INTRO
         };
         
         if($@) {
-            die("ERROR: Ensembl Funcgen API must be installed to use --regulatory\n");
+            die("ERROR: Ensembl Funcgen API must be installed to use --regulatory or plugins that deal with regulatory features\n");
         }
     }
     
@@ -715,6 +719,7 @@ INTRO
         exit(0);
     }
     
+    
     # warn user DB will be used for SIFT/PolyPhen/Condel/HGVS/frequency
     if(defined($config->{cache})) {
         
@@ -747,8 +752,6 @@ INTRO
         
         $config->{chr} = \%chrs;
     }
-   
-    configure_plugins($config);
     
     # get input file handle
     $config->{in_file_handle} = &get_in_file_handle($config);
@@ -819,19 +822,26 @@ sub configure_plugins {
 
             warn "You may experience unexpected behaviour with this plugin.\n" unless $version_ok;
 
-            # and finally check that it implements all necessary methods
+            # check that it implements all necessary methods
             
             for my $required qw(run prefetch get_header_info check_feature_type) {
                 unless ($instance->can($required)) {
                     die "$module doesn't implement a required plugin method '$required', does it inherit from BaseVepPlugin?";
                 }
             }
-            
+           
             # all's good, so save the instance in our list of plugins
             
             push @{ $config->{plugins} }, $instance;
             
-            print "Using plugin: $plugin\n" if $config->{verbose}; 
+            debug("Loaded plugin: $plugin"); 
+
+            # for convenience, check if the plugin wants regulatory stuff and turn on the config option if so
+            
+            if (grep { $_ =~ /motif|regulatory/i } @{ $instance->feature_types }) {
+                debug("Fetching regulatory features for plugin: $module");
+                $config->{regulatory} = 1;
+            }
         }
     }
 } 
