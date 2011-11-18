@@ -834,7 +834,7 @@ sub configure_plugins {
             
             push @{ $config->{plugins} }, $instance;
             
-            debug("Loaded plugin: $plugin"); 
+            debug("Loaded plugin: $module"); 
 
             # for convenience, check if the plugin wants regulatory stuff and turn on the config option if so
             
