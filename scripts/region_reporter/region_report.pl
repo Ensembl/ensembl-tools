@@ -88,24 +88,6 @@ if ($config{'output'}) {
 }
 # Select the correct serializer based on user choice
 
-my $ontology_adaptor; #useful for GFF serializer.
-
-if ($config{'gff3'} or $config{'report'}) {
-	if ($config{'gff3'}) {
-		$serializer = "Bio::EnsEMBL::Utils::IO::GFFSerializer";
-		$ontology_adaptor = $registry->get_adaptor( 'Multi', 'Ontology', 'OntologyTerm' );
-		$serializer = new $serializer($ontology_adaptor,$output_fh);
-	}
-	if ($config{'report'}) {
-		$serializer = "Bio::EnsEMBL::Utils::IO::ReportSerializer";
-		$serializer = new $serializer($output_fh);
-	}
-}
-else { #default to GFF for output
-	print STDERR "[Region report] Defaulting to GFF3 output format\n" if ($config{'verbose'});
-	$serializer = "GFFSerializer";
-	$serializer = new $serializer($ontology_adaptor,$output_fh);
-}
 
 # Build up a stack of regions to process into the one output file.
 if ($config{'input'}) {
@@ -167,6 +149,26 @@ $registry->load_registry_from_db(
 );
 
 
+# Create a serializer for output formatting.
+my $ontology_adaptor; #useful for GFF serializer.
+
+if ($config{'gff3'} or $config{'report'}) {
+	if ($config{'gff3'}) {
+		$serializer = "Bio::EnsEMBL::Utils::IO::GFFSerializer";
+		$ontology_adaptor = $registry->get_adaptor( 'Multi', 'Ontology', 'OntologyTerm' );
+		$serializer = new $serializer($ontology_adaptor,$output_fh);
+	}
+	if ($config{'report'}) {
+		$serializer = "Bio::EnsEMBL::Utils::IO::ReportSerializer";
+		$serializer = new $serializer($output_fh);
+	}
+}
+else { #default to GFF for output
+	print STDERR "[Region report] Defaulting to GFF3 output format\n" if ($config{'verbose'});
+	$serializer = "GFFSerializer";
+	$serializer = new $serializer($ontology_adaptor,$output_fh);
+}
+
 # Now iterate over supplied regions and turn them into Slice objects
 
 my $slice_adaptor;
@@ -186,6 +188,8 @@ if ($config{'special_db'}) {
 else {
 	$slice_adaptor = $registry->get_adaptor( $config{'species'}, 'Core', 'Slice' );
 }
+
+
 
 my @slices;
 foreach my $region (@regions) {
@@ -262,9 +266,9 @@ foreach my $slice (@slices) {
 		$serializer->print_feature_list($element_list);
 	}
 }
-
+# FASTA dumper. Use with caution, it makes for big files.
 if ($feature_types{'q'} ) {
-	$serializer->print_metadata("##FASTA\n");
+	$serializer->print_metadata("#FASTA\n"); #Print method provides first #
 	foreach my $slice (@slices) {
 		$serializer->print_sequence($slice);
 	}
