@@ -811,12 +811,12 @@ sub configure_plugins {
                 my ($major, $minor, $maintenance) = split /\./, $VERSION;
     
                 if ($plugin_major != $major) {
-                    warn "Warning: plugin '$plugin' version ($plugin_version) does not match the current VEP version ($VERSION).\n";
+                    warn "Warning: plugin $plugin version ($plugin_version) does not match the current VEP version ($VERSION).\n";
                     $version_ok = 0;
                 }
             }
             else {
-                warn "Warning: plugin '$plugin' does not define a version number.\n";
+                warn "Warning: plugin $plugin does not define a version number.\n";
                 $version_ok = 0;
             }
 
@@ -824,9 +824,9 @@ sub configure_plugins {
 
             # check that it implements all necessary methods
             
-            for my $required qw(run prefetch get_header_info check_feature_type) {
+            for my $required qw(run get_header_info check_feature_type check_variant_feature_type) {
                 unless ($instance->can($required)) {
-                    die "$module doesn't implement a required plugin method '$required', does it inherit from BaseVepPlugin?";
+                    die "Plugin $module doesn't implement a required method '$required', does it inherit from BaseVepPlugin?";
                 }
             }
            
