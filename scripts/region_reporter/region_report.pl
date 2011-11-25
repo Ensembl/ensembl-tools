@@ -194,7 +194,16 @@ else {
 my @slices;
 foreach my $region (@regions) {
 	print STDERR "[Region report] Requested region: $region\n" if ($config{'verbose'});
-	push @slices, $slice_adaptor->fetch_by_toplevel_location($region);
+	
+	eval {
+		my $slice = $slice_adaptor->fetch_by_toplevel_location($region);
+		push @slices, $slice;
+	};
+	if ($@) {
+		print STDERR $@."\n";
+		exit 2; # exit
+	}
+	
 }
 print STDERR "[Region report] Found ".scalar(@slices)." slices\n" if ($config{'verbose'});
 $serializer->print_main_header(\@slices);
@@ -273,6 +282,11 @@ if ($feature_types{'q'} ) {
 		$serializer->print_sequence($slice);
 	}
 }
+
+unless ($serializer->printed_something) {
+	exit 1; # output file does not contain any features.
+}
+exit 0; # normal execution
 
 sub help {
 		
