@@ -244,7 +244,7 @@ sub configure {
         'no_progress',             # don't display progress bars
         
         # output options
-        'output_file|o=s',           # output file name
+        'output_file|o=s',         # output file name
         'force_overwrite',         # force overwrite of output file if already exists
         'terms=s',                 # consequence terms to use e.g. NCBI, SO
         'coding_only',             # only return results for consequences in coding regions
@@ -271,6 +271,7 @@ sub configure {
         'cache',                   # use cache
         'write_cache',             # enables writing to the cache
         'build=s',                 # builds cache from DB from scratch; arg is either all (all top-level seqs) or a list of chrs
+        'no_adaptor_cache',        # don't write adaptor cache
         'prefetch',                # prefetch exons, translation, introns, codon table etc for each transcript
         'strip',                   # strips adaptors etc from objects before caching them
         'rebuild=s',               # rebuilds cache by reading in existing then redumping - probably don't need to use this any more
@@ -297,26 +298,19 @@ sub configure {
         exit(0);
     }
     
+    # dir is where the cache and plugins live
+    $config->{dir} ||= join '/', ($ENV{'HOME'}, '.vep');
+    
+    # ini file?
+    my $ini_file = $config->{dir}.'/vep.ini';
+    
+    if(-e $ini_file) {
+        read_config_from_file($config, $ini_file);
+    }
+    
     # config file?
     if(defined $config->{config}) {
-        
-        open CONFIG, $config->{config} or die "ERROR: Could not open config file \"".$config->{config}."\"\n";
-        
-        while(<CONFIG>) {
-            next if /^\#/;
-            my @split = split /\s+|\=/;
-            my $key = shift @split;            
-            $key =~ s/^\-//g;
-            
-            if(defined($config->{$key}) && ref($config->{$key}) eq 'ARRAY') {
-                push @{$config->{$key}}, @split;
-            }
-            else {
-                $config->{$key} = $split[0];
-            }
-        }
-        
-        close CONFIG;
+        read_config_from_file($config, $config->{config});
     }
 
     # can't be both quiet and verbose
@@ -501,7 +495,6 @@ INTRO
     $config->{terms}             ||= 'display';
     $config->{gene}              ||= 1 unless defined($config->{whole_genome}) && !defined($config->{cache});
     $config->{cache_region_size} ||= 1000000;
-    $config->{dir}               ||= join '/', ($ENV{'HOME'}, '.vep');
     $config->{compress}          ||= 'zcat';
     $config->{tmpdir}            ||= '/tmp';
     
@@ -628,7 +621,7 @@ INTRO
         # try and load adaptors from cache
         if(!&load_dumped_adaptor_cache($config)) {
             &get_adaptors($config);
-            &dump_adaptor_cache($config) if defined($config->{write_cache});
+            &dump_adaptor_cache($config) if defined($config->{write_cache}) && !defined($config->{no_adaptor_cache});
         }
         
         # check cached adaptors match DB params
@@ -654,10 +647,12 @@ INTRO
                     $ok = 0;
                 }
                 
-                # but we still need to reconnect
-                debug("INFO: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}, " - reconnecting to host") unless defined($config->{quiet});
-                
-                &get_adaptors($config);
+                unless(defined($config->{skip_db_check})) {
+                    # but we still need to reconnect
+                    debug("INFO: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}, " - reconnecting to host") unless defined($config->{quiet});
+                    
+                    &get_adaptors($config);
+                }
             }
             
             if(!$ok) {
@@ -672,7 +667,7 @@ INTRO
     }
     else {
         &get_adaptors($config);
-        &dump_adaptor_cache($config) if defined($config->{write_cache})
+        &dump_adaptor_cache($config) if defined($config->{write_cache}) && !defined($config->{no_adaptor_cache});
     }
     
     # reg adaptors (only fetches if not retrieved from cache already)
@@ -757,6 +752,32 @@ INTRO
     $config->{in_file_handle} = &get_in_file_handle($config);
     
     return $config;
+}
+
+# reads config from a file
+sub read_config_from_file {
+    my $config = shift;
+    my $file = shift;
+    
+    open CONFIG, $file or die "ERROR: Could not open config file \"$file\"\n";
+    
+    debug("Reading configuration from $file") unless defined($config->{quiet});
+    
+    while(<CONFIG>) {
+        next if /^\#/;
+        my @split = split /\s+|\=/;
+        my $key = shift @split;            
+        $key =~ s/^\-//g;
+        
+        if(defined($config->{$key}) && ref($config->{$key}) eq 'ARRAY') {
+            push @{$config->{$key}}, @split;
+        }
+        else {
+            $config->{$key} ||= $split[0];
+        }
+    }
+    
+    close CONFIG;
 }
 
 # configures custom VEP plugins
@@ -1039,12 +1060,13 @@ sub get_out_file_handle {
             push @vcf_info_strings, '##INFO=<ID='.$custom->{name}.',Number=.,Type=String,Description="'.$custom->{file}.' ('.$custom->{type}.')">';
         }
         
+        # can't use plugins on VCF output yet
         # plugin headers
-        my $plugin_header = get_plugin_headers($config);
-        if(defined($plugin_header)) {
-            $plugin_header =~ s/\n$//g;
-            push @vcf_info_strings, $plugin_header;
-        }
+        #my $plugin_header = get_plugin_headers($config);
+        #if(defined($plugin_header)) {
+        #    $plugin_header =~ s/\n$//g;
+        #    push @vcf_info_strings, $plugin_header;
+        #}
         
         # if this is already a VCF file, we need to add extra headers in the right place
         if(defined($config->{headers})) {
@@ -1130,7 +1152,7 @@ sub get_plugin_headers {
                 my $val = $hdr->{$key};
                 
                 if($config->{vcf}) {
-                    $header .= '##INFO=<ID='.$key.',Number=.,Type=String,Description="'.$val.'">\n';
+                    $header .= '##INFO=<ID='.$key.',Number=.,Type=String,Description="'.$val.'">'."\n";
                 }
                 else {
                     $header .= "## $key\t: $val\n";
@@ -1329,6 +1351,7 @@ NB: Regulatory consequences are currently available for human and mouse only
 
 --custom [file list]   Add custom annotations from tabix-indexed files. See
                        documentation for full details [default: off]
+--plugin [plugin_name] Use named plugin module [default: off]
 --hgnc                 Add HGNC gene identifiers to output [default: off]
 --hgvs                 Output HGVS identifiers (coding and protein). Requires database
                        connection [default: off]
