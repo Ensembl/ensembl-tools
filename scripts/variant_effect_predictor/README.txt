@@ -35,6 +35,16 @@ http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 Changelog
 =========
 
+New in version 2.3 (December 2011)
+----------------------------------
+
+- Add custom annotations from tabix-indexed files (BED, GFF, GTF, VCF, bigWig)
+
+- Add new functionality to the VEP with user-written plugins
+
+- Filter input on consequence type
+
+
 Version 2.2 (September 2011)
 ----------------------------
 
