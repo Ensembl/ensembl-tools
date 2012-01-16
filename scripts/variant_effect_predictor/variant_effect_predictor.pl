@@ -323,7 +323,7 @@ sub configure {
     
     # check file format
     if(defined $config->{format}) {
-        die "ERROR: Unrecognised input format specified \"".$config->{format}."\"\n" unless $config->{format} =~ /pileup|vcf|guess|hgvs|ensembl|id|vep/i;
+        die "ERROR: Unrecognised input format specified \"".$config->{format}."\"\n" unless $config->{format} =~ /^(pileup|vcf|guess|hgvs|ensembl|id|vep)$/i;
     }
     
     # check convert format
