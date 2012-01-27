@@ -266,6 +266,8 @@ sub configure {
         'vcf',                     # produce vcf output
         'original',                # produce output in input format
         'no_consequences',         # don't calculate consequences
+        'domains',                 # output overlapping protein features
+        'numbers',                 # include exon and intron numbers
         
         # cache stuff
         'cache',                   # use cache
@@ -1125,6 +1127,9 @@ sub get_out_file_handle {
 ## SIFT         : SIFT prediction
 ## PolyPhen     : PolyPhen prediction
 ## Condel       : Condel SIFT/PolyPhen consensus prediction
+## EXON         : Exon number
+## INTRON       : Intron number
+## DOMAINS      : The source and identifer of any overlapping protein domains
 ## MATRIX       : The source and identifier of a transcription factor binding profile (TFBP) aligned at this position
 ## MATRIX_POS   : The relative position of the variation in the aligned TFBP
 ## HIGH_INF_POS : A flag indicating if the variant falls in a high information position of the TFBP
