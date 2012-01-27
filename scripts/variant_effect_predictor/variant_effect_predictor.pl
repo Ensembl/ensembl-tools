@@ -1380,6 +1380,8 @@ NB: Regulatory consequences are currently available for human and mouse only
                        unless using --cache or --no_whole_genome [default: off]
 --canonical            Indicate if the transcript for this consequence is the canonical
                        transcript for this gene [default: off]
+--domains              Include details of any overlapping protein domains [default: off]
+--numbers              Include exon & intron numbers [default: off]
 
 --no_intergenic        Excludes intergenic consequences from the output [default: off]
 --coding_only          Only return consequences that fall in the coding region of
