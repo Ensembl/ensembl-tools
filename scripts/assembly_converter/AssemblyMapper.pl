@@ -86,9 +86,12 @@ while ( my $line = $in->getline() ) {
   # Skip lines containing only whitespace.
   if ( $line =~ /^\s*$/ ) { next }
 
+  #Strip off spaces at the start and end of the line
+  $line =~ s/^\s+|\s+$//;
+
   # We're assuming that the line will be in the same format as what's
   # outputted by the name() method for a Slice object.
-  if ( $line !~ /^(\w+)?:(\w+)?:(\w+):(\d+)?:(\d+)?:(-?\d+)?$/ ) {
+  if ( $line !~ /^(\w+)?:([^:]+)?:(\w+):(\d+)?:(\d+)?:(-?\d+)?$/ ) {
     printf( "Malformed line:\n%s\n", $line );
     next;
   }
