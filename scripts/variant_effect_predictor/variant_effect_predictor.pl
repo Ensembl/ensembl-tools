@@ -1192,10 +1192,10 @@ sub get_out_file_handle {
 ## EXON         : Exon number
 ## INTRON       : Intron number
 ## DOMAINS      : The source and identifer of any overlapping protein domains
-## MATRIX       : The source and identifier of a transcription factor binding profile (TFBP) aligned at this position
-## MATRIX_POS   : The relative position of the variation in the aligned TFBP
+## MOTIF_NAME   : The source and identifier of a transcription factor binding profile (TFBP) aligned at this position
+## MOTIF_POS    : The relative position of the variation in the aligned TFBP
 ## HIGH_INF_POS : A flag indicating if the variant falls in a high information position of the TFBP
-## MOTIF_SCORE_CHANGE : '+' if the variant sequence is closer to the TFBP consensus sequence, '-' if it is further, '0' if the score does not change
+## MOTIF_SCORE_CHANGE : The difference in motif score of the reference and variant sequences for the TFBP
 HEAD
    
     $header .= get_plugin_headers($config);
