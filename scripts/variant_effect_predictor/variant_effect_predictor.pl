@@ -2,7 +2,7 @@
 
 =head1 LICENSE
 
-  Copyright (c) 1999-2011 The European Bioinformatics Institute and
+  Copyright (c) 1999-2012 The European Bioinformatics Institute and
   Genome Research Limited.  All rights reserved.
 
   This software is distributed under a modified Apache license.
@@ -26,7 +26,7 @@ Variant Effect Predictor - a script to predict the consequences of genomic varia
 
 http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 
-Version 2.2
+Version 2.4
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -34,6 +34,9 @@ by Will McLaren (wm2@ebi.ac.uk)
 use strict;
 use Getopt::Long;
 use FileHandle;
+use FindBin qw($Bin);
+use lib $Bin;
+
 use Bio::EnsEMBL::Variation::Utils::Sequence qw(unambiguity_code);
 use Bio::EnsEMBL::Variation::Utils::VEP qw(
     parse_line
@@ -54,7 +57,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 );
 
 # global vars
-my $VERSION = '2.3';
+my $VERSION = '2.4';
 
 # set output autoflush for progress bars
 $| = 1;
@@ -203,7 +206,7 @@ sub configure {
         
         # input options,
         'config=s',                # config file name
-        'input_file=s',            # input file name
+        'input_file|i=s',          # input file name
         'format=s',                # input file format
         
         # DB options
@@ -239,7 +242,7 @@ sub configure {
         'freq_pop=s',              # population to filter on
         
         # verbosity options
-        'verbose',                 # print out a bit more info while running
+        'verbose|v',               # print out a bit more info while running
         'quiet',                   # print nothing to STDOUT (unless using -o stdout)
         'no_progress',             # don't display progress bars
         
@@ -266,6 +269,8 @@ sub configure {
         'vcf',                     # produce vcf output
         'original',                # produce output in input format
         'no_consequences',         # don't calculate consequences
+        'lrg',                     # enable LRG-based features
+        'fields=s',                # define your own output fields
         'domains',                 # output overlapping protein features
         'numbers',                 # include exon and intron numbers
         
@@ -280,7 +285,8 @@ sub configure {
         'dir=s',                   # dir where cache is found (defaults to $HOME/.vep/)
         'cache_region_size=i',     # size of region in bases for each cache file
         'no_slice_cache',          # tell API not to cache features on slice
-        'standalone',              # standalone mode uses minimal set of modules installed in same dir, no DB connection
+        'standalone',              # standalone renamed offline
+        'offline',                 # offline mode uses minimal set of modules installed in same dir, no DB connection
         'skip_db_check',           # don't compare DB parameters with cached
         'compress=s',              # by default we use zcat to decompress; user may want to specify gzcat or "gzip -dc"
         'custom=s' => ($config->{custom} ||= []), # specify custom tabixed bgzipped file with annotation
@@ -292,7 +298,7 @@ sub configure {
         'count_queries',           # counts SQL queries executed
         'admin',                   # allows me to build off public hosts
         'debug',                   # print out debug info
-    );
+    ) or die "ERROR: Failed to parse command-line flags\n";
     
     # print usage message if requested or no args supplied
     if(defined($config->{help}) || !$args) {
@@ -330,7 +336,12 @@ sub configure {
     
     # check convert format
     if(defined $config->{convert}) {
-        die "ERROR: Unrecognised output format for conversion specified \"".$config->{convert}."\"\n" unless $config->{convert} =~ /vcf|ensembl|pileup/i;
+        die "ERROR: Unrecognised output format for conversion specified \"".$config->{convert}."\"\n" unless $config->{convert} =~ /vcf|ensembl|pileup|hgvs/i;
+    }
+    
+    # check if user still using --standalone
+    if(defined $config->{standalone}) {
+        die "ERROR: --standalone replaced by --offline\n";
     }
     
     # connection settings for Ensembl Genomes
@@ -372,8 +383,6 @@ sub configure {
         die "ERROR: Unrecognised option for $tool \"", $config->{lc($tool)}, "\" - must be one of p (prediction), s (score) or b (both)\n" unless $config->{lc($tool)} =~ /^(s|p|b)/;
         
         die "ERROR: $tool not available for this species\n" unless $config->{species} =~ /human|homo/i;
-        
-        die "ERROR: $tool not available in standalone mode\n" if defined($config->{standalone});
         
         # use V2 of the Condel algorithm, possibly gives fewer false positives
         if($tool eq 'Condel' && $config->{lc($tool)} =~ /1$/) {
@@ -417,9 +426,10 @@ INTRO
     for my $i(0..$#{$config->{custom}}) {
         my $custom = $config->{custom}->[$i];
         
-        my ($filepath, $shortname, $format, $type) = split /\,/, $custom;
+        my ($filepath, $shortname, $format, $type, $coords) = split /\,/, $custom;
         $type ||= 'exact';
         $format ||= 'bed';
+        $coords ||= 0;
         
         # check type
         die "ERROR: Type $type for custom annotation file $filepath is not allowed (must be one of \"exact\", \"overlap\")\n" unless $type =~ /exact|overlap/;
@@ -460,6 +470,7 @@ INTRO
             'name'   => $shortname || 'CUSTOM'.($i + 1),
             'type'   => $type,
             'format' => $format,
+            'coords' => $coords,
         };
     }
     
@@ -523,7 +534,7 @@ INTRO
     }
     
     $config->{whole_genome}      = 1 unless defined $config->{no_whole_genome};
-    $config->{include_failed}    = 1 unless defined $config->{include_failed};
+    $config->{failed}            = 0 unless defined $config->{failed};
     $config->{chunk_size}        =~ s/mb?/000000/i;
     $config->{chunk_size}        =~ s/kb?/000/i;
     $config->{cache_region_size} =~ s/mb?/000000/i;
@@ -532,14 +543,14 @@ INTRO
     # cluck and display executed SQL?
     $Bio::EnsEMBL::DBSQL::StatementHandle::cluck = 1 if defined($config->{cluck});
     
-    # standalone needs cache, can't use HGVS
-    if(defined($config->{standalone})) {
+    # offline needs cache, can't use HGVS
+    if(defined($config->{offline})) {
         $config->{cache} = 1;
         
-        die("ERROR: Cannot generate HGVS coordinates in standalone mode\n") if defined($config->{hgvs});
-        die("ERROR: Cannot use HGVS as input in standalone mode\n") if $config->{format} eq 'hgvs';
-        die("ERROR: Cannot use variant identifiers as input in standalone mode\n") if $config->{format} eq 'id';
-        die("ERROR: Cannot do frequency filtering in standalone mode\n") if defined($config->{check_frequency});
+        die("ERROR: Cannot generate HGVS coordinates in offline mode\n") if defined($config->{hgvs});
+        die("ERROR: Cannot use HGVS as input in offline mode\n") if $config->{format} eq 'hgvs';
+        die("ERROR: Cannot use variant identifiers as input in offline mode\n") if $config->{format} eq 'id';
+        die("ERROR: Cannot do frequency filtering in offline mode\n") if defined($config->{check_frequency});
     }
     
     # write_cache needs cache
@@ -572,10 +583,24 @@ INTRO
     # complete dir with species name and db_version
     $config->{dir} .= '/'.(
         join '/', (
-            defined($config->{standalone}) ? $config->{species} : ($config->{reg}->get_alias($config->{species}) || $config->{species}),
+            defined($config->{offline}) ? $config->{species} : ($config->{reg}->get_alias($config->{species}) || $config->{species}),
             $config->{db_version} || $config->{reg}->software_version
         )
     );
+    
+    # warn user cache directory doesn't exist
+    if(!-e $config->{dir}) {
+        
+        # if using write_cache
+        if(defined($config->{write_cache})) {
+            debug("INFO: Cache directory ", $config->{dir}, " not found - it will be created") unless defined($config->{quiet});
+        }
+        
+        # want to read cache, not found
+        elsif(defined($config->{cache})) {
+            die("ERROR: Cache directory ", $config->{dir}, " not found");
+        }
+    }
     
     if(defined($config->{cache})) {
         # read cache info
@@ -605,80 +630,77 @@ INTRO
         }
     }
     
-    # warn user cache directory doesn't exist
-    if(!-e $config->{dir}) {
-        
-        # if using write_cache
-        if(defined($config->{write_cache})) {
-            debug("INFO: Cache directory ", $config->{dir}, " not found - it will be created") unless defined($config->{quiet});
-        }
-        
-        # want to read cache, not found
-        elsif(defined($config->{cache})) {
-            die("ERROR: Cache directory ", $config->{dir}, " not found");
-        }
+    # user defined custom output fields
+    if(defined($config->{fields})) {
+        $config->{fields} = [split ',', $config->{fields}];
+        debug("Output fields redefined (".scalar @{$config->{fields}}." defined)") unless defined($config->{quiet});
+        $config->{fields_redefined} = 1;
     }
+    $config->{fields} ||= \@OUTPUT_COLS;
     
     # suppress warnings that the FeatureAdpators spit if using no_slice_cache
     Bio::EnsEMBL::Utils::Exception::verbose(1999) if defined($config->{no_slice_cache});
     
-    # get adaptors
-    if(defined($config->{cache}) && !defined($config->{write_cache})) {
+    # get adaptors (don't get them in offline mode)
+    unless(defined($config->{offline})) {
         
-        # try and load adaptors from cache
-        if(!&load_dumped_adaptor_cache($config)) {
+        if(defined($config->{cache}) && !defined($config->{write_cache})) {
+            
+            # try and load adaptors from cache
+            if(!&load_dumped_adaptor_cache($config)) {
+                &get_adaptors($config);
+                &dump_adaptor_cache($config) if defined($config->{write_cache}) && !defined($config->{no_adaptor_cache});
+            }
+            
+            # check cached adaptors match DB params
+            else {
+                my $dbc = $config->{sa}->{dbc};
+            
+                my $ok = 1;
+                
+                if($dbc->{_host} ne $config->{host}) {
+                    
+                    # ens-livemirror, useastdb and ensembldb should all have identical DBs
+                    unless(
+                        (
+                            $dbc->{_host} eq 'ens-livemirror'
+                            || $dbc->{_host} eq 'ensembldb.ensembl.org'
+                            || $dbc->{_host} eq 'useastdb.ensembl.org'
+                        ) && (
+                            $config->{host} eq 'ens-livemirror'
+                            || $config->{host} eq 'ensembldb.ensembl.org'
+                            || $config->{host} eq 'useastdb.ensembl.org'
+                        )
+                    ) {
+                        $ok = 0;
+                    }
+                    
+                    unless(defined($config->{skip_db_check})) {
+                        # but we still need to reconnect
+                        debug("INFO: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}, " - reconnecting to host") unless defined($config->{quiet});
+                        
+                        &get_adaptors($config);
+                    }
+                }
+                
+                if(!$ok) {
+                    if(defined($config->{skip_db_check})) {
+                        debug("INFO: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}) unless defined($config->{quiet});
+                    }
+                    else {
+                        die "ERROR: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}, ". If you are sure this is OK, rerun with -skip_db_check flag set";
+                    }
+                }
+            }
+        }
+        else {
             &get_adaptors($config);
             &dump_adaptor_cache($config) if defined($config->{write_cache}) && !defined($config->{no_adaptor_cache});
         }
         
-        # check cached adaptors match DB params
-        else {
-            my $dbc = $config->{sa}->{dbc};
-        
-            my $ok = 1;
-            
-            if($dbc->{_host} ne $config->{host}) {
-                
-                # ens-livemirror, useastdb and ensembldb should all have identical DBs
-                unless(
-                    (
-                        $dbc->{_host} eq 'ens-livemirror'
-                        || $dbc->{_host} eq 'ensembldb.ensembl.org'
-                        || $dbc->{_host} eq 'useastdb.ensembl.org'
-                    ) && (
-                        $config->{host} eq 'ens-livemirror'
-                        || $config->{host} eq 'ensembldb.ensembl.org'
-                        || $config->{host} eq 'useastdb.ensembl.org'
-                    )
-                ) {
-                    $ok = 0;
-                }
-                
-                unless(defined($config->{skip_db_check})) {
-                    # but we still need to reconnect
-                    debug("INFO: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}, " - reconnecting to host") unless defined($config->{quiet});
-                    
-                    &get_adaptors($config);
-                }
-            }
-            
-            if(!$ok) {
-                if(defined($config->{skip_db_check})) {
-                    debug("INFO: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}) unless defined($config->{quiet});
-                }
-                else {
-                    die "ERROR: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}, ". If you are sure this is OK, rerun with -skip_db_check flag set";
-                }
-            }
-        }
+        # reg adaptors (only fetches if not retrieved from cache already)
+        &get_reg_adaptors($config) if defined($config->{regulatory});
     }
-    else {
-        &get_adaptors($config);
-        &dump_adaptor_cache($config) if defined($config->{write_cache}) && !defined($config->{no_adaptor_cache});
-    }
-    
-    # reg adaptors (only fetches if not retrieved from cache already)
-    &get_reg_adaptors($config) if defined($config->{regulatory});
     
     # get terminal width for progress bars
     unless(defined($config->{quiet})) {
@@ -722,11 +744,11 @@ INTRO
     }
     
     
-    # warn user DB will be used for SIFT/PolyPhen/Condel/HGVS/frequency
+    # warn user DB will be used for SIFT/PolyPhen/Condel/HGVS/frequency/LRG
     if(defined($config->{cache})) {
         
         # these two def depend on DB
-        foreach my $param(grep {defined $config->{$_}} qw(hgvs check_frequency)) {
+        foreach my $param(grep {defined $config->{$_}} qw(hgvs check_frequency lrg)) {
             debug("INFO: Database will be accessed when using --$param") unless defined($config->{quiet});
         }
         
@@ -856,7 +878,7 @@ sub configure_plugins {
 
             # check that it implements all necessary methods
             
-            for my $required qw(run get_header_info check_feature_type check_variant_feature_type) {
+            for my $required(qw(run get_header_info check_feature_type check_variant_feature_type)) {
                 unless ($instance->can($required)) {
                     debug("Plugin $module doesn't implement a required method '$required', does it inherit from BaseVepPlugin?");
                     next;
@@ -879,14 +901,14 @@ sub configure_plugins {
     }
 } 
 
-# connects to DBs; in standalone mode this just loads registry module
+# connects to DBs (not done in offline mode)
 sub connect_to_dbs {
     my $config = shift;
     
     # get registry
     my $reg = 'Bio::EnsEMBL::Registry';
     
-    unless(defined($config->{standalone})) {
+    unless(defined($config->{offline})) {
         # load DB options from registry file if given
         if(defined($config->{registry})) {
             debug("Loading DB config from registry file ", $config->{registry}) unless defined($config->{quiet});
@@ -948,9 +970,6 @@ sub get_adaptors {
         $config->{vfa}  = Bio::EnsEMBL::Variation::DBSQL::VariationFeatureAdaptor->new_fake($config->{species});
         $config->{svfa} = Bio::EnsEMBL::Variation::DBSQL::StructuralVariationFeatureAdaptor->new_fake($config->{species});
         $config->{tva}  = Bio::EnsEMBL::Variation::DBSQL::TranscriptVariationAdaptor->new_fake($config->{species});
-    }
-    else {
-        $config->{vfa}->db->include_failed_variations($config->{include_failed}) if defined($config->{vfa}->db) && $config->{vfa}->db->can('include_failed_variations');
     }
     
     $config->{sa}  = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'slice');
@@ -1065,22 +1084,65 @@ sub get_out_file_handle {
     elsif(defined($config->{vcf})) {
         
         # create an info string for the VCF header
-        my @vcf_info_strings = ('##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence type as predicted by VEP">');
+        
+        # define headers that would normally go in the extra field
+        # keyed on the config parameter used to turn it on
+        # should probably move this elsewhere to avoid things getting missed out
+        my %extra_headers = (
+            protein    => ['ENSP'],
+            canonical  => ['CANONICAL'],
+            ccds       => ['CCDS'],
+            hgvs       => ['HGVSc','HGVSp'],
+            sift       => ['SIFT'],
+            polyphen   => ['PolyPhen'],
+            condel     => ['Condel'],
+            numbers    => ['EXON','INTRON'],
+            domains    => ['domains'],
+            regulatory => ['MATRIX','MATRIX_POS','HIGH_INF_POS','MOTIF_SCORE_CHANGE'],
+        );
+        
+        my @new_headers;
+        
+        # if the user has defined the fields themselves, we don't need to worry
+        if(defined $config->{fields_redefined}) {
+            @new_headers = @{$config->{fields}};
+        }
+        else {
+            @new_headers = (
+                
+                # get default headers, minus variation name and location (already encoded in VCF)
+                grep {
+                    $_ ne 'Uploaded_variation' and
+                    $_ ne 'Location' and
+                    $_ ne 'Extra'
+                } @{$config->{fields}},
+                
+                # get extra headers
+                map {@{$extra_headers{$_}}}
+                grep {defined $config->{$_}}
+                keys %extra_headers
+            );
+            
+            # plugin headers
+            foreach my $plugin_header(split /\n/, get_plugin_headers($config)) {
+                $plugin_header =~ /\#\# (.+?)\t\:.+/;
+                push @new_headers, $1;
+            }
+            
+            # redefine the main headers list in config
+            $config->{fields} = \@new_headers;
+        }
+        
+        # add the newly defined headers as a header to the VCF
+        my $string = join '|', @{$config->{fields}};
+        my @vcf_info_strings = ('##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence type as predicted by VEP. Format: '.$string.'">');
         
         # add custom headers
         foreach my $custom(@{$config->{custom}}) {
             push @vcf_info_strings, '##INFO=<ID='.$custom->{name}.',Number=.,Type=String,Description="'.$custom->{file}.' ('.$custom->{type}.')">';
         }
         
-        # can't use plugins on VCF output yet
-        # plugin headers
-        #my $plugin_header = get_plugin_headers($config);
-        #if(defined($plugin_header)) {
-        #    $plugin_header =~ s/\n$//g;
-        #    push @vcf_info_strings, $plugin_header;
-        #}
-        
-        # if this is already a VCF file, we need to add extra headers in the right place
+        # if this is already a VCF file, we need to add our new headers in the right place
         if(defined($config->{headers})) {
             
             for my $i(0..$#{$config->{headers}}) {
@@ -1149,7 +1211,7 @@ HEAD
     }
     
     # add column headers
-    print $out_file_handle '#', (join "\t", @OUTPUT_COLS);
+    print $out_file_handle '#', (join "\t", @{$config->{fields}});
     print $out_file_handle "\n";
     
     return $out_file_handle;
@@ -1166,12 +1228,7 @@ sub get_plugin_headers {
             for my $key (keys %$hdr) {
                 my $val = $hdr->{$key};
                 
-                if($config->{vcf}) {
-                    $header .= '##INFO=<ID='.$key.',Number=.,Type=String,Description="'.$val.'">'."\n";
-                }
-                else {
-                    $header .= "## $key\t: $val\n";
-                }
+                $header .= "## $key\t: $val\n";
             }
         }
     }
@@ -1278,6 +1335,26 @@ sub convert_to_pileup {
     }
 }
 
+# converts to HGVS (hackily returns many lines)
+sub convert_to_hgvs {
+    my $config = shift;
+    my $vf = shift;
+    
+    # ensure we have a slice
+    $vf->{slice} ||= get_slice($config, $vf->{chr});
+    
+    my $tvs = $vf->get_all_TranscriptVariations;
+    
+    my @return = values %{$vf->get_all_hgvs_notations()};
+    
+    if(defined($tvs)) {
+        push @return, map {values %{$vf->get_all_hgvs_notations($_->transcript, 'c')}} @$tvs;
+        push @return, map {values %{$vf->get_all_hgvs_notations($_->transcript, 'p')}} @$tvs;
+    }
+    
+    return [join "\n", @return];
+}
+
 # prints a line of output from the hash
 sub print_line {
     my $config = shift;
@@ -1288,8 +1365,13 @@ sub print_line {
     
     # normal
     if(ref($line) eq 'HASH') {
+        my %extra = %{$line->{Extra}};
+        
         $line->{Extra} = join ';', map { $_.'='.$line->{Extra}->{$_} } keys %{ $line->{Extra} || {} };
-        $output = join "\t", map { $line->{$_} || '-' } @OUTPUT_COLS;
+        
+        # if the fields have been redefined we need to search through in case
+        # any of the defined fields are actually part of the Extra hash
+        $output = join "\t", map { $line->{$_} || $extra{$_} || '-' } @{$config->{fields}};
     }
     
     # gvf
@@ -1342,6 +1424,10 @@ Options
                        variant per line, you may also specify --most_severe to print
                        only most severe consequence per variant) [default: off]
 --gvf                  Write output as GVF [default: off]
+--fields [field list]  Define a custom output format by specifying a comma-separated
+                       list of field names. Field names normally present in the
+                       "Extra" field may also be specified, including those added by
+                       plugin modules [default: off]
                        
 --species [species]    Species to use [default: "human"]
 
@@ -1351,7 +1437,7 @@ Options
 --sift=[p|s|b]         Add SIFT [p]rediction, [s]core or [b]oth [default: off]
 --polyphen=[p|s|b]     Add PolyPhen [p]rediction, [s]core or [b]oth [default: off]
 --condel=[p|s|b]       Add Condel SIFT/PolyPhen consensus [p]rediction, [s]core or
-                       [b]oth. Add 1 (e.g. b1) to option to use old Condel algorithm
+                       [b]oth. Add 1 (i.e. b1) to option to use old Condel algorithm
                        [default: off]
 
 NB: SIFT, PolyPhen and Condel predictions are currently available for human only
@@ -1400,6 +1486,9 @@ NB: Regulatory consequences are currently available for human and mouse only
                        entry in Ensembl Core database [default: off]
 --check_existing       If specified, checks for existing co-located variations in the
                        Ensembl Variation database [default: off]
+--failed [0|1]         Include (1) or exclude (0) variants that have been flagged as
+                       failed by Ensembl when checking for existing variants.
+		       [default: exclude]		       
 --check_alleles        If specified, the alleles of existing co-located variations
                        are compared to the input; an existing variation will only
                        be reported if no novel allele is in the input (strand is
