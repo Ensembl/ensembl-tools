@@ -18,6 +18,14 @@ developers list at <dev@ensembl.org>.
 Questions may also be sent to the Ensembl help desk at
 <helpdesk@ensembl.org>
   
+Quickstart
+==========
+
+Install API and cache files, run in offline mode:
+
+perl INSTALL.pl
+perl variant_effect_predictor.pl --offline
+
 
 Documentation
 =============
@@ -34,6 +42,24 @@ http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 
 Changelog
 =========
+
+New in version 2.4 (February 2012)
+----------------------------------
+- offline mode and new installer script make it easy to use the VEP without
+  the usual dependencies
+
+- output columns configurable using the --fields flag
+
+- VCF output support expanded, can now carry all fields
+
+- output affected exon and intron numbers with --numbers
+
+- output overlapping protein domains using --domains
+
+- enhanced support for LRGs
+
+- plugins now work on variants called as intergenic
+
 
 New in version 2.3 (December 2011)
 ----------------------------------
