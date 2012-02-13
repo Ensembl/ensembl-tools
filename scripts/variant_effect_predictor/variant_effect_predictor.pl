@@ -1098,7 +1098,7 @@ sub get_out_file_handle {
             condel     => ['Condel'],
             numbers    => ['EXON','INTRON'],
             domains    => ['domains'],
-            regulatory => ['MATRIX','MATRIX_POS','HIGH_INF_POS','MOTIF_SCORE_CHANGE'],
+            regulatory => ['MOTIF_NAME','MOTIF_POS','HIGH_INF_POS','MOTIF_SCORE_CHANGE'],
         );
         
         my @new_headers;
