@@ -165,7 +165,8 @@ if ($config{'gff3'} or $config{'report'}) {
 }
 else { #default to GFF for output
 	print STDERR "[Region report] Defaulting to GFF3 output format\n" if ($config{'verbose'});
-	$serializer = "GFFSerializer";
+	$serializer = "Bio::EnsEMBL::Utils::IO::GFFSerializer";
+	$ontology_adaptor = $registry->get_adaptor( 'Multi', 'Ontology', 'OntologyTerm' );
 	$serializer = new $serializer($ontology_adaptor,$output_fh);
 }
 
