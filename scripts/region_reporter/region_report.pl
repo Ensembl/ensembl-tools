@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 # Region Report tool
 #     A script for sampling a given set of chromosomal regions, producing a simple
