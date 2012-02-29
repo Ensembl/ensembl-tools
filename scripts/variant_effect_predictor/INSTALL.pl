@@ -296,21 +296,19 @@ print "\nDownloading list of available cache files\n";
 my $num = 1;
 my $species_list;
 my @files;
-foreach my $species_dir(@{parse_dir(get($CACHE_URL))}) {
-	push @files, map {$species_dir->[0].'/'.$_->[0]} grep {$_->[0] =~ /tar.gz/} @{parse_dir(get($CACHE_URL.'/'.$species_dir->[0]))};
-}
+push @files, map {$_->[0]} grep {$_->[0] =~ /tar.gz/} @{parse_dir(get($CACHE_URL))};
 
 # if we don't have a species list, we'll have to guess
 if(!scalar(@files)) {
 	print "Could not get current species list - using predefined list instead\n";
 	
 	@files = (
-		"bos_taurus/bos_taurus_vep_$API_VERSION.tar.gz",
-		"danio_rerio/danio_rerio_vep_$API_VERSION.tar.gz",
-		"homo_sapiens/homo_sapiens_vep_$API_VERSION.tar.gz",
-		"homo_sapiens/homo_sapiens_vep_$API_VERSION\_sift_polyphen.tar.gz",
-		"mus_musculus/mus_musculus_vep_$API_VERSION.tar.gz",
-		"rattus_norvegicus/rattus_norvegicus_vep_$API_VERSION.tar.gz",
+		"bos_taurus_vep_$API_VERSION.tar.gz",
+		"danio_rerio_vep_$API_VERSION.tar.gz",
+		"homo_sapiens_vep_$API_VERSION.tar.gz",
+		"homo_sapiens_vep_$API_VERSION\_sift_polyphen.tar.gz",
+		"mus_musculus_vep_$API_VERSION.tar.gz",
+		"rattus_norvegicus_vep_$API_VERSION.tar.gz",
 	);
 }
 
