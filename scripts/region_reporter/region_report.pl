@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 # Region Report tool
 #     A script for sampling a given set of chromosomal regions, producing a simple
@@ -57,11 +57,16 @@ GetOptions ( \%config,
 			 'include:s',				# features to include in report
 			 'exclude:s',				# features to exclude from report
 			 
-             'host=s',                  # database host
-             'port=s',                  # database port
-             'user=s',                  # database user name
-             'password=s',              # database password
-             'db_version=i',            # Ensembl database version to use e.g. 62
+       'host=s',                  # database host
+       'port=s',                  # database port
+       'user=s',                  # database user name
+       'password=s',              # database password
+       'db_version=i',            # Ensembl database version to use e.g. 62
+       
+       'secondaryhost=s',         # secondary database host
+       'secondaryport=s',         # secondary database port
+       'secondaryuser=s',         # secondary database user name
+       'secondarypassword=s',     # secondary database password
 
 			 'input=s',					# Input file containing many regions to parse in batch.
 			 'output=s',				# Target file to receive report
@@ -138,15 +143,34 @@ if (not defined ($config{'user'}) ) { $config{'user'} = 'anonymous';}
 if (not defined ($config{'db_version'})) { $config{'db_version'} = 65;}
 if (not defined ($config{'port'})) { $config{'port'} = 5306;}
 if (not defined ($config{'password'})) { $config{'password'} = "";}
+
 print STDERR "[Region report] # Connecting to ",$config{'host'},":",$config{'port'}," as ",$config{'user'},"\n" if ($config{'verbose'});
-$registry->load_registry_from_db(
-	-host => $config{'host'},
-	-user => $config{'user'},
-	-verbose => 0,
-	-db_version => $config{'db_version'},
-	-port => $config{'port'},
-	-password => $config{'password'},
-);
+my @dbs;
+push(@dbs, {
+  -HOST => $config{host},
+  -PORT => $config{port},
+  -USER => $config{'user'},
+  -VERBOSE => 0,
+  -DB_VERSION => $config{db_version},
+});
+$dbs[0]->{-PASSWORD} = $config{password} if $config{password};
+
+if($config{secondaryhost}) {
+  if (not defined ($config{'secondaryhost'}) ) { $config{'host'} = 'ensembldb.ensembl.org';}
+  if (not defined ($config{'secondaryuser'}) ) { $config{'user'} = 'anonymous';}
+  if (not defined ($config{'secondaryport'})) { $config{'port'} = 5306;}
+  if (not defined ($config{'secondarypassword'})) { $config{'password'} = "";}
+  push(@dbs, {
+    -HOST => $config{secondaryhost},
+    -PORT => $config{secondaryport},
+    -USER => $config{secondaryuser},
+    -VERBOSE => 0,
+    -DB_VERSION => $config{db_version},
+  });
+  $dbs[1]->{-PASSWORD} = $config{secondarypassword} if $config{secondarypassword};
+}
+
+$registry->load_registry_from_multiple_dbs(@dbs);
 
 
 # Create a serializer for output formatting.
