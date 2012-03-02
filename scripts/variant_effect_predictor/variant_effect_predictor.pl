@@ -240,6 +240,7 @@ sub configure {
         'freq_freq=f',             # frequency to filter on
         'freq_gt_lt=s',            # gt or lt (greater than or less than)
         'freq_pop=s',              # population to filter on
+        'allow_non_variant',       # allow non-variant VCF lines through
         
         # verbosity options
         'verbose|v',               # print out a bit more info while running
