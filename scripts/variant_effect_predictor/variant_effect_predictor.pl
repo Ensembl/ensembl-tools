@@ -1372,7 +1372,9 @@ sub print_line {
         
         # if the fields have been redefined we need to search through in case
         # any of the defined fields are actually part of the Extra hash
-        $output = join "\t", map { $line->{$_} || $extra{$_} || '-' } @{$config->{fields}};
+        $output = join "\t", map {
+            (defined $line->{$_} ? $line->{$_} : (defined $extra{$_} ? $extra{$_} : '-'))
+        } @{$config->{fields}};
     }
     
     # gvf
@@ -1460,7 +1462,7 @@ NB: Regulatory consequences are currently available for human and mouse only
 --ccds                 Output CCDS transcript identifiers [default: off]
 --xref_refseq          Output aligned RefSeq mRNA identifier for transcript. NB: the
                        RefSeq and Ensembl transcripts aligned in this way MAY NOT, AND
-                       FREQUENCTLY WILL NOT, match exactly in sequence, exon structure
+                       FREQUENTLY WILL NOT, match exactly in sequence, exon structure
                        and protein product [default: off]
 --protein              Output Ensembl protein identifer [default: off]
 --gene                 Force output of Ensembl gene identifer - disabled by default
