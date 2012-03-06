@@ -19,6 +19,7 @@ use warnings;
 use Bio::EnsEMBL::Registry;
 use Bio::EnsEMBL::Utils::IO::GFFSerializer;
 use Bio::EnsEMBL::Utils::IO::ReportSerializer;
+use Bio::EnsEMBL::ApiVersion qw/software_version/;
 use Getopt::Long;
 use IO::File;
 use Bio::EnsEMBL::Utils::IO qw(:slurp);
@@ -140,7 +141,7 @@ if ($config{'verbose'}) {
 
 if (not defined ($config{'host'}) ) { $config{'host'} = 'ensembldb.ensembl.org';}
 if (not defined ($config{'user'}) ) { $config{'user'} = 'anonymous';}
-if (not defined ($config{'db_version'})) { $config{'db_version'} = 65;}
+if (not defined ($config{'db_version'})) { $config{'db_version'} = software_version();}
 if (not defined ($config{'port'})) { $config{'port'} = 5306;}
 if (not defined ($config{'password'})) { $config{'password'} = "";}
 
