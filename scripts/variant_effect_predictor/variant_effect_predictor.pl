@@ -1094,6 +1094,7 @@ sub get_out_file_handle {
             canonical  => ['CANONICAL'],
             ccds       => ['CCDS'],
             hgvs       => ['HGVSc','HGVSp'],
+            hgnc       => ['HGNC'],
             sift       => ['SIFT'],
             polyphen   => ['PolyPhen'],
             condel     => ['Condel'],
