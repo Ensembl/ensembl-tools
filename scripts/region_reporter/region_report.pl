@@ -219,6 +219,7 @@ else {
 
 my @slices;
 foreach my $region (@regions) {
+	next unless $region; #empty line
 	print STDERR "[Region report] Requested region: $region\n" if ($config{'verbose'});
 	
 	eval {
