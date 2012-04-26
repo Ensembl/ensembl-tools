@@ -43,6 +43,20 @@ http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 Changelog
 =========
 
+New in version 2.5 (May 2012)
+-----------------------------
+
+- SIFT and PolyPhen predictions now available for RefSeq transcripts
+
+- retrieve cell type-specific regulatory consequences
+
+- consequences can be retrieved based on a single individual's genotype in
+  a VCF input file
+
+- find overlapping structural variants
+
+- Condel support removed from main script and moved to a plugin
+
 New in version 2.4 (February 2012)
 ----------------------------------
 - offline mode and new installer script make it easy to use the VEP without
