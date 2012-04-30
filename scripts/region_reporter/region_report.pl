@@ -157,10 +157,10 @@ push(@dbs, {
 $dbs[0]->{-PASSWORD} = $config{password} if $config{password};
 
 if($config{secondaryhost}) {
-  if (not defined ($config{'secondaryhost'}) ) { $config{'host'} = 'ensembldb.ensembl.org';}
-  if (not defined ($config{'secondaryuser'}) ) { $config{'user'} = 'anonymous';}
-  if (not defined ($config{'secondaryport'})) { $config{'port'} = 5306;}
-  if (not defined ($config{'secondarypassword'})) { $config{'password'} = "";}
+  if (not defined ($config{'secondaryhost'}) ) { $config{'secondaryhost'} = 'ensembldb.ensembl.org';}
+  if (not defined ($config{'secondaryuser'}) ) { $config{'secondaryuser'} = 'anonymous';}
+  if (not defined ($config{'secondaryport'})) { $config{'secondaryport'} = 5306;}
+  if (not defined ($config{'secondarypassword'})) { $config{'secondarypassword'} = "";}
   push(@dbs, {
     -HOST => $config{secondaryhost},
     -PORT => $config{secondaryport},
