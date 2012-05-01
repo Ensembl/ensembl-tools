@@ -154,7 +154,7 @@ push(@dbs, {
   -VERBOSE => 0,
   -DB_VERSION => $config{db_version},
 });
-$dbs[0]->{-PASSWORD} = $config{password} if $config{password};
+$dbs[0]->{-PASS} = $config{password} if $config{password};
 
 if($config{secondaryhost}) {
   if (not defined ($config{'secondaryhost'}) ) { $config{'secondaryhost'} = 'ensembldb.ensembl.org';}
@@ -168,7 +168,7 @@ if($config{secondaryhost}) {
     -VERBOSE => 0,
     -DB_VERSION => $config{db_version},
   });
-  $dbs[1]->{-PASSWORD} = $config{secondarypassword} if $config{secondarypassword};
+  $dbs[1]->{-PASS} = $config{secondarypassword} if $config{secondarypassword};
 }
 
 $registry->load_registry_from_multiple_dbs(@dbs);
