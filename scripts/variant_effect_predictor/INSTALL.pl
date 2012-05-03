@@ -5,7 +5,7 @@ use LWP::Simple qw($ua getstore get);
 use File::Listing qw(parse_dir);
 
 $| = 1;
-our $VERSION = 2.4;
+our $VERSION = 2.5;
 
 # CONFIGURE
 ###########
@@ -43,7 +43,7 @@ my $lib_dir = $DEST_DIR;
 $DEST_DIR       .= '/Bio';
 $ENS_CVS_ROOT ||= 'http://cvs.sanger.ac.uk/cgi-bin/viewvc.cgi/';
 $BIOPERL_URL  ||= 'http://bioperl.org/DIST/old_releases/bioperl-1.2.3.tar.gz';
-$API_VERSION  ||= 66;
+$API_VERSION  ||= 67;
 $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP";
 $CACHE_DIR    ||= $ENV{HOME}.'/.vep';
 
