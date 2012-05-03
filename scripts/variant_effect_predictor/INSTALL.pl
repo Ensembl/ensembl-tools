@@ -321,7 +321,16 @@ print "The following species/files are available; which do you want (can specify
 foreach my $file(split /\s+/, <>) {
 	my $file_path = $files[$file - 1];
 	
-	my ($species, $file_name) = (split /\//, $file_path);
+	my ($species, $file_name);
+	
+	if($file_path =~ /\//) {
+		($species, $file_name) = (split /\//, $file_path);
+	}
+	else {
+		$file_name = $file_path;
+		$file_name =~ m/^(\w+?\_\w+?)\_vep/;
+		$species = $1;
+	}
 	
 	# check if user already has this species and version
 	if(-e "$CACHE_DIR/$species/$API_VERSION") {
