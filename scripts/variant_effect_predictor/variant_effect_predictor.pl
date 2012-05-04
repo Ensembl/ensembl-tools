@@ -1196,6 +1196,7 @@ sub get_out_file_handle {
             individual  => ['IND'],
             xref_refseq => ['RefSeq'],
             check_svs   => ['SV'],
+            check_frequency => ['FREQS'],
         );
         
         my @new_headers;
@@ -1295,6 +1296,7 @@ sub get_out_file_handle {
 ## CELL_TYPE    : List of cell types and classifications for regulatory feature
 ## IND          : Individual name
 ## SV           : IDs of overlapping structural variants
+## FREQS        : Frequencies of overlapping variants used in filtering
 HEAD
    
     $header .= get_plugin_headers($config);
