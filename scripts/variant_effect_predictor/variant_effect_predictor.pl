@@ -422,7 +422,6 @@ sub configure {
             numbers    => 1,
             domains    => 1,
             regulatory => 1,
-            cell_type  => 1,
             canonical  => 1,
             protein    => 1,
         );
