@@ -19,6 +19,7 @@ use warnings;
 use Bio::EnsEMBL::Registry;
 use Bio::EnsEMBL::Utils::IO::GFFSerializer;
 use Bio::EnsEMBL::Utils::IO::ReportSerializer;
+use Bio::EnsEMBL::Utils::IO::FASTASerializer;
 use Bio::EnsEMBL::ApiVersion qw/software_version/;
 use Getopt::Long;
 use IO::File;
@@ -307,7 +308,8 @@ foreach my $slice (@slices) {
 if ($feature_types{'q'} ) {
     $serializer->print_metadata("#FASTA\n"); #Print method provides first #
     foreach my $slice (@slices) {
-        $serializer->print_sequence($slice);
+        my $fasta_serializer = Bio::EnsEMBL::Utils::IO::FASTASerializer->new($output_fh);
+        $fasta_serializer->print_Seq($slice);
     }
 }
 
