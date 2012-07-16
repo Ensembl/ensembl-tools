@@ -43,6 +43,20 @@ http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 Changelog
 =========
 
+New in version 2.6 (July 2012)
+------------------------------
+
+- support for structural variant consequences
+
+- Sequence Ontology (SO) consequence terms now default
+
+- script runtime 3-4x faster when using forking
+
+- 1000 Genomes global MAF available in cache files
+
+- improved memory usage
+
+
 New in version 2.5 (May 2012)
 -----------------------------
 
@@ -56,6 +70,7 @@ New in version 2.5 (May 2012)
 - find overlapping structural variants
 
 - Condel support removed from main script and moved to a plugin
+
 
 New in version 2.4 (February 2012)
 ----------------------------------
