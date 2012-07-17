@@ -1606,8 +1606,8 @@ Options
                        
 --species [species]    Species to use [default: "human"]
 
--t | --terms           Type of consequence terms to output - one of "ensembl", "SO",
-                       "NCBI" [default: ensembl]
+-t | --terms           Type of consequence terms to output - one of "SO", "ensembl"
+                       [default: SO]
  
 --sift=[p|s|b]         Add SIFT [p]rediction, [s]core or [b]oth [default: off]
 --polyphen=[p|s|b]     Add PolyPhen [p]rediction, [s]core or [b]oth [default: off]
