@@ -358,7 +358,7 @@ sub configure {
         'polyphen=s',              # PolyPhen predictions
         'condel=s',                # Condel predictions
         'regulatory',              # enable regulatory stuff
-        'cell_type=s',             # filter cell types for regfeats
+        'cell_type=s' => ($config->{cell_type} ||= []),             # filter cell types for regfeats
         'convert=s',               # convert input to another format (doesn't run VEP)
         'filter=s',                # run in filtering mode
         'no_intergenic',           # don't print out INTERGENIC consequences
@@ -548,6 +548,12 @@ sub configure {
         $config->{allow_non_variant} = 1;
     }
     
+    # regulatory has to be on for cell_type
+    if(defined($config->{cell_type})) {
+        $config->{regulatory} = 1;
+        $config->{cell_type} = [map {split /\,/, $_} @{$config->{cell_type}}];
+    }
+    
     # summarise options if verbose
     if(defined $config->{verbose}) {
         my $header =<<INTRO;
@@ -665,12 +671,6 @@ INTRO
     $config->{terms}             ||= 'SO';
     $config->{cache_region_size} ||= 1000000;
     $config->{compress}          ||= 'zcat';
-    
-    # regulatory has to be on for cell_type
-    if(defined($config->{cell_type})) {
-        $config->{regulatory} = 1;
-        $config->{cell_type} = [split /\,/, $config->{cell_type}] if defined($config->{cell_type});
-    }
     
     # can't use a whole bunch of options with most_severe
     if(defined($config->{most_severe})) {
