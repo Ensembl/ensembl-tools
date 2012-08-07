@@ -745,7 +745,7 @@ INTRO
         $config->{cache} = 1;
         $config->{strip} = 1;
         $config->{write_cache} = 1;
-        $config->{cell_type} = 1 if defined($config->{regulatory});
+        $config->{cell_type} = [1] if defined($config->{regulatory});
     }
     
     # connect to databases
