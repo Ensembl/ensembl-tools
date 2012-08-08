@@ -549,7 +549,7 @@ sub configure {
     }
     
     # regulatory has to be on for cell_type
-    if(defined($config->{cell_type})) {
+    if(defined($config->{cell_type}) && scalar(@{$config->{cell_type}})) {
         $config->{regulatory} = 1;
         $config->{cell_type} = [map {split /\,/, $_} @{$config->{cell_type}}];
     }
