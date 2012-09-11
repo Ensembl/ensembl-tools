@@ -874,7 +874,7 @@ INTRO
     }
     
     # check cell types
-    if(defined($config->{cell_type}) && !defined($config->{build})) {
+    if(defined($config->{cell_type}) && scalar @{$config->{cell_type}} && !defined($config->{build})) {
         my $cls = '';
         
         if(defined($config->{cache})) {
