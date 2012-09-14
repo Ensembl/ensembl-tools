@@ -404,6 +404,11 @@ sub configure {
         exit(0);
     }
     
+    # config file?
+    if(defined $config->{config}) {
+        read_config_from_file($config, $config->{config});
+    }
+    
     # dir is where the cache and plugins live
     $config->{dir} ||= join '/', ($ENV{'HOME'}, '.vep');
    
@@ -417,11 +422,6 @@ sub configure {
     
     if(-e $ini_file) {
         read_config_from_file($config, $ini_file);
-    }
-    
-    # config file?
-    if(defined $config->{config}) {
-        read_config_from_file($config, $config->{config});
     }
 
     # can't be both quiet and verbose
@@ -1350,7 +1350,7 @@ sub get_out_file_handle {
     my $version_string =
         "Using API version ".$config->{reg}->software_version.
         ", DB version ".(defined $config->{mca} && $config->{mca}->get_schema_version ? $config->{mca}->get_schema_version : '?');
-    
+        
     # add key for extra column headers based on config
     my $extra_column_keys = join "\n",
         map {'## '.$_.' : '.$extra_descs{$_}}
