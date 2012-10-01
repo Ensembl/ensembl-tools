@@ -43,6 +43,15 @@ http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 Changelog
 =========
 
+New in version 2.7 (October 2012)
+---------------------------------
+
+- build VEP cache files offline from GTF and FASTA files
+
+- support for using FASTA files for sequence lookup in HGVS notations in
+  offline/cache modes
+
+
 New in version 2.6 (July 2012)
 ------------------------------
 

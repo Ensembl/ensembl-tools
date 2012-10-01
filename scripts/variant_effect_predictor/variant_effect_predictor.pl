@@ -26,7 +26,7 @@ Variant Effect Predictor - a script to predict the consequences of genomic varia
 
 http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 
-Version 2.6
+Version 2.7
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -57,7 +57,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 );
 
 # global vars
-my $VERSION = '2.6';
+my $VERSION = '2.7';
 
  
 # define headers that would normally go in the extra field
@@ -389,6 +389,7 @@ sub configure {
         'custom=s' => ($config->{custom} ||= []), # specify custom tabixed bgzipped file with annotation
         'tmpdir=s',                # tmp dir used for BigWig retrieval
         'plugin=s' => ($config->{plugin} ||= []), # specify a method in a module in the plugins directory
+        'fasta=s',                 # file or dir containing FASTA files with reference sequence
         
         # debug
         'cluck',                   # these two need some mods to Bio::EnsEMBL::DBSQL::StatementHandle to work. Clucks callback trace and SQL
@@ -404,6 +405,11 @@ sub configure {
         exit(0);
     }
     
+    # config file?
+    if(defined $config->{config}) {
+        read_config_from_file($config, $config->{config});
+    }
+    
     # dir is where the cache and plugins live
     $config->{dir} ||= join '/', ($ENV{'HOME'}, '.vep');
    
@@ -417,11 +423,6 @@ sub configure {
     
     if(-e $ini_file) {
         read_config_from_file($config, $ini_file);
-    }
-    
-    # config file?
-    if(defined $config->{config}) {
-        read_config_from_file($config, $config->{config});
     }
 
     # can't be both quiet and verbose
@@ -464,6 +465,65 @@ sub configure {
     # check convert format
     if(defined $config->{convert}) {
         die "ERROR: Unrecognised output format for conversion specified \"".$config->{convert}."\"\n" unless $config->{convert} =~ /vcf|ensembl|pileup|hgvs/i;
+    }
+    
+    
+    if(defined($config->{fasta})) {
+        die "ERROR: Specified FASTA file/directory not found" unless -e $config->{fasta};
+        
+        eval q{ use Bio::DB::Fasta; };
+        
+        if($@) {
+            die("ERROR: Could not load required BioPerl module\n");
+        }
+        
+        # try to overwrite sequence method in Slice
+        eval {
+            package Bio::EnsEMBL::Slice;
+            
+            # define a global variable so that we can pull in config hash
+            our $config;
+            
+            {
+                # don't want a redefine warning spat out, thanks
+                no warnings 'redefine';
+                
+                # overwrite seq method to read from FASTA DB
+                sub seq {
+                    my $self = shift;
+                    
+                    my $seq;
+                    
+                    if(defined($config->{fasta_db})) {
+                        $seq = $config->{fasta_db}->seq($self->seq_region_name, $self->start => $self->end);
+                        reverse_comp(\$seq) if $self->strand < 0;
+                    }
+                    
+                    # default to a string of Ns if we couldn't get sequence
+                    $seq ||= 'N' x $self->length();
+                    
+                    return $seq;
+                }
+            }
+            
+            1;
+        };
+        
+        if($@) {
+            die("ERROR: Could not redefine sequence method\n");
+        }
+        
+        # copy to Slice for offline sequence fetching
+        $Bio::EnsEMBL::Slice::config = $config;
+        
+        # spoof a coordinate system
+        $config->{coord_system} = Bio::EnsEMBL::CoordSystem->new(
+            -NAME => 'chromosome',
+            -RANK => 1,
+        );
+        
+        debug("Checking/creating FASTA index");
+        $config->{fasta_db} = Bio::DB::Fasta->new($config->{fasta});
     }
     
     # check if user still using --standalone
@@ -522,7 +582,7 @@ sub configure {
         $config->{$_} = $everything{$_} for keys %everything;
         
         # these ones won't work with offline
-        delete $config->{hgvs} if defined($config->{offline});
+        delete $config->{hgvs} if defined($config->{offline}) && !defined($config->{fasta_db});
     }
     
     # check nsSNP tools
@@ -717,11 +777,12 @@ INTRO
     if(defined($config->{offline})) {
         $config->{cache} = 1;
         
-        #die("ERROR: Cannot generate HGVS coordinates in offline mode\n") if defined($config->{hgvs});
+        die("ERROR: Cannot generate HGVS coordinates in offline mode without a FASTA file (see --fasta)\n") if defined($config->{hgvs}) && !defined($config->{fasta_db});
         die("ERROR: Cannot use HGVS as input in offline mode\n") if $config->{format} eq 'hgvs';
         die("ERROR: Cannot use variant identifiers as input in offline mode\n") if $config->{format} eq 'id';
         die("ERROR: Cannot do frequency filtering in offline mode\n") if defined($config->{check_frequency});
         die("ERROR: Cannot retrieve overlapping structural variants in offline mode\n") if defined($config->{check_sv});
+        die("ERROR: Cannot check reference sequences without a FASTA file (see --fasta)\n") if defined($config->{check_ref}) && !defined($config->{fasta_db});
     }
     
     # write_cache needs cache
@@ -874,7 +935,7 @@ INTRO
     }
     
     # check cell types
-    if(defined($config->{cell_type}) && !defined($config->{build})) {
+    if(defined($config->{cell_type}) && scalar @{$config->{cell_type}} && !defined($config->{build})) {
         my $cls = '';
         
         if(defined($config->{cache})) {
@@ -936,8 +997,8 @@ INTRO
     if(defined($config->{cache})) {
         
         # these two def depend on DB
-        foreach my $param(grep {defined $config->{$_}} qw(hgvs check_frequency lrg check_sv)) {
-            debug("INFO: Database will be accessed when using --$param") unless defined($config->{quiet});
+        foreach my $param(grep {defined $config->{$_}} qw(hgvs check_frequency lrg check_sv check_ref)) {
+            debug("INFO: Database will be accessed when using --$param") unless defined($config->{quiet}) or ($param =~ /hgvs|check_ref/ and defined($config->{fasta_db}));
         }
         
         # as does using HGVS or IDs as input
@@ -1153,6 +1214,37 @@ sub get_adaptors {
     
     die "ERROR: No registry" unless defined $config->{reg};
     
+    # try fetching a slice adaptor
+    eval {
+        $config->{sa}  = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'slice');
+    };
+    
+    if($@) {
+        if($@ =~ /not find internal name for species/) {
+            my %register = %Bio::EnsEMBL::Registry::registry_register;
+            my @species_list = sort keys %{$register{_SPECIES}};
+            
+            debug("ERROR: Could not find database for species ".$config->{species});
+            
+            if(scalar @species_list) {
+                debug("List of valid species for this server:\n\n".(join "\n", @species_list));
+            }
+            
+            die("\nExiting\n");
+        }
+        
+        else {
+            die $@;
+        }
+    }
+    
+    # get the remaining core adaptors
+    $config->{ga}  = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'gene');
+    $config->{ta}  = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'transcript');
+    $config->{mca} = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'metacontainer');
+    $config->{csa} = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'coordsystem');
+    
+    # get variation adaptors
     $config->{vfa}   = $config->{reg}->get_adaptor($config->{species}, 'variation', 'variationfeature');
     $config->{svfa}  = $config->{reg}->get_adaptor($config->{species}, 'variation', 'structuralvariationfeature');
     $config->{tva}   = $config->{reg}->get_adaptor($config->{species}, 'variation', 'transcriptvariation');
@@ -1165,12 +1257,6 @@ sub get_adaptors {
         $config->{svfa} = Bio::EnsEMBL::Variation::DBSQL::StructuralVariationFeatureAdaptor->new_fake($config->{species});
         $config->{tva}  = Bio::EnsEMBL::Variation::DBSQL::TranscriptVariationAdaptor->new_fake($config->{species});
     }
-    
-    $config->{sa}  = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'slice');
-    $config->{ga}  = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'gene');
-    $config->{ta}  = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'transcript');
-    $config->{mca} = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'metacontainer');
-    $config->{csa} = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'coordsystem');
     
     # cache schema version
     $config->{mca}->get_schema_version if defined $config->{mca};
@@ -1350,6 +1436,20 @@ sub get_out_file_handle {
     my $version_string =
         "Using API version ".$config->{reg}->software_version.
         ", DB version ".(defined $config->{mca} && $config->{mca}->get_schema_version ? $config->{mca}->get_schema_version : '?');
+        
+    # sift/polyphen versions
+    foreach my $tool(qw(sift polyphen)) {
+        if(defined($config->{$tool})) {
+            my $string = 'config_'.$tool.'_version';
+            
+            if(!defined($config->{$string})) {
+                my $var_mca = $config->{reg}->get_adaptor($config->{species}, 'variation', 'metacontainer');
+                my $values = $var_mca->list_value_by_key($tool.'_version') if defined($var_mca);
+                $config->{$string} = $values->[0] if scalar @$values;
+            }
+            $version_string .= "\n## $tool version ".$config->{$string} if defined($config->{$string});
+        }
+    }
     
     # add key for extra column headers based on config
     my $extra_column_keys = join "\n",
@@ -1741,6 +1841,15 @@ NB: Regulatory consequences are currently available for human and mouse only
                        chromosomes with --build all, or a list of chromosomes (see
                        --chr). DO NOT USE WHEN CONNECTED TO PUBLIC DB SERVERS AS THIS
                        VIOLATES OUR FAIR USAGE POLICY [default: off]
+                       
+--fasta [file|dir]     Specify a FASTA file or a directory containing FASTA files
+                       to use to look up reference sequence. The first time you
+                       run the script with this parameter an index will be built
+                       which can take a few minutes. This is required if
+                       fetching HGVS annotations (--hgvs) or checking reference
+                       sequences (--check_ref) in offline mode (--offline), and
+                       optional with some performance increase in cache mode
+                       (--cache). See documentation for more details
                        
 --compress             Specify utility to decompress cache files - may be "gzcat" or
                        "gzip -dc" Only use if default does not work [default: zcat]
