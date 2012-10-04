@@ -1733,7 +1733,7 @@ NB: Regulatory consequences are currently available for human and mouse only
 --plugin [plugin_name] Use named plugin module [default: off]
 --hgnc                 Add HGNC gene identifiers to output [default: off]
 --hgvs                 Output HGVS identifiers (coding and protein). Requires database
-                       connection [default: off]
+                       connection or --fasta [default: off]
 --ccds                 Output CCDS transcript identifiers [default: off]
 --xref_refseq          Output aligned RefSeq mRNA identifier for transcript. NB: the
                        RefSeq and Ensembl transcripts aligned in this way MAY NOT, AND
