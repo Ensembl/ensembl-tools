@@ -1442,7 +1442,7 @@ sub get_out_file_handle {
         if(defined($config->{$tool})) {
             my $string = 'config_'.$tool.'_version';
             
-            if(!defined($config->{$string})) {
+            if(!defined($config->{$string}) && !defined($config->{offline})) {
                 my $var_mca = $config->{reg}->get_adaptor($config->{species}, 'variation', 'metacontainer');
                 my $values = $var_mca->list_value_by_key($tool.'_version') if defined($var_mca);
                 $config->{$string} = $values->[0] if scalar @$values;
