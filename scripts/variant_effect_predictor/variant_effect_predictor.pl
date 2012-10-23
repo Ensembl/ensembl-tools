@@ -492,11 +492,23 @@ sub configure {
                 sub seq {
                     my $self = shift;
                     
+                    # special case for in-between (insert) coordinates
+                    return '' if($self->start() == $self->end() + 1);
+                    
                     my $seq;
                     
                     if(defined($config->{fasta_db})) {
                         $seq = $config->{fasta_db}->seq($self->seq_region_name, $self->start => $self->end);
                         reverse_comp(\$seq) if $self->strand < 0;
+                    }
+                    
+                    else {
+                        return $self->{'seq'} if($self->{'seq'});
+                      
+                        if($self->adaptor()) {
+                          my $seqAdaptor = $self->adaptor()->db()->get_SequenceAdaptor();
+                          return ${$seqAdaptor->fetch_by_Slice_start_end_strand($self,1,undef,1)};
+                        }
                     }
                     
                     # default to a string of Ns if we couldn't get sequence
