@@ -534,7 +534,7 @@ sub configure {
             -RANK => 1,
         );
         
-        debug("Checking/creating FASTA index");
+        debug("Checking/creating FASTA index") unless defined($config->{quiet});
         $config->{fasta_db} = Bio::DB::Fasta->new($config->{fasta});
     }
     
