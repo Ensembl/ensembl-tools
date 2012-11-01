@@ -478,7 +478,7 @@ sub configure {
         }
         
         # try to overwrite sequence method in Slice
-        eval {
+        eval q{
             package Bio::EnsEMBL::Slice;
             
             # define a global variable so that we can pull in config hash
