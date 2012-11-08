@@ -20,6 +20,8 @@ our $VERSION = 2.7;
 
 my $config = {};
 
+my $count_args = scalar @ARGV;
+
 GetOptions(
 	$config,
 	'input|i|gtf|g=s',
@@ -31,7 +33,7 @@ GetOptions(
 	'help',
 ) or die "ERROR: Failed to parse command line options\n";
 
-if(defined($config->{help}) || !@ARGV) {
+if(defined($config->{help}) || !$count_args) {
 	usage();
 	exit(0);
 }
