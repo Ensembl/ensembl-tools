@@ -5,7 +5,7 @@ use LWP::Simple qw($ua getstore get);
 use File::Listing qw(parse_dir);
 
 $| = 1;
-our $VERSION = 2.7;
+our $VERSION = 2.8;
 
 # CONFIGURE
 ###########
@@ -43,7 +43,7 @@ my $lib_dir = $DEST_DIR;
 $DEST_DIR       .= '/Bio';
 $ENS_CVS_ROOT ||= 'http://cvs.sanger.ac.uk/cgi-bin/viewvc.cgi/';
 $BIOPERL_URL  ||= 'http://bioperl.org/DIST/old_releases/bioperl-1.2.3.tar.gz';
-$API_VERSION  ||= 69;
+$API_VERSION  ||= 70;
 $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP";
 $CACHE_DIR    ||= $ENV{HOME}.'/.vep';
 
@@ -242,7 +242,6 @@ my $bioperl_dir = $1;
 `mv -f $DEST_DIR/tmp/$bioperl_dir/Bio/* $DEST_DIR/`;
 `rm -rf $DEST_DIR/tmp/$bioperl_dir`;# or die "ERROR: Failed to remove directory $DEST_DIR/$bioperl_dir\n";
 `rm -rf $DEST_DIR/tmp`;
-
 
 
 # TEST
