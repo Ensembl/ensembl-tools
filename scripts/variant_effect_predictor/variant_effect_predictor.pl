@@ -26,7 +26,7 @@ Variant Effect Predictor - a script to predict the consequences of genomic varia
 
 http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 
-Version 2.7
+Version 2.8
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -57,7 +57,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 );
 
 # global vars
-my $VERSION = '2.7';
+my $VERSION = '2.8';
 
  
 # define headers that would normally go in the extra field
@@ -275,9 +275,9 @@ sub main {
         $config->{last_time} = time();
         
         debug("Processed $total_vf_count total variants ($rate, $total_rate total)") unless defined($config->{quiet});
-        
-        debug($config->{filter_count}, "/$total_vf_count variants remain after filtering") if defined($config->{filter}) && !defined($config->{quiet});
     }
+    
+    debug($config->{filter_count}, "/$total_vf_count variants remain after filtering") if (defined($config->{filter}) || defined($config->{check_frequency})) && !defined($config->{quiet});
     
     debug("Executed ", defined($Bio::EnsEMBL::DBSQL::StatementHandle::count_queries) ? $Bio::EnsEMBL::DBSQL::StatementHandle::count_queries : 'unknown number of', " SQL statements") if defined($config->{count_queries}) && !defined($config->{quiet});
     
@@ -309,7 +309,6 @@ sub configure {
         'db_version=i',            # Ensembl database version to use e.g. 62
         'genomes',                 # automatically sets DB params for e!Genomes
         'refseq',                  # use otherfeatures RefSeq DB instead of Ensembl
-        #'no_disconnect',           # disables disconnect_when_inactive
         
         # runtime options
         'most_severe',             # only return most severe consequence
@@ -332,6 +331,7 @@ sub configure {
         'freq_freq=f',             # frequency to filter on
         'freq_gt_lt=s',            # gt or lt (greater than or less than)
         'freq_pop=s',              # population to filter on
+        'filter_common',           # shortcut to MAF filtering
         'allow_non_variant',       # allow non-variant VCF lines through
         'individual=s',            # give results by genotype for individuals
         'phased',                  # force VCF genotypes to be interpreted as phased
@@ -390,6 +390,7 @@ sub configure {
         'tmpdir=s',                # tmp dir used for BigWig retrieval
         'plugin=s' => ($config->{plugin} ||= []), # specify a method in a module in the plugins directory
         'fasta=s',                 # file or dir containing FASTA files with reference sequence
+        'freq_file=s',             # file containing freqs to add to cache build
         
         # debug
         'cluck',                   # these two need some mods to Bio::EnsEMBL::DBSQL::StatementHandle to work. Clucks callback trace and SQL
@@ -759,6 +760,16 @@ INTRO
     }
     
     # frequency filtering
+    if(defined($config->{filter_common})) {
+        $config->{check_frequency} = 1;
+        
+        # set defaults
+        $config->{freq_freq}   ||= 0.01;
+        $config->{freq_filter} ||= 'exclude';
+        $config->{freq_pop}    ||= '1KG_ALL';
+        $config->{freq_gt_lt}  ||= 'gt';
+    }
+    
     if(defined($config->{check_frequency})) {
         foreach my $flag(qw(freq_freq freq_filter freq_pop freq_gt_lt)) {
             die "ERROR: To use --check_frequency you must also specify flag --$flag\n" unless defined $config->{$flag};
@@ -792,7 +803,7 @@ INTRO
         die("ERROR: Cannot generate HGVS coordinates in offline mode without a FASTA file (see --fasta)\n") if defined($config->{hgvs}) && !defined($config->{fasta_db});
         die("ERROR: Cannot use HGVS as input in offline mode\n") if $config->{format} eq 'hgvs';
         die("ERROR: Cannot use variant identifiers as input in offline mode\n") if $config->{format} eq 'id';
-        die("ERROR: Cannot do frequency filtering in offline mode\n") if defined($config->{check_frequency});
+        die("ERROR: Cannot do frequency filtering in offline mode\n") if defined($config->{check_frequency}) && $config->{freq_pop} !~ /1kg.*(all|afr|amr|asn|eur)/i;
         die("ERROR: Cannot retrieve overlapping structural variants in offline mode\n") if defined($config->{check_sv});
         die("ERROR: Cannot check reference sequences without a FASTA file (see --fasta)\n") if defined($config->{check_ref}) && !defined($config->{fasta_db});
     }
@@ -995,6 +1006,20 @@ INTRO
             die("ERROR: Cannot build cache using public database server ", $config->{host}, "\n");
         }
         
+        # get 1KG freqs
+        if(defined($config->{'freq_file'})) {
+            debug("Loading extra frequencies from ".$config->{'freq_file'}) unless defined($config->{quiet});
+            
+            open IN, $config->{'freq_file'} or die "ERROR: Could not open frequencies file ".$config->{'freq_file'}."\n";
+            while(<IN>) {
+                chomp;
+                my @data = split /\t/;
+                my $id = shift @data;
+                $config->{'freqs'}->{$id} = join(" ", @data);
+            }
+            close IN;
+        }
+        
         # build the cache
         debug("Building cache for ".$config->{species}) unless defined($config->{quiet});
         build_full_cache($config);
@@ -1009,9 +1034,11 @@ INTRO
     if(defined($config->{cache})) {
         
         # these two def depend on DB
-        foreach my $param(grep {defined $config->{$_}} qw(hgvs check_frequency lrg check_sv check_ref)) {
+        foreach my $param(grep {defined $config->{$_}} qw(hgvs lrg check_sv check_ref)) {
             debug("INFO: Database will be accessed when using --$param") unless defined($config->{quiet}) or ($param =~ /hgvs|check_ref/ and defined($config->{fasta_db}));
         }
+        
+        debug("INFO: Database will be accessed when using --check_frequency with population ".$config->{freq_pop}) if !defined($config->{quiet}) and defined($config->{check_frequency}) && $config->{freq_pop} !~ /1kg.*(all|afr|amr|asn|eur)/i;
         
         # as does using HGVS or IDs as input
         debug("INFO: Database will be accessed when using --format ", $config->{format}) if ($config->{format} eq 'id' || $config->{format} eq 'hgvs') && !defined($config->{quiet});
@@ -1790,6 +1817,12 @@ NB: Regulatory consequences are currently available for human and mouse only
                        iteratively to progressively filter a set of variants. See
                        documentation for full details [default: off]
 
+--filter_common        Shortcut flag for the filters below - this will exclude
+                       variants that have a co-located existing variant with global
+                       MAF > 0.01 (1%). May be modified using any of the following
+                       freq_* filters. For human, this can be used in offline mode
+                       for the following populations: 1KG_ALL, 1KG_AFR, 1KG_AMR,
+                       1KG_ASN, 1KG_EUR
 --check_frequency      Turns on frequency filtering. Use this to include or exclude
                        variants based on the frequency of co-located existing
                        variants in the Ensembl Variation database. You must also
