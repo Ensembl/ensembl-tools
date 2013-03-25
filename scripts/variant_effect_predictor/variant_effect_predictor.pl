@@ -26,7 +26,7 @@ Variant Effect Predictor - a script to predict the consequences of genomic varia
 
 http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 
-Version 2.8
+Version 71
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -34,6 +34,7 @@ by Will McLaren (wm2@ebi.ac.uk)
 use strict;
 use Getopt::Long;
 use FileHandle;
+use CGI qw/:standard/;
 use FindBin qw($Bin);
 use lib $Bin;
 
@@ -57,7 +58,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 );
 
 # global vars
-my $VERSION = '2.8';
+my $VERSION = '71';
 
  
 # define headers that would normally go in the extra field
@@ -106,6 +107,21 @@ my %extra_descs = (
     'DISTANCE'     => 'Shortest distance from variant to transcript',
 );
 
+my %ts_tv = (
+  'A/G' => 'Ts',
+  'G/A' => 'Ts',
+  'C/T' => 'Ts',
+  'T/C' => 'Ts',
+  'A/C' => 'Tv',
+  'C/A' => 'Tv',
+  'G/T' => 'Tv',
+  'T/G' => 'Tv',
+  'C/G' => 'Tv',
+  'G/C' => 'Tv',
+  'A/T' => 'Tv',
+  'T/A' => 'Tv',
+);
+
 # set output autoflush for progress bars
 $| = 1;
 
@@ -121,8 +137,12 @@ sub main {
     
     debug("Starting...") unless defined $config->{quiet};
     
+    # this is for counting seconds
     $config->{start_time} = time();
     $config->{last_time} = time();
+    
+    # this is for stats
+    $config->{stats}->{start_time} = get_time();
     
     my $tr_cache = {};
     my $rf_cache = {};
@@ -277,9 +297,18 @@ sub main {
         debug("Processed $total_vf_count total variants ($rate, $total_rate total)") unless defined($config->{quiet});
     }
     
-    debug($config->{filter_count}, "/$total_vf_count variants remain after filtering") if (defined($config->{filter}) || defined($config->{check_frequency})) && !defined($config->{quiet});
+    debug($config->{stats}->{filter_count}, "/$total_vf_count variants remain after filtering") if (defined($config->{filter}) || defined($config->{check_frequency})) && !defined($config->{quiet});
     
     debug("Executed ", defined($Bio::EnsEMBL::DBSQL::StatementHandle::count_queries) ? $Bio::EnsEMBL::DBSQL::StatementHandle::count_queries : 'unknown number of', " SQL statements") if defined($config->{count_queries}) && !defined($config->{quiet});
+    
+    $config->{stats}->{var_count} = $total_vf_count;
+    $config->{stats}->{end_time} = get_time();
+    $config->{stats}->{run_time} = time() - $config->{start_time};
+    
+    unless(defined($config->{no_stats})) {
+      summarise_stats($config);
+      debug("Wrote stats summary to ".$config->{stats_file});
+    }
     
     debug("Finished!") unless defined $config->{quiet};
 }
@@ -289,6 +318,9 @@ sub configure {
     my $args = shift;
     
     my $config = {};
+    
+    my @ARGV_copy = @ARGV;
+    $config->{stats}->{options} = \@ARGV_copy;
     
     GetOptions(
         $config,
@@ -327,6 +359,7 @@ sub configure {
         'check_alleles',           # only attribute co-located if alleles are the same
         'check_frequency',         # enable frequency checking
         'gmaf',                    # add global MAF of existing var
+        'maf_1kg',                 # add 1KG MAFs of existing vars
         'freq_filter=s',           # exclude or include
         'freq_freq=f',             # frequency to filter on
         'freq_gt_lt=s',            # gt or lt (greater than or less than)
@@ -345,6 +378,9 @@ sub configure {
         # output options
         'everything|e',            # switch on EVERYTHING :-)
         'output_file|o=s',         # output file name
+        'html',                    # generate an HTML version of output
+        'stats_file|sf=s',         # stats file name
+        'no_stats',                # don't write stats file
         'force_overwrite',         # force overwrite of output file if already exists
         'terms|t=s',               # consequence terms to use e.g. NCBI, SO
         'coding_only',             # only return results for consequences in coding regions
@@ -602,7 +638,7 @@ sub configure {
     foreach my $tool(grep {defined $config->{lc($_)}} qw(SIFT PolyPhen Condel)) {
         die "ERROR: Unrecognised option for $tool \"", $config->{lc($tool)}, "\" - must be one of p (prediction), s (score) or b (both)\n" unless $config->{lc($tool)} =~ /^(s|p|b)/;
         
-        die "ERROR: $tool not available for this species\n" unless $config->{species} =~ /human|homo/i;
+        #die "ERROR: $tool not available for this species\n" unless $config->{species} =~ /human|homo/i;
         
         die "ERROR: $tool functionality is now available as a VEP Plugin - see http://www.ensembl.org/info/docs/variation/vep/vep_script.html#plugins\n" if $tool eq 'Condel';
     }
@@ -731,7 +767,7 @@ INTRO
         
         $config->{filter} = \%filters;
         
-        $config->{filter_count} = 0;
+        $config->{stats}->{filter_count} = 0;
     }
     
     # set defaults
@@ -739,6 +775,7 @@ INTRO
     $config->{buffer_size}       ||= 5000;
     $config->{chunk_size}        ||= '50kb';
     $config->{output_file}       ||= "variant_effect_output.txt";
+    $config->{stats_file}        ||= $config->{output_file}."_summary.html";
     $config->{tmpdir}            ||= '/tmp';
     $config->{format}            ||= 'guess';
     $config->{terms}             ||= 'SO';
@@ -779,7 +816,7 @@ INTRO
         $config->{check_existing} = 1;
     }
     
-    $config->{check_existing} = 1 if defined $config->{check_alleles} || defined $config->{gmaf};
+    $config->{check_existing} = 1 if defined $config->{check_alleles} || defined $config->{gmaf} || defined $config->{maf_1kg};
     
     # warn users still using whole_genome flag
     if(defined($config->{whole_genome})) {
@@ -1008,16 +1045,24 @@ INTRO
         
         # get 1KG freqs
         if(defined($config->{'freq_file'})) {
-            debug("Loading extra frequencies from ".$config->{'freq_file'}) unless defined($config->{quiet});
+            my ($freq_file, @file_pops) = split /\,/, $config->{'freq_file'};
+            debug("Loading extra frequencies from $freq_file") unless defined($config->{quiet});
             
-            open IN, $config->{'freq_file'} or die "ERROR: Could not open frequencies file ".$config->{'freq_file'}."\n";
+            open IN, $freq_file or die "ERROR: Could not open frequencies file $freq_file\n";
             while(<IN>) {
                 chomp;
                 my @data = split /\t/;
                 my $id = shift @data;
+                
+                # sanity check
+                die("ERROR: column count in frequency file $freq_file does not match specified populations ".(join ",", @file_pops)."\n") unless scalar @data == scalar @file_pops;
+                
                 $config->{'freqs'}->{$id} = join(" ", @data);
             }
             close IN;
+            
+            # add pops to $config
+            $config->{'freq_file_pops'} = \@file_pops;
         }
         
         # build the cache
@@ -1363,12 +1408,23 @@ sub get_out_file_handle {
         die("ERROR: Output file ", $config->{output_file}, " already exists. Specify a different output file with --output_file or overwrite existing file with --force_overwrite\n");
     }
     
+    # do same for stats file
+    if(-e $config->{stats_file} && !defined($config->{force_overwrite})) {
+        die("ERROR: Stats file ", $config->{stats_file}, " already exists. Specify a different output file with --stats_file or overwriet existing file with --force_overwrite\n");
+    }
+    
     if($config->{output_file} =~ /stdout/i) {
         $out_file_handle = *STDOUT;
     }
     else {
         $out_file_handle->open(">".$config->{output_file}) or die("ERROR: Could not write to output file ", $config->{output_file}, "\n");
     }
+    
+    # get stats file handle
+    die("ERROR: Stats file name ", $config->{stats_file}, " doesn't end in \".htm\" or \".html\" - some browsers may not be able to open this file\n") unless $config->{stats_file} =~ /htm(l)?$/;
+    my $stats_file_handle = new FileHandle;
+    $stats_file_handle->open(">".$config->{stats_file}) or die("ERROR: Could not write to stats file ", $config->{stats_file}, "\n");
+    $config->{stats_file_handle} = $stats_file_handle;
     
     # define headers for a VCF file
     my @vcf_headers = (
@@ -1691,6 +1747,376 @@ sub print_line {
     
     my $fh = $config->{out_file_handle};
     print $fh "$output\n";
+}
+
+sub summarise_stats {
+    my $config = shift;
+    
+    # convert gene and transcript hashes to counts
+    for my $type(qw(genes transcripts regfeats)) {
+      $config->{stats}->{$type} = scalar keys %{$config->{stats}->{$type}} if defined $config->{stats}->{$type};
+    }
+    
+    # tot up chromosome counts
+    foreach my $chr(keys %{$config->{stats}->{chr}}) {
+      $config->{stats}->{chr_totals}->{$chr} += $config->{stats}->{chr}->{$chr}->{$_} for keys %{$config->{stats}->{chr}->{$chr}};
+      
+      my $start = 0;
+      my %tmp;
+      
+      while($start <= $config->{stats}->{chr_lengths}->{$chr}) {
+        $tmp{$start / 1e6} = $config->{stats}->{chr}->{$chr}->{$start} || 0;
+        $start += 1e6;
+      }
+      
+      $config->{stats}->{chr}->{$chr} = \%tmp;
+    }
+    
+    # convert allele changes to Ts/Tv
+    map {$config->{stats}->{ts_tv}->{$ts_tv{$_}} += $config->{stats}->{allele_changes}->{$_}} keys %{$config->{stats}->{allele_changes}} if defined($config->{stats}->{allele_changes});
+    
+    # flesh out protein_pos
+    if(defined($config->{stats}->{protein_pos})) {
+      if(defined($config->{stats}->{protein_pos}->{10})) {
+        $config->{stats}->{protein_pos}->{9} += $config->{stats}->{protein_pos}->{10};
+        delete $config->{stats}->{protein_pos}->{10};
+      }
+      $config->{stats}->{protein_pos}->{$_} ||= 0 for (0..9);
+      
+      my %tmp = map {$_.'0-'.($_+1).'0%' => $config->{stats}->{protein_pos}->{$_}} keys %{$config->{stats}->{protein_pos}};
+      $config->{stats}->{protein_pos} = \%tmp;
+    }
+    
+    # create pie chart hashes
+    my @charts = (
+      {
+        id => 'var_class',
+        title => 'Variant classes',
+        header => ['Variant class', 'Count'],
+        data => $config->{stats}->{classes},
+        type => 'pie',
+        height => 200,
+      },
+      {
+        id => 'consequence',
+        title => 'Variant consequences',
+        header => ['Consequence type', 'Count'],
+        data => $config->{stats}->{consequences},
+        type => 'pie',
+      },
+      {
+        id => 'protein',
+        title => 'Protein position',
+        header => ['Protein position (percentile)','Count'],
+        data => $config->{stats}->{protein_pos},
+        sort => 'chr',
+        type => 'bar',
+        no_table => 1,
+      }
+    );
+    
+    foreach my $tool(qw(SIFT PolyPhen)) {
+      my $lc_tool = lc($tool);
+      
+      push @charts, {
+        id => $lc_tool,
+        title => $tool.' summary',
+        header => ['Prediction', 'Count'],
+        data => $config->{stats}->{$tool},
+        type => 'pie',
+        height => 200,
+      } if defined($config->{$lc_tool});
+    }
+    
+    push @charts,
+    {
+      id => 'chr',
+      title => 'Variants by chromosome',
+      header => ['Chromosome','Count'],
+      data => $config->{stats}->{chr_totals},
+      sort => 'chr',
+      type => 'bar',
+    };
+    
+    foreach my $chr(sort {($a !~ /^\d+$/ || $b !~ /^\d+/) ? $a cmp $b : $a <=> $b} keys %{$config->{stats}->{chr}}) {
+      push @charts, {
+        id => 'chr_'.$chr,
+        title => 'Distribution of variants on chromosome '.$chr,
+        header => ['Position (mb)', 'Count'],
+        data => $config->{stats}->{chr}->{$chr},
+        sort => 'chr',
+        type => 'line',
+        no_table => 1,
+        no_link => 1,
+      };
+    }
+    
+    my $fh = $config->{stats_file_handle};
+    print $fh html_head($config, \@charts);
+    
+    # create menu
+    print $fh div(
+      {class => 'sidemenu'},
+      div(
+        {class => 'sidemenu_head'},
+        "Links"
+      ),
+      div(
+        {class => 'sidemenu_body'},
+        ul(
+          li([
+            a({href => '#masthead'}, "Top of page"),
+            a({href => '#run_stats'}, "VEP run statistics"),
+            a({href => '#gen_stats'}, "General statistics"),
+            map {
+              a({href => '#'.$_->{id}}, $_->{title})
+            } grep { !$_->{no_link} } @charts,
+          ])
+        ),
+      )
+    );
+    
+    print $fh "<div class='main_content'>";
+    
+    # run stats
+    print $fh h3({id => 'run_stats'}, "VEP run statistics");
+    
+    my @rows = (
+      ['VEP version (API)', $VERSION.' ('.$config->{reg}->software_version.')'],
+      ['Cache/Database', ($config->{cache} ? $config->{dir} : ($config->{mca} ? $config->{mca}->dbc->dbname." on ".$config->{mca}->dbc->host : '?'))],
+      ['Species', $config->{species}],
+      ['Command line options', pre(join(" ", @{$config->{stats}->{options}}))],
+      ['Start time', $config->{stats}->{start_time}],
+      ['End time', $config->{stats}->{end_time}],
+      ['Run time', $config->{stats}->{run_time}." seconds"],
+      ['Input file (format)', $config->{input_file}.' ('.uc($config->{format}).')'],
+      ['Output file', $config->{output_file}],
+    );
+    print $fh table({class => 'stats_table'}, Tr([map {td($_)} @rows]));
+    
+    # vars in/out stats
+    print $fh h3({id => 'gen_stats'}, "General statistics");
+    
+    @rows = (
+      ['Lines of input read', $config->{line_number}],
+      ['Variants processed', $config->{stats}->{var_count}],
+      ['Variants remaining after filtering', $config->{stats}->{filter_count}],
+      ['Overlapped genes', $config->{stats}->{genes}],
+      ['Overlapped transcripts', $config->{stats}->{transcripts}],
+      ['Overlapped regulatory features', $config->{stats}->{regfeats}],
+    );
+    print $fh table({class => 'stats_table'}, Tr([map {td($_)} @rows]));
+    
+    foreach my $chart(@charts) {
+      my $height = $chart->{height} || ($chart->{type} eq 'pie' ? '400' : '200');
+      
+      print $fh hr();
+      print $fh h3({id => $chart->{id}}, $chart->{title});
+      print $fh div({id => $chart->{id}."_".$chart->{type}, style => 'width: 800px; height: '.$height.'px'}, '&nbsp;');
+      print $fh div({id => $chart->{id}."_table", style => 'width: 800px; height: 200px'}, '&nbsp;') unless $chart->{no_table};
+    }
+    
+    print $fh '</div>';
+    print $fh html_tail();
+    $config->{stats_file_handle}->close;
+}
+
+sub html_head {
+    my $config = shift;
+    my $charts = shift;
+    
+    my ($js);
+    foreach my $chart(@$charts) {
+      my @keys;
+      if(defined($chart->{sort})) {
+        if($chart->{sort} eq 'chr') {
+          @keys = sort {($a !~ /^\d+$/ || $b !~ /^\d+/) ? $a cmp $b : $a <=> $b} keys %{$chart->{data}};
+        }
+      }
+      else {
+        @keys = keys %{$chart->{data}};
+      }
+      
+      my $type = ucfirst($chart->{type});
+      
+      $js .= sprintf(
+        "var %s = draw$type('%s', '%s', google.visualization.arrayToDataTable([['%s','%s'],%s]));\n",
+        $chart->{id}.'_'.$chart->{type},
+        $chart->{id}.'_'.$chart->{type},
+        $chart->{title},
+        $chart->{header}->[0], $chart->{header}->[1],
+        join(",", map {"['".$_."',".$chart->{data}->{$_}."]"} @keys)
+      );
+      
+      unless($chart->{no_table}) {
+        $js .= sprintf(
+          "var %s = drawTable('%s', '%s', google.visualization.arrayToDataTable([['%s','%s'],%s]));\n",
+          $chart->{id}.'_table',
+          $chart->{id}.'_table',
+          $chart->{title},
+          $chart->{header}->[0], $chart->{header}->[1],
+          join(",", map {"['".$_."',".$chart->{data}->{$_}."]"} @keys)
+        );
+        
+        # interaction between table/chart
+        #$js .= sprintf(
+        #  qq{
+        #    google.visualization.events.addListener(%s, 'select', function() {
+        #      %s.setSelection(%s.getSelection());
+        #    });
+        #    google.visualization.events.addListener(%s, 'select', function() {
+        #      %s.setSelection(%s.getSelection());
+        #    });
+        #  },
+        #  $chart->{id}.'_'.$chart->{type},
+        #  $chart->{id}.'_table',
+        #  $chart->{id}.'_'.$chart->{type},
+        #  $chart->{id}.'_table',
+        #  $chart->{id}.'_'.$chart->{type},
+        #  $chart->{id}.'_table',
+        #);
+      }
+    }
+    
+    my $html =<<HTML;
+<html>
+<head>
+  <title>VEP summary</title>
+  <script type="text/javascript" src="http://www.google.com/jsapi"></script>
+  <script type="text/javascript">
+    google.load('visualization', '1', {packages: ['corechart','table']});
+  </script>
+  <script type="text/javascript">
+    
+    function init() {
+      // charts
+      $js
+    }
+    
+    function drawPie(id, title, data) {    
+      return new google.visualization.PieChart(document.getElementById(id)).
+        draw(data, null);
+    }
+    function drawBar(id, title, data) {
+      return new google.visualization.ColumnChart(document.getElementById(id)).
+        draw(data, null);
+    }
+    function drawTable(id, title, data) {
+      return new google.visualization.Table(document.getElementById(id)).
+        draw(data, null);
+    }
+    function drawLine(id, title, data) {
+      return new google.visualization.LineChart(document.getElementById(id)).
+        draw(data, null);
+    }
+    google.setOnLoadCallback(init);
+  </script>
+  
+  
+  <style type="text/css">
+    body {
+      font-family: arial, sans-serif;
+      margin: 0px;
+      padding: 0px;
+    }
+    
+    a {color: #36b;}
+    a.visited {color: #006;}
+    
+    .stats_table {
+      margin: 5px;
+    }
+    
+    tr:nth-child(odd) {
+      background-color: rgb(238, 238, 238);
+    }
+    
+    td {
+      padding: 5px;
+    }
+    
+    td:nth-child(odd) {
+      font-weight: bold;
+    }
+    
+    h3 {
+      color: #666;
+    }
+    
+    .masthead {
+      background-color: rgb(51, 51, 102);
+      color: rgb(204, 221, 255);
+      height: 80px;
+      width: 100%;
+      padding: 0px;
+    }
+    
+    .main {
+      padding: 10px;
+    }
+    
+    .gradient {
+      background: #333366; /* Old browsers */
+      background: -moz-linear-gradient(left,  #333366 0%, #ffffff 100%); /* FF3.6+ */
+      background: -webkit-gradient(linear, left top, right top, color-stop(0%,#333366), color-stop(100%,#ffffff)); /* Chrome,Safari4+ */
+      background: -webkit-linear-gradient(left,  #333366 0%,#ffffff 100%); /* Chrome10+,Safari5.1+ */
+      background: -o-linear-gradient(left,  #333366 0%,#ffffff 100%); /* Opera 11.10+ */
+      background: -ms-linear-gradient(left,  #333366 0%,#ffffff 100%); /* IE10+ */
+      background: linear-gradient(to right,  #333366 0%,#ffffff 100%); /* W3C */
+      filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#333366', endColorstr='#ffffff',GradientType=1 ); /* IE6-9 */
+      
+      padding: 0px;
+      height: 80px;
+      width: 500px;
+      float: right;
+      display: inline;
+    }
+    
+    .main_content {
+      margin-left: 300px;
+    }
+    
+    .sidemenu {
+      width: 260px;
+      position: fixed;
+      border-style: solid;
+      border-width: 2px;
+      border-color: rgb(51, 51, 102);
+    }
+    
+    .sidemenu_head {
+      width: 250px;
+      background-color: rgb(51, 51, 102);
+      color: rgb(204, 221, 255);
+      padding: 5px;
+    }
+    
+    .sidemenu_body {
+      width: 250px;
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+<div id="masthead" class="masthead">
+  <div style="float: left; display: inline; padding: 10px; height: 80px;">
+    <a href="http://www.ensembl.org/"><img src="http://static.ensembl.org/i/e-ensembl.png"></a>
+  </div>
+  
+  <div style="float: right; display: inline; height: 80px; background: white; padding: 10px;">
+    <a href="http://www.ensembl.org/info/docs/variation/vep/vep_script.html"><img src="http://www.ensembl.org/img/vep_logo.png"></a>
+  </div>
+  <div class="gradient">
+  </div>
+</div>
+<div class="main">
+HTML
+
+    return $html;
+}
+
+sub html_tail {
+  return "\n</div></body>\n</html>\n";
 }
 
 # outputs usage message
