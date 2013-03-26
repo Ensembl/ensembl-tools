@@ -122,6 +122,55 @@ my %ts_tv = (
   'T/A' => 'Tv',
 );
 
+my %colour_keys = (
+  'polyphen' => {
+    'unknown' => 'blue',
+    'benign' => 'green',
+    'possibly damaging' => 'orange',
+    'probably damaging' => 'red',
+  },
+  'sift' => {
+    'tolerated' => 'green',
+    'deleterious' => 'red',
+  },
+  
+  # copied from COLOUR.ini in web code via browser to check colours
+  'consequences' => {
+    'intergenic_variant'                => 'gray',
+    'intron_variant'                    => '#02599c',
+    'upstream_gene_variant'             => '#a2b5cd',
+    'downstream_gene_variant'           => '#a2b5cd',
+    '5_prime_utr_variant'               => '#7ac5cd',
+    '3_prime_utr_variant'               => '#7ac5cd',
+    'splice_region_variant'             => '#ff7f50',
+    'splice_donor_variant'              => '#ff7f50',
+    'splice_acceptor_variant'           => '#ff7f50',
+    'frameshift_variant'                => '#ff69b4',
+    'transcript_ablation'               => '#ff0000',
+    'transcript_amplification'          => '#ff69b4',
+    'inframe_insertion'                 => '#ff69b4',
+    'inframe_deletion'                  => '#ff69b4',
+    'synonymous_variant'                => '#76ee00',
+    'stop_retained_variant'             => '#76ee00',
+    'missense_variant'                  => '#ffd700',
+    'initiator_codon_variant'           => '#ffd700',
+    'stop_gained'                       => '#ff0000',
+    'stop_lost'                         => '#ff0000',
+    'mature_mirna_variant'              => '#458b00',
+    'non_coding_exon_variant'           => '#32cd32',
+    'nc_transcript_variant'             => '#32cd32',
+    'incomplete_terminal_codon_variant' => '#ff00ff',
+    'nmd_transcript_variant'            => '#ff4500',
+    'coding_sequence_variant'           => '#458b00',
+    'tfbs_ablation'                     => 'brown',
+    'tfbs_amplification'                => 'brown',
+    'tf_binding_site_variant'           => 'brown',
+    'regulatory_region_variant'         => 'brown',
+    'regulatory_region_ablation'        => 'brown',
+    'regulatory_region_amplification'   => 'brown',
+  },
+);
+
 # set output autoflush for progress bars
 $| = 1;
 
@@ -301,13 +350,22 @@ sub main {
     
     debug("Executed ", defined($Bio::EnsEMBL::DBSQL::StatementHandle::count_queries) ? $Bio::EnsEMBL::DBSQL::StatementHandle::count_queries : 'unknown number of', " SQL statements") if defined($config->{count_queries}) && !defined($config->{quiet});
     
+    # finalise run-time stats
     $config->{stats}->{var_count} = $total_vf_count;
     $config->{stats}->{end_time} = get_time();
     $config->{stats}->{run_time} = time() - $config->{start_time};
     
+    # write stats
     unless(defined($config->{no_stats})) {
       summarise_stats($config);
-      debug("Wrote stats summary to ".$config->{stats_file});
+      debug("Wrote stats summary to ".$config->{stats_file}) unless defined($config->{quiet});
+    }
+    
+    # close HTML output
+    if(defined($config->{html}) && defined($config->{html_file_handle})) {
+      my $fh = $config->{html_file_handle};
+      print $fh "</tbody><tfoot><tr>".$config->{_th}."</tr></tfoot></table><p>&nbsp;</p></html></body>\n</html>\n";
+      $fh->close;
     }
     
     debug("Finished!") unless defined $config->{quiet};
@@ -1410,7 +1468,7 @@ sub get_out_file_handle {
     
     # do same for stats file
     if(-e $config->{stats_file} && !defined($config->{force_overwrite})) {
-        die("ERROR: Stats file ", $config->{stats_file}, " already exists. Specify a different output file with --stats_file or overwriet existing file with --force_overwrite\n");
+        die("ERROR: Stats file ", $config->{stats_file}, " already exists. Specify a different output file with --stats_file or overwrite existing file with --force_overwrite\n");
     }
     
     if($config->{output_file} =~ /stdout/i) {
@@ -1425,6 +1483,21 @@ sub get_out_file_handle {
     my $stats_file_handle = new FileHandle;
     $stats_file_handle->open(">".$config->{stats_file}) or die("ERROR: Could not write to stats file ", $config->{stats_file}, "\n");
     $config->{stats_file_handle} = $stats_file_handle;
+    
+    # HTML output?
+    my $html_file_handle;
+    
+    if(defined($config->{html})) {
+      if(-e $config->{output_file}.'.html' && !defined($config->{force_overwrite})) {
+          die("ERROR: Stats file ", $config->{stats_file}, " already exists. Specify a different output file with --stats_file or overwrite existing file with --force_overwrite\n");
+      }
+      
+      $html_file_handle = new FileHandle;
+      $html_file_handle->open(">".$config->{output_file}.'.html') or die("ERROR: Could not write to HTML file ", $config->{output_file}, ".html\n");
+      $config->{html_file_handle} = $html_file_handle;
+      
+      print $html_file_handle html_head();
+    }
     
     # define headers for a VCF file
     my @vcf_headers = (
@@ -1452,7 +1525,10 @@ sub get_out_file_handle {
     
     # GVF output, no header
     elsif(defined($config->{gvf}) || defined($config->{original})) {
-        print $out_file_handle join "\n", @{$config->{headers}} if defined($config->{headers}) && defined($config->{original});
+        if(defined($config->{headers}) && defined($config->{original})) {
+            print $out_file_handle join "\n", @{$config->{headers}};
+            print $html_file_handle join("\n", @{$config->{headers}})."\n</pre>" if defined($config->{html});
+        }
         return $out_file_handle;
     }
     
@@ -1511,6 +1587,14 @@ sub get_out_file_handle {
             
             print $out_file_handle join "\n", @{$config->{headers}};
             print $out_file_handle "\n";
+            
+            if(defined($config->{html})) {
+                my @tmp = @{$config->{headers}};
+                my @cols = split /\s+/, pop @tmp;
+                print $html_file_handle join "\n", @tmp;
+                print $html_file_handle "\n";
+                print $html_file_handle html_table_headers($config, \@cols);
+            }
         }
         
         else {
@@ -1519,6 +1603,13 @@ sub get_out_file_handle {
             print $out_file_handle "\n";
             print $out_file_handle join "\t", @vcf_headers;
             print $out_file_handle "\n";
+            
+            if(defined($config->{html})) {
+                print $html_file_handle "##fileformat=VCFv4.0\n";
+                print $html_file_handle join "\n", @vcf_info_strings;
+                print $html_file_handle "\n";
+                print $html_file_handle html_table_headers($config, \@vcf_headers);
+            }
         }
         
         return $out_file_handle;
@@ -1566,17 +1657,23 @@ HEAD
     
     # add headers
     print $out_file_handle $header;
+    print $html_file_handle $header if defined($config->{html});
     
     # add custom data defs
     if(defined($config->{custom})) {
         foreach my $custom(@{$config->{custom}}) {
             print $out_file_handle '## '.$custom->{name}."\t: ".$custom->{file}.' ('.$custom->{type}.")\n";
+            print $html_file_handle '## '.$custom->{name}."\t: ".$custom->{file}.' ('.$custom->{type}.")\n" if defined($config->{html});
         }
     }
     
     # add column headers
     print $out_file_handle '#', (join "\t", @{$config->{fields}});
     print $out_file_handle "\n";
+    
+    if(defined($config->{html})) {
+        print $html_file_handle html_table_headers($config, $config->{fields});
+    }
     
     return $out_file_handle;
 }
@@ -1726,6 +1823,7 @@ sub print_line {
     return unless defined($line);
     
     my $output;
+    my $html_fh = $config->{html_file_handle};
     
     # normal
     if(ref($line) eq 'HASH') {
@@ -1738,6 +1836,17 @@ sub print_line {
         $output = join "\t", map {
             (defined $line->{$_} ? $line->{$_} : (defined $extra{$_} ? $extra{$_} : '-'))
         } @{$config->{fields}};
+        
+        if(defined($config->{html})) {
+          print $html_fh Tr(
+            map {td($_)}
+            map {linkify($config, $_)}
+            map {
+              (defined $line->{$_} ? $line->{$_} : (defined $extra{$_} ? $extra{$_} : '-'))
+            }
+            @{$config->{fields}}
+          );
+        }
     }
     
     # gvf/vcf
@@ -1787,6 +1896,9 @@ sub summarise_stats {
       $config->{stats}->{protein_pos} = \%tmp;
     }
     
+    # get ranks to sort
+    my %cons_ranks = map { $_->{SO_term} => $_->{rank} } values %Bio::EnsEMBL::Variation::Utils::Constants::OVERLAP_CONSEQUENCES;
+    
     # create pie chart hashes
     my @charts = (
       {
@@ -1795,23 +1907,17 @@ sub summarise_stats {
         header => ['Variant class', 'Count'],
         data => $config->{stats}->{classes},
         type => 'pie',
+        sort => 'value',
         height => 200,
       },
       {
-        id => 'consequence',
+        id => 'consequences',
         title => 'Variant consequences',
         header => ['Consequence type', 'Count'],
         data => $config->{stats}->{consequences},
         type => 'pie',
-      },
-      {
-        id => 'protein',
-        title => 'Protein position',
-        header => ['Protein position (percentile)','Count'],
-        data => $config->{stats}->{protein_pos},
-        sort => 'chr',
-        type => 'bar',
-        no_table => 1,
+        sort => \%cons_ranks,
+        colours => $colour_keys{consequences},
       }
     );
     
@@ -1825,17 +1931,19 @@ sub summarise_stats {
         data => $config->{stats}->{$tool},
         type => 'pie',
         height => 200,
+        sort => 'value',
+        colours => $colour_keys{$lc_tool},
       } if defined($config->{$lc_tool});
     }
     
-    push @charts,
-    {
+    push @charts, {
       id => 'chr',
       title => 'Variants by chromosome',
       header => ['Chromosome','Count'],
       data => $config->{stats}->{chr_totals},
       sort => 'chr',
       type => 'bar',
+      options => '{legend: {position: "none"}}',
     };
     
     foreach my $chr(sort {($a !~ /^\d+$/ || $b !~ /^\d+/) ? $a cmp $b : $a <=> $b} keys %{$config->{stats}->{chr}}) {
@@ -1846,13 +1954,25 @@ sub summarise_stats {
         data => $config->{stats}->{chr}->{$chr},
         sort => 'chr',
         type => 'line',
+        options => '{hAxis: {title: "Position (mb)"}, legend: {position: "none"}}',
         no_table => 1,
         no_link => 1,
       };
     }
     
+    push @charts, {
+      id => 'protein',
+      title => 'Protein position',
+      header => ['Protein position (percentile)','Count'],
+      data => $config->{stats}->{protein_pos},
+      sort => 'chr',
+      type => 'bar',
+      no_table => 1,
+      options => '{hAxis: {title: "Protein position (percentile)", textStyle: {fontSize: 10}}, legend: {position: "none"}}',
+    };
+    
     my $fh = $config->{stats_file_handle};
-    print $fh html_head($config, \@charts);
+    print $fh stats_html_head($config, \@charts);
     
     # create menu
     print $fh div(
@@ -1890,7 +2010,12 @@ sub summarise_stats {
       ['End time', $config->{stats}->{end_time}],
       ['Run time', $config->{stats}->{run_time}." seconds"],
       ['Input file (format)', $config->{input_file}.' ('.uc($config->{format}).')'],
-      ['Output file', $config->{output_file}],
+      [
+        'Output file',
+        $config->{output_file}.
+        (defined($config->{html}) ? ' '.a({href => $config->{output_file}.'.html'}, '[HTML]') : '').
+        ' '.a({href => $config->{output_file}}, '[text]')
+      ],
     );
     print $fh table({class => 'stats_table'}, Tr([map {td($_)} @rows]));
     
@@ -1917,20 +2042,28 @@ sub summarise_stats {
     }
     
     print $fh '</div>';
-    print $fh html_tail();
+    print $fh stats_html_tail();
     $config->{stats_file_handle}->close;
 }
 
-sub html_head {
+sub stats_html_head {
     my $config = shift;
     my $charts = shift;
     
     my ($js);
     foreach my $chart(@$charts) {
       my @keys;
+      
+      # sort data
       if(defined($chart->{sort})) {
         if($chart->{sort} eq 'chr') {
           @keys = sort {($a !~ /^\d+$/ || $b !~ /^\d+/) ? $a cmp $b : $a <=> $b} keys %{$chart->{data}};
+        }
+        elsif($chart->{sort} eq 'value') {
+          @keys = sort {$chart->{data}->{$a} <=> $chart->{data}->{$b}} keys %{$chart->{data}};
+        }
+        elsif(ref($chart->{sort}) eq 'HASH') {
+          @keys = sort {$chart->{sort}->{$a} <=> $chart->{sort}->{$b}} keys %{$chart->{data}};
         }
       }
       else {
@@ -1939,16 +2072,32 @@ sub html_head {
       
       my $type = ucfirst($chart->{type});
       
+      # add colour
+      if(defined($chart->{colours})) {
+        my $co = 'slices: ['.join(", ", map { $chart->{colours}->{$_} ? '{color: "'.$chart->{colours}->{$_}.'"}' : '{}' } @keys).']';
+        
+        if(defined($chart->{options})) {
+          $chart->{options} =~ s/}$/, $co}/;
+        }
+        else {
+          $chart->{options} = "{$co}";
+        }
+      }
+      
+      # code to draw chart
       $js .= sprintf(
-        "var %s = draw$type('%s', '%s', google.visualization.arrayToDataTable([['%s','%s'],%s]));\n",
+        "var %s = draw$type('%s', '%s', google.visualization.arrayToDataTable([['%s','%s'],%s]), %s);\n",
         $chart->{id}.'_'.$chart->{type},
         $chart->{id}.'_'.$chart->{type},
         $chart->{title},
         $chart->{header}->[0], $chart->{header}->[1],
-        join(",", map {"['".$_."',".$chart->{data}->{$_}."]"} @keys)
+        join(",", map {"['".$_."',".$chart->{data}->{$_}."]"} @keys),
+        $chart->{options} || 'null',
       );
       
       unless($chart->{no_table}) {
+        
+        # code to draw table
         $js .= sprintf(
           "var %s = drawTable('%s', '%s', google.visualization.arrayToDataTable([['%s','%s'],%s]));\n",
           $chart->{id}.'_table',
@@ -1959,26 +2108,26 @@ sub html_head {
         );
         
         # interaction between table/chart
-        #$js .= sprintf(
-        #  qq{
-        #    google.visualization.events.addListener(%s, 'select', function() {
-        #      %s.setSelection(%s.getSelection());
-        #    });
-        #    google.visualization.events.addListener(%s, 'select', function() {
-        #      %s.setSelection(%s.getSelection());
-        #    });
-        #  },
-        #  $chart->{id}.'_'.$chart->{type},
-        #  $chart->{id}.'_table',
-        #  $chart->{id}.'_'.$chart->{type},
-        #  $chart->{id}.'_table',
-        #  $chart->{id}.'_'.$chart->{type},
-        #  $chart->{id}.'_table',
-        #);
+        $js .= sprintf(
+          qq{
+            google.visualization.events.addListener(%s, 'select', function() {
+              %s.setSelection(%s.getSelection());
+            });
+            google.visualization.events.addListener(%s, 'select', function() {
+              %s.setSelection(%s.getSelection());
+            });
+          },
+          $chart->{id}.'_'.$chart->{type},
+          $chart->{id}.'_table',
+          $chart->{id}.'_'.$chart->{type},
+          $chart->{id}.'_table',
+          $chart->{id}.'_'.$chart->{type},
+          $chart->{id}.'_table',
+        );
       }
     }
     
-    my $html =<<HTML;
+    my $html =<<SHTML;
 <html>
 <head>
   <title>VEP summary</title>
@@ -1993,21 +2142,25 @@ sub html_head {
       $js
     }
     
-    function drawPie(id, title, data) {    
-      return new google.visualization.PieChart(document.getElementById(id)).
-        draw(data, null);
+    function drawPie(id, title, data, options) {    
+      var pie = new google.visualization.PieChart(document.getElementById(id));
+      pie.draw(data, options);
+      return pie;
     }
-    function drawBar(id, title, data) {
-      return new google.visualization.ColumnChart(document.getElementById(id)).
-        draw(data, null);
+    function drawBar(id, title, data, options) {
+      var bar = new google.visualization.ColumnChart(document.getElementById(id));
+      bar.draw(data, options);
+      return bar;
     }
     function drawTable(id, title, data) {
-      return new google.visualization.Table(document.getElementById(id)).
-        draw(data, null);
+      var table = new google.visualization.Table(document.getElementById(id));
+      table.draw(data, null);
+      return table;
     }
-    function drawLine(id, title, data) {
-      return new google.visualization.LineChart(document.getElementById(id)).
-        draw(data, null);
+    function drawLine(id, title, data, options) {
+      var line = new google.visualization.LineChart(document.getElementById(id));
+      line.draw(data, options);
+      return line;
     }
     google.setOnLoadCallback(init);
   </script>
@@ -2110,13 +2263,103 @@ sub html_head {
   </div>
 </div>
 <div class="main">
-HTML
+SHTML
 
     return $html;
 }
 
-sub html_tail {
+sub stats_html_tail {
   return "\n</div></body>\n</html>\n";
+}
+
+sub html_head {
+    my $txt_file = $config->{output_file};
+    my $stats_file = $config->{stats_file};
+    my $html =<<HTML;
+<html>
+<head>
+  <title>VEP summary</title>
+  <script type="text/javascript" language="javascript" src="http://www.datatables.net/media/javascript/complete.min.js"></script>
+  <script class="jsbin" src="http://datatables.net/download/build/jquery.dataTables.nightly.js"></script>  
+  <style type="text/css">
+    \@import "http://www.datatables.net/release-datatables/media/css/demo_table.css";
+    body {
+      font-family: arial, sans-serif;
+      margin: 5px;
+      padding: 5px;
+    }
+    
+    a {color: #36b;}
+    a.visited {color: #006;}
+    
+    th {
+      font-size: 11px;
+    }
+    td {
+      font-size: 11px;
+    }
+  </style>
+  </head>
+  <body onload="\$(document).ready(function(){\$('#data').dataTable({});});">
+  <p>
+    View: <a href="$stats_file">Summary statistics</a> | <a href="$txt_file">as text</a>
+  </p>
+  <hr/>
+  <pre>
+HTML
+  return $html;
+}
+
+sub html_table_headers {
+  my $config = shift;
+  my $cols = shift;
+  
+  my @cols_copy = @$cols;
+  
+  my $html = qq{</pre><table id="data" class="display"><thead><tr>};
+  $config->{_th} = join("", map {$_ =~ s/\_/ /g; '<th>'.$_.'</th>'} @cols_copy);
+  $html .= $config->{_th};
+  $html .= qq{</thead></tr><tbody>};
+  
+  return $html;
+}
+
+sub linkify {
+  my $config = shift;
+  my $string = shift;
+  
+  my $species = ucfirst($config->{species});
+  
+  # Ensembl genes
+  $string =~ s/(ENS.{0,3}G\d+|CCDS\d+\.?\d+?|N[MP]_\d+\.?\d+?)/a({href => "http:\/\/www.ensembl.org\/$species\/Gene\/Summary\?g=$1", target => "_blank"}, $1)/ge;
+  
+  # Ensembl transcripts
+  $string =~ s/(ENS.{0,3}T\d+)/a({href => "http:\/\/www.ensembl.org\/$species\/Transcript\/Summary\?t=$1", target => "_blank"}, $1)/ge;
+  
+  # Ensembl regfeats
+  $string =~ s/(ENS.{0,3}R\d+)/a({href => "http:\/\/www.ensembl.org\/$species\/Regulation\/Summary\?rf=$1", target => "_blank"}, $1)/ge;
+  
+  # variant identifiers
+  $string =~ s/(rs\d+|COSM\d+|C[DMIX]\d+)/a({href => "http:\/\/www.ensembl.org\/$species\/Variation\/Summary\?v=$1", target => "_blank"}, $1)/gie;
+  
+  # locations
+  while($string =~ m/(^[A-Z\_\d]+?:\d+)(\-\d+)?/g) {
+    my $loc = $1.($2 ? $2 : '');
+    my ($chr, $start, $end) = split /\-|\:/, $loc;
+    $end ||= $start;
+    
+    # adjust +/- 1kb
+    $start -= 1000;
+    $end   += 1000;
+    
+    my $link = a({href => "http://www.ensembl.org/$species/Location/View?r=$chr:$start\-$end", target => "_blank"}, $string);
+    $string =~ s/$loc/$link/;
+  }
+  
+  # split strings
+  $string =~ s/([,;])/$1 /g;
+  
+  return $string;
 }
 
 # outputs usage message
