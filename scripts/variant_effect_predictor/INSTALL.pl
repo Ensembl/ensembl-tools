@@ -42,7 +42,7 @@ my $lib_dir = $DEST_DIR;
 
 $DEST_DIR       .= '/Bio';
 $ENS_CVS_ROOT ||= 'http://cvs.sanger.ac.uk/cgi-bin/viewvc.cgi/';
-$BIOPERL_URL  ||= 'http://bioperl.org/DIST/old_releases/bioperl-1.2.3.tar.gz';
+$BIOPERL_URL  ||= 'http://bioperl.org/DIST/BioPerl-1.6.1.tar.gz';
 $API_VERSION  ||= 71;
 $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP";
 $CACHE_DIR    ||= $ENV{HOME}.'/.vep';
@@ -237,7 +237,7 @@ unpack_tar("$DEST_DIR/tmp/$bioperl_file", "$DEST_DIR/tmp/");
 
 print " - moving files\n";
 
-$bioperl_file =~ /(bioperl.+?)\.tar\.gz/;
+$bioperl_file =~ /(bioperl.+?)\.tar\.gz/i;
 my $bioperl_dir = $1;
 `mv -f $DEST_DIR/tmp/$bioperl_dir/Bio/* $DEST_DIR/`;
 `rm -rf $DEST_DIR/tmp/$bioperl_dir`;# or die "ERROR: Failed to remove directory $DEST_DIR/$bioperl_dir\n";
