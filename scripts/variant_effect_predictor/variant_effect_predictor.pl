@@ -80,7 +80,9 @@ my %extra_headers = (
     check_svs       => ['SV'],
     check_frequency => ['FREQS'],
     gmaf            => ['GMAF'],
+    maf_1kg         => ['AFR_MAF','AMR_MAF','ASN_MAF','EUR_MAF'],
     user            => ['DISTANCE'],
+    check_existing  => ['CLIN_SIG'],
 );
 
 my %extra_descs = (
@@ -103,8 +105,13 @@ my %extra_descs = (
     'IND'          => 'Individual name',
     'SV'           => 'IDs of overlapping structural variants',
     'FREQS'        => 'Frequencies of overlapping variants used in filtering',
-    'GMAF'         => 'Minor allele and frequency of existing variation in 1000 Genomes Phase 1',
+    'GMAF'         => 'Minor allele and frequency of existing variation in 1000 Genomes Phase 1 combined population',
+    'AFR_MAF'      => 'Minor allele and frequency of existing variation in 1000 Genomes Phase 1 combined African population',
+    'AMR_MAF'      => 'Minor allele and frequency of existing variation in 1000 Genomes Phase 1 combined American population',
+    'ASN_MAF'      => 'Minor allele and frequency of existing variation in 1000 Genomes Phase 1 combined Asian population',
+    'EUR_MAF'      => 'Minor allele and frequency of existing variation in 1000 Genomes Phase 1 combined European population',
     'DISTANCE'     => 'Shortest distance from variant to transcript',
+    'CLIN_SIG'     => 'Clinical significance of variant from dbSNP',
 );
 
 my %ts_tv = (
@@ -364,7 +371,7 @@ sub main {
     # close HTML output
     if(defined($config->{html}) && defined($config->{html_file_handle})) {
       my $fh = $config->{html_file_handle};
-      print $fh "</tbody><tfoot><tr>".$config->{_th}."</tr></tfoot></table><p>&nbsp;</p></html></body>\n</html>\n";
+      print $fh "</tbody><tfoot><tr>".$config->{_th}."</tr></tfoot></table><p>&nbsp;</p></div></html></body>\n</html>\n";
       $fh->close;
     }
     
@@ -466,6 +473,7 @@ sub configure {
         'numbers',                 # include exon and intron numbers
         
         # cache stuff
+        'database',                # must specify this to use DB now
         'cache',                   # use cache
         'write_cache',             # enables writing to the cache
         'build=s',                 # builds cache from DB from scratch; arg is either all (all top-level seqs) or a list of chrs
@@ -560,6 +568,9 @@ sub configure {
     # check convert format
     if(defined $config->{convert}) {
         die "ERROR: Unrecognised output format for conversion specified \"".$config->{convert}."\"\n" unless $config->{convert} =~ /vcf|ensembl|pileup|hgvs/i;
+        
+        # disable stats
+        $config->{no_stats} = 1;
     }
     
     
@@ -658,6 +669,33 @@ sub configure {
     else {
         $config->{core_type} = 'core';
     }
+    
+    # check one of database/cache/offline/build
+    if(!grep {defined($config->{$_})} qw(database cache offline build convert)) {
+      die qq{
+IMPORTANT INFORMATION:
+
+The VEP can read gene data from either a local cache or local/remote databases.
+
+Using a cache is the fastest and most efficient way to use the VEP. The
+included INSTALL.pl script can be used to fetch and set up cache files from the
+Ensembl FTP server. Simply run "perl INSTALL.pl" and follow the instructions, or
+see the documentation pages listed below.
+
+If you have already set up a cache, use "--cache" or "--offline" to use it.
+
+It is possible to use the public databases hosted at ensembldb.ensembl.org, but
+this is slower than using the cache and concurrent and/or long running VEP jobs
+can put strain on the Ensembl servers, limiting availability to other users.
+
+To enable using databases, add the flag "--database".
+
+Documentation
+Installer: http://www.ensembl.org/info/docs/variation/vep/vep_script.html#installer
+Cache: http://www.ensembl.org/info/docs/variation/vep/vep_script.html#cache
+
+      }
+    };
     
     # output term
     if(defined $config->{terms}) {
@@ -1873,7 +1911,7 @@ sub summarise_stats {
       my $start = 0;
       my %tmp;
       
-      while($start <= $config->{stats}->{chr_lengths}->{$chr}) {
+      while($start <= $config->{chr_lengths}->{$chr}) {
         $tmp{$start / 1e6} = $config->{stats}->{chr}->{$chr}->{$start} || 0;
         $start += 1e6;
       }
@@ -1896,6 +1934,11 @@ sub summarise_stats {
       $config->{stats}->{protein_pos} = \%tmp;
     }
     
+    # coding cons
+    foreach my $con(qw(missense_variant synonymous_variant coding_sequence_variant stop_lost stop_gained frameshift_variant inframe_insertion inframe_deletion)) {
+      $config->{stats}->{coding}->{$con} = $config->{stats}->{consequences}->{$con} if defined($config->{stats}->{consequences}->{$con});
+    }
+    
     # get ranks to sort
     my %cons_ranks = map { $_->{SO_term} => $_->{rank} } values %Bio::EnsEMBL::Variation::Utils::Constants::OVERLAP_CONSEQUENCES;
     
@@ -1915,6 +1958,15 @@ sub summarise_stats {
         title => 'Variant consequences',
         header => ['Consequence type', 'Count'],
         data => $config->{stats}->{consequences},
+        type => 'pie',
+        sort => \%cons_ranks,
+        colours => $colour_keys{consequences},
+      },
+      {
+        id => 'coding',
+        title => 'Coding consequences',
+        header => ['Consequence type', 'Count'],
+        data => $config->{stats}->{coding},
         type => 'pie',
         sort => \%cons_ranks,
         colours => $colour_keys{consequences},
@@ -1962,13 +2014,13 @@ sub summarise_stats {
     
     push @charts, {
       id => 'protein',
-      title => 'Protein position',
-      header => ['Protein position (percentile)','Count'],
+      title => 'Position in protein',
+      header => ['Position in protein (percentile)','Count'],
       data => $config->{stats}->{protein_pos},
       sort => 'chr',
       type => 'bar',
       no_table => 1,
-      options => '{hAxis: {title: "Protein position (percentile)", textStyle: {fontSize: 10}}, legend: {position: "none"}}',
+      options => '{hAxis: {title: "Position in protein (percentile)", textStyle: {fontSize: 10}}, legend: {position: "none"}}',
     };
     
     my $fh = $config->{stats_file_handle};
@@ -2026,9 +2078,20 @@ sub summarise_stats {
       ['Lines of input read', $config->{line_number}],
       ['Variants processed', $config->{stats}->{var_count}],
       ['Variants remaining after filtering', $config->{stats}->{filter_count}],
+      [
+        'Novel / known variants',
+        defined($config->{stats}->{existing}) ?
+        sprintf("%s (%.1f\%) / %s (%.1f\%)",
+          $config->{stats}->{var_count} - $config->{stats}->{existing},
+          100 * (($config->{stats}->{var_count} - $config->{stats}->{existing}) / $config->{stats}->{var_count}),
+          $config->{stats}->{existing},
+          100 * ($config->{stats}->{existing} / $config->{stats}->{var_count}),
+        )
+        : '-'
+      ],
       ['Overlapped genes', $config->{stats}->{genes}],
       ['Overlapped transcripts', $config->{stats}->{transcripts}],
-      ['Overlapped regulatory features', $config->{stats}->{regfeats}],
+      ['Overlapped regulatory features', $config->{stats}->{regfeats} || '-'],
     );
     print $fh table({class => 'stats_table'}, Tr([map {td($_)} @rows]));
     
@@ -2278,15 +2341,51 @@ sub html_head {
     my $html =<<HTML;
 <html>
 <head>
-  <title>VEP summary</title>
+  <title>VEP output</title>
   <script type="text/javascript" language="javascript" src="http://www.datatables.net/media/javascript/complete.min.js"></script>
-  <script class="jsbin" src="http://datatables.net/download/build/jquery.dataTables.nightly.js"></script>  
+  <script class="jsbin" src="http://datatables.net/download/build/jquery.dataTables.nightly.js"></script>
+  <script type="text/javascript" language="javascript">
+    \$(document).ready(function() {
+      \$('#data').dataTable({
+        "sPaginationType": "full_numbers"
+      });
+    });
+    
+    function fnShowHide( iCol ) {
+      /* Get the DataTables object again - this is not a recreation, just a get of the object */
+      var oTable = \$('#data').dataTable();
+       
+      var bVis = oTable.fnSettings().aoColumns[iCol].bVisible;
+      oTable.fnSetColumnVis( iCol, bVis ? false : true );
+    }
+    
+    function showAllCols() {
+      var oTable = \$('#data').dataTable();
+      for (var i=0;i<oTable.fnSettings().aoColumns.length;i++) { 
+        oTable.fnSetColumnVis(i, true);
+      }
+    }
+    
+    function showHide(lyr) {
+      var lyrobj = document.getElementById(lyr);
+      
+      if(lyrobj.style.height == "0px") {
+        lyrobj.style.height = "";
+        lyrobj.style.display = "";
+      }
+      
+      else {
+        lyrobj.style.height = "0px";
+        lyrobj.style.display = "none";
+      }
+    }
+  </script>
   <style type="text/css">
     \@import "http://www.datatables.net/release-datatables/media/css/demo_table.css";
     body {
       font-family: arial, sans-serif;
-      margin: 5px;
-      padding: 5px;
+      margin: 0px;
+      padding: 0px;
     }
     
     a {color: #36b;}
@@ -2298,14 +2397,58 @@ sub html_head {
     td {
       font-size: 11px;
     }
+    
+    .masthead {
+      background-color: rgb(51, 51, 102);
+      color: rgb(204, 221, 255);
+      height: 80px;
+      width: 100%;
+      padding: 0px;
+    }
+    
+    .main {
+      padding: 10px;
+    }
+    
+    .gradient {
+      background: #333366; /* Old browsers */
+      background: -moz-linear-gradient(left,  #333366 0%, #ffffff 100%); /* FF3.6+ */
+      background: -webkit-gradient(linear, left top, right top, color-stop(0%,#333366), color-stop(100%,#ffffff)); /* Chrome,Safari4+ */
+      background: -webkit-linear-gradient(left,  #333366 0%,#ffffff 100%); /* Chrome10+,Safari5.1+ */
+      background: -o-linear-gradient(left,  #333366 0%,#ffffff 100%); /* Opera 11.10+ */
+      background: -ms-linear-gradient(left,  #333366 0%,#ffffff 100%); /* IE10+ */
+      background: linear-gradient(to right,  #333366 0%,#ffffff 100%); /* W3C */
+      filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#333366', endColorstr='#ffffff',GradientType=1 ); /* IE6-9 */
+      
+      padding: 0px;
+      height: 80px;
+      width: 500px;
+      float: right;
+      display: inline;
+    }
   </style>
   </head>
-  <body onload="\$(document).ready(function(){\$('#data').dataTable({});});">
+  <body>
+  <div id="masthead" class="masthead">
+    <div style="float: left; display: inline; padding: 10px; height: 80px;">
+      <a href="http://www.ensembl.org/"><img src="http://static.ensembl.org/i/e-ensembl.png"></a>
+    </div>
+    
+    <div style="float: right; display: inline; height: 80px; background: white; padding: 10px;">
+      <a href="http://www.ensembl.org/info/docs/variation/vep/vep_script.html"><img src="http://www.ensembl.org/img/vep_logo.png"></a>
+    </div>
+    <div class="gradient">
+    </div>
+  </div>
+  <div class="main">
   <p>
-    View: <a href="$stats_file">Summary statistics</a> | <a href="$txt_file">as text</a>
+    View: <a href="$stats_file">Summary statistics</a> |
+    <a href="$txt_file">as text</a> |
+    <a href="javascript:void();" onclick="showHide('header')">Show/hide header</a> |
+    <a href="javascript:void();" onclick="showAllCols()">Restore columns</a>
   </p>
   <hr/>
-  <pre>
+  <pre id="header" style="height:0px; display: none;">
 HTML
   return $html;
 }
@@ -2317,7 +2460,12 @@ sub html_table_headers {
   my @cols_copy = @$cols;
   
   my $html = qq{</pre><table id="data" class="display"><thead><tr>};
-  $config->{_th} = join("", map {$_ =~ s/\_/ /g; '<th>'.$_.'</th>'} @cols_copy);
+  
+  $config->{_th} = join("", map {
+    $cols_copy[$_] =~ s/\_/ /g;
+    '<th>'.$cols_copy[$_].' '.a({href => 'javascript:void();', onclick => "fnShowHide($_);"}, img({src => 'http://www.ensembl.org/i/16/cross.png', height => 6, width => 6, style => 'border: 1px solid gray; padding: 1px;'})).'</th>'
+  } (0..$#cols_copy));
+  
   $html .= $config->{_th};
   $html .= qq{</thead></tr><tbody>};
   
@@ -2406,6 +2554,9 @@ Options
                        since no consequence data is added [default: off]
 --vcf                  Write output as VCF [default: off]
 --gvf                  Write output as GVF [default: off]
+--html                 Write output also as HTML (filename: [output_file].html)
+--stats_file           Specify stats summary file [default: [output_file]_summary.html]
+--no_stats             Don't write stats summary file
 --fields [field list]  Define a custom output format by specifying a comma-separated
                        list of field names. Field names normally present in the
                        "Extra" field may also be specified, including those added by
@@ -2506,6 +2657,8 @@ NB: Regulatory consequences are currently available for human and mouse only
   [exclude|include]    or excluded from analysis
 --gmaf                 Include global MAF of existing variant from 1000 Genomes
                        Phase 1 in output
+--maf_1kg              Include MAF from continental populations (AFR,AMR,ASN,EUR) of
+                       1000 Genomes Phase 1 in output
   
 --individual [id]      Consider only alternate alleles present in the genotypes of the
                        specified individual(s). May be a single individual, a comma-
@@ -2529,10 +2682,22 @@ NB: Regulatory consequences are currently available for human and mouse only
   [ensembl|vcf|pileup] Converted output is written to the file specified in
                        --output_file. No consequence calculation is carried out when
                        doing file conversion. [default: off]
+                       
+--cache                Enables read-only use of cache [default: off]
+--dir [directory]      Specify the base cache directory to use [default: "\$HOME/.vep/"]
+--fasta [file|dir]     Specify a FASTA file or a directory containing FASTA files
+                       to use to look up reference sequence. The first time you
+                       run the script with this parameter an index will be built
+                       which can take a few minutes. This is required if
+                       fetching HGVS annotations (--hgvs) or checking reference
+                       sequences (--check_ref) in offline mode (--offline), and
+                       optional with some performance increase in cache mode
+                       (--cache). See documentation for more details
 
 --refseq               Use the otherfeatures database to retrieve transcripts - this
                        database contains RefSeq transcripts (as well as CCDS and
                        Ensembl EST alignments) [default: off]
+--database             Enable using databases [default: off]
 --host                 Manually define database host [default: "ensembldb.ensembl.org"]
 -u | --user            Database username [default: "anonymous"]
 --port                 Database port [default: 5306]
@@ -2542,28 +2707,12 @@ NB: Regulatory consequences are currently available for human and mouse only
                        Defining a registry file overrides above connection settings.
 --db_version=[number]  Force script to load DBs from a specific Ensembl version. Not
                        advised due to likely incompatibilities between API and DB
-
---no_whole_genome      Run in old-style, non-whole genome mode [default: off]
---buffer_size          Sets the number of variants sent in each batch [default: 5000]
-                       Increasing buffer size can retrieve results more quickly
-                       but requires more memory. Only applies to whole genome mode.
                        
---cache                Enables read-only use of cache [default: off]
---dir [directory]      Specify the base cache directory to use [default: "\$HOME/.vep/"]
 --write_cache          Enable writing to cache [default: off]
 --build [all|list]     Build a complete cache for the selected species. Build for all
                        chromosomes with --build all, or a list of chromosomes (see
                        --chr). DO NOT USE WHEN CONNECTED TO PUBLIC DB SERVERS AS THIS
                        VIOLATES OUR FAIR USAGE POLICY [default: off]
-                       
---fasta [file|dir]     Specify a FASTA file or a directory containing FASTA files
-                       to use to look up reference sequence. The first time you
-                       run the script with this parameter an index will be built
-                       which can take a few minutes. This is required if
-                       fetching HGVS annotations (--hgvs) or checking reference
-                       sequences (--check_ref) in offline mode (--offline), and
-                       optional with some performance increase in cache mode
-                       (--cache). See documentation for more details
                        
 --compress             Specify utility to decompress cache files - may be "gzcat" or
                        "gzip -dc" Only use if default does not work [default: zcat]
@@ -2574,6 +2723,11 @@ NB: Regulatory consequences are currently available for human and mouse only
                        useastdb.ensembl.org) [default: off]
 --cache_region_size    ADVANCED! The size in base-pairs of the region covered by one
                        file in the cache. [default: 1MB]
+                       
+--buffer_size          Sets the number of variants sent in each batch [default: 5000]
+                       Increasing buffer size can retrieve results more quickly
+                       but requires more memory. Only applies to whole genome mode.
+--no_whole_genome      Run in old-style, non-whole genome mode [default: off]
 END
 
     print $usage;
