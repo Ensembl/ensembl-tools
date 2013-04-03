@@ -2491,7 +2491,7 @@ sub linkify {
   $string =~ s/(rs\d+|COSM\d+|C[DMIX]\d+)/a({href => "http:\/\/www.ensembl.org\/$species\/Variation\/Summary\?v=$1", target => "_blank"}, $1)/gie;
   
   # locations
-  while($string =~ m/(^[A-Z\_\d]+?:\d+)(\-\d+)?/g) {
+  while($string =~ m/(^[A-Z\_\d]+?:[1-9]\d+)(\-\d+)?/g) {
     my $loc = $1.($2 ? $2 : '');
     my ($chr, $start, $end) = split /\-|\:/, $loc;
     $end ||= $start;
