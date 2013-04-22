@@ -1175,7 +1175,7 @@ INTRO
     if(defined($config->{cache})) {
         
         # these two def depend on DB
-        foreach my $param(grep {defined $config->{$_}} qw(hgvs lrg check_sv check_ref)) {
+        foreach my $param(grep {defined $config->{$_}} qw(hgvs lrg check_sv check_ref domains)) {
             debug("INFO: Database will be accessed when using --$param") unless defined($config->{quiet}) or ($param =~ /hgvs|check_ref/ and defined($config->{fasta_db}));
         }
         
@@ -1423,6 +1423,7 @@ sub get_adaptors {
     $config->{ta}  = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'transcript');
     $config->{mca} = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'metacontainer');
     $config->{csa} = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'coordsystem');
+    $config->{tra} = $config->{reg}->get_adaptor($config->{species}, $config->{core_type}, 'translation');
     
     # get variation adaptors
     $config->{vfa}   = $config->{reg}->get_adaptor($config->{species}, 'variation', 'variationfeature');
