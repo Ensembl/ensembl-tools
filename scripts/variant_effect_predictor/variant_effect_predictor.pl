@@ -1175,7 +1175,7 @@ INTRO
     if(defined($config->{cache})) {
         
         # these two def depend on DB
-        foreach my $param(grep {defined $config->{$_}} qw(hgvs lrg check_sv check_ref domains)) {
+        foreach my $param(grep {defined $config->{$_}} qw(hgvs lrg check_sv check_ref)) {
             debug("INFO: Database will be accessed when using --$param") unless defined($config->{quiet}) or ($param =~ /hgvs|check_ref/ and defined($config->{fasta_db}));
         }
         
