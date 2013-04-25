@@ -83,6 +83,7 @@ my %extra_headers = (
     maf_1kg         => ['AFR_MAF','AMR_MAF','ASN_MAF','EUR_MAF'],
     user            => ['DISTANCE'],
     check_existing  => ['CLIN_SIG'],
+    biotype         => ['BIOTYPE'],
 );
 
 my %extra_descs = (
@@ -113,6 +114,7 @@ my %extra_descs = (
     'EUR_MAF'      => 'Minor allele and frequency of existing variation in 1000 Genomes Phase 1 combined European population',
     'DISTANCE'     => 'Shortest distance from variant to transcript',
     'CLIN_SIG'     => 'Clinical significance of variant from dbSNP',
+    'BIOTYPE'      => 'Biotype of transcript',
 );
 
 my %ts_tv = (
@@ -454,6 +456,7 @@ sub configure {
         'ccds',                    # output CCDS identifer
         'xref_refseq',             # output refseq mrna xref
         'protein',                 # add e! protein ID to extra column
+        'biotype',                 # add biotype of transcript to output
         'hgnc',                    # add HGNC gene ID to extra column
         'hgvs',                    # add HGVS names to extra column
         'sift=s',                  # SIFT predictions
@@ -722,6 +725,7 @@ Cache: http://www.ensembl.org/info/docs/variation/vep/vep_script.html#cache
             regulatory => 1,
             canonical  => 1,
             protein    => 1,
+            biotype    => 1,
             gmaf       => 1,
         );
         
