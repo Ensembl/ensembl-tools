@@ -2577,7 +2577,7 @@ Options
 --sift=[p|s|b]         Add SIFT [p]rediction, [s]core or [b]oth [default: off]
 --polyphen=[p|s|b]     Add PolyPhen [p]rediction, [s]core or [b]oth [default: off]
 
-NB: SIFT and PolyPhen predictions are currently available for human only
+NB: SIFT predictions are only available for some species, PolyPhen for human only
 NB: Condel support has been moved to a VEP plugin module - see documentation
 
 --regulatory           Look for overlaps with regulatory regions. The script can
@@ -2605,6 +2605,7 @@ NB: Regulatory consequences are currently available for human and mouse only
                        FREQUENTLY WILL NOT, match exactly in sequence, exon structure
                        and protein product [default: off]
 --protein              Output Ensembl protein identifer [default: off]
+--biotype              Output transcript biotype [default: off]
 --canonical            Indicate if the transcript for this consequence is the canonical
                        transcript for this gene [default: off]
 --domains              Include details of any overlapping protein domains [default: off]
