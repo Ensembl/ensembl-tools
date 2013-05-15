@@ -486,6 +486,8 @@ sub configure {
         'strip',                   # strips adaptors etc from objects before caching them
         'rebuild=s',               # rebuilds cache by reading in existing then redumping - probably don't need to use this any more
         'dir=s',                   # dir where cache is found (defaults to $HOME/.vep/)
+        'dir_cache=s',             # specific directory for cache
+        'dir_plugins=s',           # specific directory for plugins
         'cache_region_size=i',     # size of region in bases for each cache file
         'no_slice_cache',          # tell API not to cache features on slice
         'standalone',              # standalone renamed offline
@@ -518,12 +520,9 @@ sub configure {
     }
     
     # dir is where the cache and plugins live
-    $config->{dir} ||= join '/', ($ENV{'HOME'}, '.vep');
-   
-    # dir gets set to the specific cache directory later on, so take a copy to use 
-    # when configuring plugins
-
-    $config->{toplevel_dir} = $config->{dir};
+    my $default_dir = join '/', ($ENV{'HOME'}, '.vep');
+    $config->{dir_plugins} ||= $config->{dir} || $default_dir;
+    $config->{dir} ||= $config->{dir_cache} || $default_dir;
 
     # ini file?
     my $ini_file = $config->{dir}.'/vep.ini';
@@ -1260,7 +1259,7 @@ sub configure_plugins {
 
         # add the Plugins directory onto @INC
 
-        unshift @INC, $config->{toplevel_dir}."/Plugins";
+        unshift @INC, $config->{dir_plugins}."/Plugins";
 
         for my $plugin (@plugins) {
 
@@ -2692,6 +2691,8 @@ NB: Regulatory consequences are currently available for human and mouse only
                        
 --cache                Enables read-only use of cache [default: off]
 --dir [directory]      Specify the base cache directory to use [default: "\$HOME/.vep/"]
+--dir_cache [dir]      Specify cache directory (if different from --dir)
+--dir_plugins [dir]    Specify plugins directory (if different from --dir)
 --fasta [file|dir]     Specify a FASTA file or a directory containing FASTA files
                        to use to look up reference sequence. The first time you
                        run the script with this parameter an index will be built
