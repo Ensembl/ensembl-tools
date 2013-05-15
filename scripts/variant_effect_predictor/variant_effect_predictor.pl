@@ -521,7 +521,7 @@ sub configure {
     
     # dir is where the cache and plugins live
     my $default_dir = join '/', ($ENV{'HOME'}, '.vep');
-    $config->{dir_plugins} ||= $config->{dir} || $default_dir;
+    $config->{dir_plugins} ||= $config->{dir}.'/Plugins' || $default_dir.'/Plugins';
     $config->{dir} ||= $config->{dir_cache} || $default_dir;
 
     # ini file?
@@ -1259,7 +1259,7 @@ sub configure_plugins {
 
         # add the Plugins directory onto @INC
 
-        unshift @INC, $config->{dir_plugins}."/Plugins";
+        unshift @INC, $config->{dir_plugins};
 
         for my $plugin (@plugins) {
 
