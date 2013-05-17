@@ -521,7 +521,7 @@ sub configure {
     
     # dir is where the cache and plugins live
     my $default_dir = join '/', ($ENV{'HOME'}, '.vep');
-    $config->{dir_plugins} ||= $config->{dir}.'/Plugins' || $default_dir.'/Plugins';
+    $config->{dir_plugins} ||= ($config->{dir} ? $config->{dir}.'/Plugins' : $default_dir.'/Plugins');
     $config->{dir} ||= $config->{dir_cache} || $default_dir;
 
     # ini file?
