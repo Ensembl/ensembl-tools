@@ -33,11 +33,6 @@ use strict;
 use Getopt::Long;
 use FileHandle;
 
-use Bio::EnsEMBL::Variation::Utils::VEP qw(
-  detect_format
-);
-
-
 # set output autoflush for progress bars
 $| = 1;
 
@@ -435,6 +430,36 @@ sub merge_arrays {
   my %tmp = map {$_ => 1} (@$x, @$y);
   
   return [keys %tmp];
+}
+
+
+# sub-routine to detect format of input
+sub detect_format {
+  my $line = shift;
+  my @data = split /\s+/, $line;
+  
+  # VCF: 20  14370  rs6054257  G  A  29  0  NS=58;DP=258;AF=0.786;DB;H2  GT:GQ:DP:HQ
+  if (
+    $data[0] =~ /(chr)?\w+/ &&
+    $data[1] =~ /^\d+$/ &&
+    $data[3] =~ /^[ACGTN-]+$/i &&
+    $data[4] =~ /^([\.ACGTN-]+\,?)+$/i
+  ) {
+    return 'vcf';
+  }
+  
+  # vep output: ID  1:142849179   -     -     -     -     INTERGENIC
+  elsif (
+    $data[0] =~ /\w+/ &&
+    $data[1] =~ /^\w+?\:\d+(\-\d+)*$/ &&
+    scalar @data == 14
+  ) {
+    return 'vep';
+  }
+  
+  else {
+    die("ERROR: Could not detect input file format\n");
+  }
 }
 
 # basic filters
