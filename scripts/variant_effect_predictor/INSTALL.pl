@@ -10,7 +10,7 @@ use Net::FTP;
 use Cwd;
 
 $| = 1;
-our $VERSION = 71;
+our $VERSION = 72;
 
 # CONFIGURE
 ###########
@@ -48,9 +48,9 @@ my $lib_dir = $DEST_DIR;
 $DEST_DIR       .= '/Bio';
 $ENS_CVS_ROOT ||= 'http://cvs.sanger.ac.uk/cgi-bin/viewvc.cgi/';
 $BIOPERL_URL  ||= 'http://bioperl.org/DIST/BioPerl-1.6.1.tar.gz';
-$API_VERSION  ||= 71;
+$API_VERSION  ||= 72;
 $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP";
-$CACHE_DIR    ||= $ENV{HOME}.'/.vep';
+$CACHE_DIR    ||= $ENV{HOME} ? $ENV{HOME}.'/.vep' : 'cache';
 $FTP_USER     ||= 'anonymous';
 
 our $prev_progress = 0;
