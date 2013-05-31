@@ -320,7 +320,7 @@ sub main {
                 if($vf_count == $config->{buffer_size}) {
                     debug("Read $vf_count variants into buffer") unless defined($config->{quiet});
                     
-                    print_line($config, $_) foreach @{get_all_consequences($config, \@vfs)};
+                    $config->{stats}->{out_count} += print_line($config, $_) foreach @{get_all_consequences($config, \@vfs)};
                     
                     # calculate stats
                     my $total_rate = sprintf("%.0f vars/sec", $total_vf_count / ((time() - $config->{start_time}) || 1));
@@ -334,7 +334,7 @@ sub main {
                 }
             }
             else {
-                print_line($config, $_) foreach @{vf_to_consequences($config, $vf)};
+                $config->{stats}->{out_count} += print_line($config, $_) foreach @{vf_to_consequences($config, $vf)};
                 $vf_count++;
                 $total_vf_count++;
                 debug("Processed $vf_count variants") if $vf_count =~ /0$/ && defined($config->{verbose});
@@ -346,7 +346,7 @@ sub main {
     if(defined $config->{whole_genome} && scalar @vfs) {
         debug("Read $vf_count variants into buffer") unless defined($config->{quiet});
         
-        print_line($config, $_) foreach @{get_all_consequences($config, \@vfs)};
+        $config->{stats}->{out_count} += print_line($config, $_) foreach @{get_all_consequences($config, \@vfs)};
         
         # calculate stats
         my $total_rate = sprintf("%.0f vars/sec", $total_vf_count / ((time() - $config->{start_time}) || 1));
@@ -376,6 +376,14 @@ sub main {
       my $fh = $config->{html_file_handle};
       print $fh "</tbody><tfoot><tr>".$config->{_th}."</tr></tfoot></table><p>&nbsp;</p></div></html></body>\n</html>\n";
       $fh->close;
+    }
+    
+    # tabix?
+    if(defined($config->{tabix})) {
+      debug("Compressing and indexing output") unless defined($config->{quiet});
+      system("bgzip -f ".$config->{output_file}) == 0 or warn "WARNING: failed to generated bgzipped file for tabix\n$?\n";
+      rename($config->{output_file}.".gz", $config->{output_file});
+      system("tabix -p vcf -f ".$config->{output_file}) == 0 or warn "WARNING: failed to generated tabix index\n$?\n";
     }
     
     debug("Finished!") unless defined $config->{quiet};
@@ -446,8 +454,10 @@ sub configure {
         # output options
         'everything|e',            # switch on EVERYTHING :-)
         'output_file|o=s',         # output file name
+        'tabix',                   # bgzip and tabix-index output
         'html',                    # generate an HTML version of output
         'stats_file|sf=s',         # stats file name
+        'stats_text',              # write stats as text
         'no_stats',                # don't write stats file
         'force_overwrite',         # force overwrite of output file if already exists
         'terms|t=s',               # consequence terms to use e.g. NCBI, SO
@@ -749,6 +759,9 @@ Cache: http://www.ensembl.org/info/docs/variation/vep/vep_script.html#cache
         $config->{quiet} = 1;
     }
     
+    # output format has to be VCF for tabix
+    die "ERROR: Output must be vcf (--vcf) to use --tabix\n" if defined($config->{tabix}) && !defined($config->{vcf});
+    
     # individual(s) specified?
     if(defined($config->{individual})) {
         $config->{individual} = [split /\,/, $config->{individual}];
@@ -875,7 +888,7 @@ INTRO
     $config->{buffer_size}       ||= 5000;
     $config->{chunk_size}        ||= '50kb';
     $config->{output_file}       ||= "variant_effect_output.txt";
-    $config->{stats_file}        ||= $config->{output_file}."_summary.html";
+    $config->{stats_file}        ||= $config->{output_file}."_summary.".(defined($config->{stats_text}) ? 'txt' : 'html');
     $config->{tmpdir}            ||= '/tmp';
     $config->{format}            ||= 'guess';
     $config->{terms}             ||= 'SO';
@@ -1517,12 +1530,15 @@ sub get_out_file_handle {
     if($config->{output_file} =~ /stdout/i) {
         $out_file_handle = *STDOUT;
     }
+    #elsif(defined($config->{tabix})) {
+    #    $out_file_handle->open(" | bgzip -c > ".$config->{output_file});
+    #}
     else {
         $out_file_handle->open(">".$config->{output_file}) or die("ERROR: Could not write to output file ", $config->{output_file}, "\n");
     }
     
     # get stats file handle
-    die("ERROR: Stats file name ", $config->{stats_file}, " doesn't end in \".htm\" or \".html\" - some browsers may not be able to open this file\n") unless $config->{stats_file} =~ /htm(l)?$/;
+    die("ERROR: Stats file name ", $config->{stats_file}, " doesn't end in \".htm\" or \".html\" - some browsers may not be able to open this file\n") unless $config->{stats_file} =~ /htm(l)?$/ || defined($config->{stats_text});
     my $stats_file_handle = new FileHandle;
     $stats_file_handle->open(">".$config->{stats_file}) or die("ERROR: Could not write to stats file ", $config->{stats_file}, "\n");
     $config->{stats_file_handle} = $stats_file_handle;
@@ -1532,7 +1548,7 @@ sub get_out_file_handle {
     
     if(defined($config->{html})) {
       if(-e $config->{output_file}.'.html' && !defined($config->{force_overwrite})) {
-          die("ERROR: Stats file ", $config->{stats_file}, " already exists. Specify a different output file with --stats_file or overwrite existing file with --force_overwrite\n");
+          die("ERROR: HTML file ", $config->{output_file}, ".html already exists. Specify a different output file with --output_file or overwrite existing file with --force_overwrite\n");
       }
       
       $html_file_handle = new FileHandle;
@@ -1863,7 +1879,7 @@ sub convert_to_hgvs {
 sub print_line {
     my $config = shift;
     my $line = shift;
-    return unless defined($line);
+    return 0 unless defined($line);
     
     my $output;
     my $html_fh = $config->{html_file_handle};
@@ -1899,6 +1915,8 @@ sub print_line {
     
     my $fh = $config->{out_file_handle};
     print $fh "$output\n";
+    
+    return 1;
 }
 
 sub summarise_stats {
@@ -2028,37 +2046,7 @@ sub summarise_stats {
       options => '{hAxis: {title: "Position in protein (percentile)", textStyle: {fontSize: 10}}, legend: {position: "none"}}',
     };
     
-    my $fh = $config->{stats_file_handle};
-    print $fh stats_html_head($config, \@charts);
-    
-    # create menu
-    print $fh div(
-      {class => 'sidemenu'},
-      div(
-        {class => 'sidemenu_head'},
-        "Links"
-      ),
-      div(
-        {class => 'sidemenu_body'},
-        ul(
-          li([
-            a({href => '#masthead'}, "Top of page"),
-            a({href => '#run_stats'}, "VEP run statistics"),
-            a({href => '#gen_stats'}, "General statistics"),
-            map {
-              a({href => '#'.$_->{id}}, $_->{title})
-            } grep { !$_->{no_link} } @charts,
-          ])
-        ),
-      )
-    );
-    
-    print $fh "<div class='main_content'>";
-    
-    # run stats
-    print $fh h3({id => 'run_stats'}, "VEP run statistics");
-    
-    my @rows = (
+    my @run_stats_rows = (
       ['VEP version (API)', $VERSION.' ('.$config->{reg}->software_version.')'],
       ['Cache/Database', ($config->{cache} ? $config->{dir} : ($config->{mca} ? $config->{mca}->dbc->dbname." on ".$config->{mca}->dbc->host : '?'))],
       ['Species', $config->{species}],
@@ -2074,15 +2062,12 @@ sub summarise_stats {
         ' '.a({href => $config->{output_file}}, '[text]')
       ],
     );
-    print $fh table({class => 'stats_table'}, Tr([map {td($_)} @rows]));
     
-    # vars in/out stats
-    print $fh h3({id => 'gen_stats'}, "General statistics");
-    
-    @rows = (
+    my @general_stats_rows = (
       ['Lines of input read', $config->{line_number}],
       ['Variants processed', $config->{stats}->{var_count}],
       ['Variants remaining after filtering', $config->{stats}->{filter_count}],
+      ['Lines of output written', $config->{stats}->{out_count}],
       [
         'Novel / known variants',
         defined($config->{stats}->{existing}) ?
@@ -2098,19 +2083,73 @@ sub summarise_stats {
       ['Overlapped transcripts', $config->{stats}->{transcripts}],
       ['Overlapped regulatory features', $config->{stats}->{regfeats} || '-'],
     );
-    print $fh table({class => 'stats_table'}, Tr([map {td($_)} @rows]));
     
-    foreach my $chart(@charts) {
-      my $height = $chart->{height} || ($chart->{type} eq 'pie' ? '400' : '200');
+    # get file handle
+    my $fh = $config->{stats_file_handle};
+    
+    # text output
+    if(defined($config->{stats_text})) {
+      print $fh "[VEP run statistics]\n";
+      print $fh join("\t", map {s/\<.+?\>//g; $_} @{$_})."\n" for @run_stats_rows;
       
-      print $fh hr();
-      print $fh h3({id => $chart->{id}}, $chart->{title});
-      print $fh div({id => $chart->{id}."_".$chart->{type}, style => 'width: 800px; height: '.$height.'px'}, '&nbsp;');
-      print $fh div({id => $chart->{id}."_table", style => 'width: 800px; height: 200px'}, '&nbsp;') unless $chart->{no_table};
+      print $fh "\n[General statistics]\n";
+      print $fh join("\t", map {s/\<.+?\>//g; $_} @{$_})."\n" for @general_stats_rows;
+      
+      foreach my $chart(@charts) {
+        print $fh "\n[".$chart->{title}."]\n";
+        print $fh join("\t", ($_, $chart->{data}->{$_}))."\n" for @{sort_keys($chart->{data}, $chart->{sort})};
+      }
     }
     
-    print $fh '</div>';
-    print $fh stats_html_tail();
+    # html output
+    else {
+      print $fh stats_html_head($config, \@charts);
+      
+      # create menu
+      print $fh div(
+        {class => 'sidemenu'},
+        div(
+          {class => 'sidemenu_head'},
+          "Links"
+        ),
+        div(
+          {class => 'sidemenu_body'},
+          ul(
+            li([
+              a({href => '#masthead'}, "Top of page"),
+              a({href => '#run_stats'}, "VEP run statistics"),
+              a({href => '#gen_stats'}, "General statistics"),
+              map {
+                a({href => '#'.$_->{id}}, $_->{title})
+              } grep { !$_->{no_link} } @charts,
+            ])
+          ),
+        )
+      );
+      
+      print $fh "<div class='main_content'>";
+      
+      print $fh h3({id => 'run_stats'}, "VEP run statistics");
+    
+      print $fh table({class => 'stats_table'}, Tr([map {td($_)} @run_stats_rows]));
+      
+      # vars in/out stats
+      print $fh h3({id => 'gen_stats'}, "General statistics");
+      print $fh table({class => 'stats_table'}, Tr([map {td($_)} @general_stats_rows]));
+      
+      foreach my $chart(@charts) {
+        my $height = $chart->{height} || ($chart->{type} eq 'pie' ? '400' : '200');
+        
+        print $fh hr();
+        print $fh h3({id => $chart->{id}}, $chart->{title});
+        print $fh div({id => $chart->{id}."_".$chart->{type}, style => 'width: 800px; height: '.$height.'px'}, '&nbsp;');
+        print $fh div({id => $chart->{id}."_table", style => 'width: 800px; height: 200px'}, '&nbsp;') unless $chart->{no_table};
+      }
+      
+      print $fh '</div>';
+      print $fh stats_html_tail();
+    }
+    
     $config->{stats_file_handle}->close;
 }
 
@@ -2120,23 +2159,7 @@ sub stats_html_head {
     
     my ($js);
     foreach my $chart(@$charts) {
-      my @keys;
-      
-      # sort data
-      if(defined($chart->{sort})) {
-        if($chart->{sort} eq 'chr') {
-          @keys = sort {($a !~ /^\d+$/ || $b !~ /^\d+/) ? $a cmp $b : $a <=> $b} keys %{$chart->{data}};
-        }
-        elsif($chart->{sort} eq 'value') {
-          @keys = sort {$chart->{data}->{$a} <=> $chart->{data}->{$b}} keys %{$chart->{data}};
-        }
-        elsif(ref($chart->{sort}) eq 'HASH') {
-          @keys = sort {$chart->{sort}->{$a} <=> $chart->{sort}->{$b}} keys %{$chart->{data}};
-        }
-      }
-      else {
-        @keys = keys %{$chart->{data}};
-      }
+      my @keys = @{sort_keys($chart->{data}, $chart->{sort})};
       
       my $type = ucfirst($chart->{type});
       
@@ -2334,6 +2357,31 @@ sub stats_html_head {
 SHTML
 
     return $html;
+}
+
+sub sort_keys {
+  my $data = shift;
+  my $sort = shift;
+  
+  my @keys;
+  
+  # sort data
+  if(defined($sort)) {
+    if($sort eq 'chr') {
+      @keys = sort {($a !~ /^\d+$/ || $b !~ /^\d+/) ? $a cmp $b : $a <=> $b} keys %{$data};
+    }
+    elsif($sort eq 'value') {
+      @keys = sort {$data->{$a} <=> $data->{$b}} keys %{$data};
+    }
+    elsif(ref($sort) eq 'HASH') {
+      @keys = sort {$sort->{$a} <=> $sort->{$b}} keys %{$data};
+    }
+  }
+  else {
+    @keys = keys %{$data};
+  }
+  
+  return \@keys;
 }
 
 sub stats_html_tail {
