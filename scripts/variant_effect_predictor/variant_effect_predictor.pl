@@ -26,7 +26,7 @@ Variant Effect Predictor - a script to predict the consequences of genomic varia
 
 http://www.ensembl.org/info/docs/variation/vep/vep_script.html
 
-Version 71
+Version 72
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -58,7 +58,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 );
 
 # global vars
-my $VERSION = '71';
+my $VERSION = '72';
 
  
 # define headers that would normally go in the extra field
@@ -508,14 +508,13 @@ sub configure {
         'tmpdir=s',                # tmp dir used for BigWig retrieval
         'plugin=s' => ($config->{plugin} ||= []), # specify a method in a module in the plugins directory
         'fasta=s',                 # file or dir containing FASTA files with reference sequence
-        'freq_file=s',             # file containing freqs to add to cache build
+        'freq_file=s@',            # file containing freqs to add to cache build
         
         # debug
         'cluck',                   # these two need some mods to Bio::EnsEMBL::DBSQL::StatementHandle to work. Clucks callback trace and SQL
         'count_queries',           # counts SQL queries executed
         'admin',                   # allows me to build off public hosts
         'debug',                   # print out debug info
-        'tabix',                   # experimental use tabix cache files
     ) or die "ERROR: Failed to parse command-line flags\n";
     
     # print usage message if requested or no args supplied
@@ -709,6 +708,8 @@ Cache: http://www.ensembl.org/info/docs/variation/vep/vep_script.html#cache
 
       }
     };
+    
+    die("ERROR: --maf_1kg can only be used with --cache or --offline") if defined($config->{maf_1kg}) && !(defined($config->{cache}) || defined($config->{offline}));
     
     # output term
     if(defined $config->{terms}) {
@@ -1897,14 +1898,15 @@ sub print_line {
         } @{$config->{fields}};
         
         if(defined($config->{html})) {
-          print $html_fh Tr(
-            map {td($_)}
-            map {linkify($config, $_)}
-            map {
-              (defined $line->{$_} ? $line->{$_} : (defined $extra{$_} ? $extra{$_} : '-'))
-            }
-            @{$config->{fields}}
-          );
+          my @tr_data;
+          
+          foreach my $field(@{$config->{fields}}) {
+            my $value = $line->{$field} || $extra{$field} || '-';
+            
+            push @tr_data, $value eq '-' ? $value : linkify($config, $field, $value, $line);
+          }
+          
+          print $html_fh Tr(map {td($_)} @tr_data);
         }
     }
     
@@ -1934,7 +1936,7 @@ sub summarise_stats {
       my $start = 0;
       my %tmp;
       
-      while($start <= $config->{chr_lengths}->{$chr}) {
+      while($start <= $config->{stats}->{chr_lengths}->{$chr}) {
         $tmp{$start / 1e6} = $config->{stats}->{chr}->{$chr}->{$start} || 0;
         $start += 1e6;
       }
@@ -1977,8 +1979,17 @@ sub summarise_stats {
         height => 200,
       },
       {
+        id => 'var_cons',
+        title => 'Consequences (most severe)',
+        header => ['Consequence type', 'Count'],
+        data => $config->{stats}->{var_cons},
+        type => 'pie',
+        sort => \%cons_ranks,
+        colours => $colour_keys{consequences},
+      },
+      {
         id => 'consequences',
-        title => 'Variant consequences',
+        title => 'Consequences (all)',
         header => ['Consequence type', 'Count'],
         data => $config->{stats}->{consequences},
         type => 'pie',
@@ -2028,8 +2039,8 @@ sub summarise_stats {
         header => ['Position (mb)', 'Count'],
         data => $config->{stats}->{chr}->{$chr},
         sort => 'chr',
-        type => 'line',
-        options => '{hAxis: {title: "Position (mb)"}, legend: {position: "none"}}',
+        type => 'area',
+        options => '{hAxis: {title: "Position (mb)", textStyle: {fontSize: 8}}, legend: {position: "none"}}',
         no_table => 1,
         no_link => 1,
       };
@@ -2252,6 +2263,11 @@ sub stats_html_head {
       var line = new google.visualization.LineChart(document.getElementById(id));
       line.draw(data, options);
       return line;
+    }
+    function drawArea(id, title, data, options) {
+      var area = new google.visualization.AreaChart(document.getElementById(id));
+      area.draw(data, options);
+      return area;
     }
     google.setOnLoadCallback(init);
   </script>
@@ -2527,7 +2543,9 @@ sub html_table_headers {
 
 sub linkify {
   my $config = shift;
+  my $field  = shift;
   my $string = shift;
+  my $line   = shift;
   
   my $species = ucfirst($config->{species});
   
@@ -2543,6 +2561,9 @@ sub linkify {
   # variant identifiers
   $string =~ s/(rs\d+|COSM\d+|C[DMIX]\d+)/a({href => "http:\/\/www.ensembl.org\/$species\/Variation\/Summary\?v=$1", target => "_blank"}, $1)/gie;
   
+  # split strings
+  $string =~ s/([,;])/$1 /g;
+  
   # locations
   while($string =~ m/(^[A-Z\_\d]+?:[1-9]\d+)(\-\d+)?/g) {
     my $loc = $1.($2 ? $2 : '');
@@ -2550,15 +2571,19 @@ sub linkify {
     $end ||= $start;
     
     # adjust +/- 1kb
-    $start -= 1000;
-    $end   += 1000;
+    my $view_start = $start - 10;
+    my $view_end   = $end + 10;
+    my $allele = $line->{Allele} || 'N';
     
-    my $link = a({href => "http://www.ensembl.org/$species/Location/View?r=$chr:$start\-$end", target => "_blank"}, $string);
+    my $url =
+      "http://www.ensembl.org/$species/Location/View?".
+      "r=$chr:$view_start\-$view_end;format=vep_input;".
+      "custom_feature=$chr%20$start%20$end%20$allele%201;".
+      "custom_feature=normal";
+    
+    my $link = a({href => $url, target => "_blank"}, $string);
     $string =~ s/$loc/$link/;
   }
-  
-  # split strings
-  $string =~ s/([,;])/$1 /g;
   
   return $string;
 }
@@ -2625,7 +2650,6 @@ Options
 --polyphen=[p|s|b]     Add PolyPhen [p]rediction, [s]core or [b]oth [default: off]
 
 NB: SIFT predictions are only available for some species, PolyPhen for human only
-NB: Condel support has been moved to a VEP plugin module - see documentation
 
 --regulatory           Look for overlaps with regulatory regions. The script can
                        also call if a variant falls in a high information position
@@ -2712,7 +2736,7 @@ NB: Regulatory consequences are currently available for human and mouse only
 --gmaf                 Include global MAF of existing variant from 1000 Genomes
                        Phase 1 in output
 --maf_1kg              Include MAF from continental populations (AFR,AMR,ASN,EUR) of
-                       1000 Genomes Phase 1 in output
+                       1000 Genomes Phase 1 in output. Must be used with --cache
   
 --individual [id]      Consider only alternate alleles present in the genotypes of the
                        specified individual(s). May be a single individual, a comma-
