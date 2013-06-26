@@ -1305,29 +1305,29 @@ sub configure_plugins {
 
             # check that the versions match
             
-            my $plugin_version;
-            
-            if ($instance->can('version')) {
-                $plugin_version = $instance->version;
-            }
-            
-            my $version_ok = 1;
-
-            if ($plugin_version) {
-                my ($plugin_major, $plugin_minor, $plugin_maintenance) = split /\./, $plugin_version;
-                my ($major, $minor, $maintenance) = split /\./, $VERSION;
-    
-                if ($plugin_major != $major) {
-                    debug("Warning: plugin $plugin version ($plugin_version) does not match the current VEP version ($VERSION)") unless defined($config->{quiet});
-                    $version_ok = 0;
-                }
-            }
-            else {
-                debug("Warning: plugin $plugin does not define a version number") unless defined($config->{quiet});
-                $version_ok = 0;
-            }
-
-            debug("You may experience unexpected behaviour with this plugin") unless defined($config->{quiet}) || $version_ok;
+            #my $plugin_version;
+            #
+            #if ($instance->can('version')) {
+            #    $plugin_version = $instance->version;
+            #}
+            #
+            #my $version_ok = 1;
+            #
+            #if ($plugin_version) {
+            #    my ($plugin_major, $plugin_minor, $plugin_maintenance) = split /\./, $plugin_version;
+            #    my ($major, $minor, $maintenance) = split /\./, $VERSION;
+            #
+            #    if ($plugin_major != $major) {
+            #        debug("Warning: plugin $plugin version ($plugin_version) does not match the current VEP version ($VERSION)") unless defined($config->{quiet});
+            #        $version_ok = 0;
+            #    }
+            #}
+            #else {
+            #    debug("Warning: plugin $plugin does not define a version number") unless defined($config->{quiet});
+            #    $version_ok = 0;
+            #}
+            #
+            #debug("You may experience unexpected behaviour with this plugin") unless defined($config->{quiet}) || $version_ok;
 
             # check that it implements all necessary methods
             
