@@ -260,6 +260,9 @@ sub main {
             next;
         }
         
+        # strip off nasty characters
+        s/\s+$//g;
+        
         # configure output file
         $config->{out_file_handle} ||= &get_out_file_handle($config);
         
