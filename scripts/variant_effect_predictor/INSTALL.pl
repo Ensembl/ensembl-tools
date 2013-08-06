@@ -1,21 +1,23 @@
 #!/usr/bin/perl
 
 use Getopt::Long;
-use LWP::Simple qw($ua getstore get);
+use HTTP::Tiny;
 use File::Listing qw(parse_dir);
 use File::Path;
 use File::Copy;
 use Archive::Tar;
+use Archive::Extract;
 use Net::FTP;
 use Cwd;
 
 $| = 1;
 our $VERSION = 72;
+our $have_LWP;
 
 # CONFIGURE
 ###########
 
-my ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $BIOPERL_URL, $CACHE_URL, $FTP_USER, $help);
+my ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $BIOPERL_URL, $CACHE_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE);
 
 GetOptions(
   'DESTDIR|d=s'  => \$DEST_DIR,
@@ -23,7 +25,9 @@ GetOptions(
   'BIOPERL|b=s'  => \$BIOPERL_URL,
   'CACHEURL|u=s' => \$CACHE_URL,
   'CACHEDIR|c=s' => \$CACHE_DIR,
-  'HELP|h'       => \$help
+  'FASTAURL|f=s' => \$FASTA_URL,
+  'HELP|h'       => \$help,
+  'UPDATE|n'     => \$UPDATE
 );
 
 if(defined($help)) {
@@ -48,15 +52,93 @@ my $lib_dir = $DEST_DIR;
 $DEST_DIR       .= '/Bio';
 $ENS_CVS_ROOT ||= 'http://cvs.sanger.ac.uk/cgi-bin/viewvc.cgi/';
 $BIOPERL_URL  ||= 'http://bioperl.org/DIST/BioPerl-1.6.1.tar.gz';
-$API_VERSION  ||= 72;
+$API_VERSION  ||= $VERSION;
 $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP";
 $CACHE_DIR    ||= $ENV{HOME} ? $ENV{HOME}.'/.vep' : 'cache';
 $FTP_USER     ||= 'anonymous';
+$FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
+
+# set up the URLs
+my $ensembl_url_tail = '.tar.gz?root=ensembl&view=tar&only_with_tag=branch-ensembl-';
 
 our $prev_progress = 0;
 
 print "\nHello! This installer is configured to install v$API_VERSION of the Ensembl API for use by the VEP.\nIt will not affect any existing installations of the Ensembl API that you may have.\n\nIt will also download and install cache files from Ensembl's FTP server.\n\n";
 
+
+# UPDATE
+########
+
+if($UPDATE) {
+  eval q{ use JSON; };
+  die("ERROR: Updating requires JSON Perl module\n$@") if $@;
+  
+  print "Checking for newer version of the VEP\n";
+  my $http = HTTP::Tiny->new();
+ 
+  my $server = 'http://beta.rest.ensembl.org';
+  my $ext = '/info/software?';
+  my $response = $http->get($server.$ext, {
+    headers => { 'Content-type' => 'application/json' }
+  });
+  
+  die "ERROR: Failed to fetch software version number!\n" unless $response->{success};
+  
+  if(length $response->{content}) {
+    my $hash = decode_json($response->{content});  
+    die("ERROR: Failed to get software version from JSON response\n") unless defined($hash->{release});
+    
+    if($hash->{release} > $VERSION) {
+      
+      print "Ensembl reports there is a newer version of the VEP ($hash->{release}) available - do you want to download? ";
+      
+      my $ok = <>;
+      
+      if($ok !~ /^y/i) {
+        print "OK, bye!\n";
+        exit(0);
+      }
+      
+      my $url = 'http://cvs.sanger.ac.uk/cgi-bin/viewvc.cgi/ensembl-tools/scripts/variant_effect_predictor.tar.gz?view=tar&root=ensembl&pathrev=branch-ensembl-'.$hash->{release};
+      my $tmpdir = '.'.$$.'_tmp';
+      
+      mkdir($tmpdir);
+      
+      print "Downloading version $hash->{release}\n";
+      download_to_file($url, $tmpdir.'/variant_effect_predictor.tar.gz');
+      
+      print "Unpacking\n";
+      unpack_tar($tmpdir.'/variant_effect_predictor.tar.gz', $tmpdir);
+      unlink($tmpdir.'/variant_effect_predictor.tar.gz');
+      
+      opendir NEWDIR, $tmpdir.'/variant_effect_predictor';
+      my @new_files = grep {!/^\./} readdir NEWDIR;
+      closedir NEWDIR;
+      
+      foreach my $new_file(@new_files) {
+        if(-e $new_file) {
+          print "Backing up $new_file to $new_file\.bak\_$VERSION\n";
+          move($new_file, "$new_file\.bak\_$VERSION");
+          move("$tmpdir/variant_effect_predictor/$new_file", $new_file);
+        }
+        else {
+          print "Copying file $new_file\n";
+          move("$tmpdir/variant_effect_predictor/$new_file", $new_file);
+        }
+      }
+      
+      rmtree($tmpdir);
+      
+      print "\nLooks good! Rerun INSTALL.pl to update your API and/or get the latest cache files\n";
+      exit(0);
+    }
+    else {
+      print "Looks like you have the latest version - no need to update!\n\n";
+      print "There may still be post-release patches to the API - run INSTALL.pl without --UPDATE/-n to re-install your API\n";
+      exit(0);
+    }
+  }
+}
 
 # CHECK EXISTING
 ################
@@ -175,23 +257,11 @@ if(-e $DEST_DIR) {
 mkdir($DEST_DIR) or die "ERROR: Could not make directory $DEST_DIR\n";
 mkdir($DEST_DIR.'/tmp') or die "ERROR: Could not make directory $DEST_DIR/tmp\n";
 
-# set up a user agent's proxy
-$ua->env_proxy;
-
-# enable progress
-eval q{
-  $ua->show_progress(1);
-};
-
-
 
 # API
 #####
 
 print "\nDownloading required files\n";
-
-# set up the URLs
-my $ensembl_url_tail = '.tar.gz?root=ensembl&view=tar&only_with_tag=branch-ensembl-';
 
 foreach my $module(qw(ensembl ensembl-variation ensembl-functgenomics)) {
   my $url = $ENS_CVS_ROOT.$module.$ensembl_url_tail.$API_VERSION;
@@ -201,9 +271,7 @@ foreach my $module(qw(ensembl ensembl-variation ensembl-functgenomics)) {
   my $target_file = $DEST_DIR.'/tmp/'.$module.'.tar.gz';
   
   if(!-e $target_file) {
-    unless(getstore($url, $target_file) == 200) {
-      die "ERROR: Failed to fetch $module from $url - perhaps you have a proxy/firewall? Set the http_proxy ENV variable if you do\nError code: $response\n";
-    }
+    download_to_file($url, $target_file);
   }
   
   print " - unpacking $target_file\n";
@@ -236,9 +304,7 @@ $bioperl_file = (split /\//, $BIOPERL_URL)[-1];
 
 my $target_file = $DEST_DIR.'/tmp/'.$bioperl_file;
 
-unless(getstore($BIOPERL_URL, $target_file) == 200) {
-  die "ERROR: Failed to fetch BioPerl from $BIOPERL_URL - perhaps you have a proxy/firewall?\nError code: $response\n";
-}
+download_to_file($BIOPERL_URL, $target_file);
 
 print " - unpacking $target_file\n";
 unpack_tar("$DEST_DIR/tmp/$bioperl_file", "$DEST_DIR/tmp/");
@@ -280,8 +346,7 @@ print "Do you want to install any cache files (y/n)? ";
 my $ok = <>;
 
 if($ok !~ /^y/i) {
-  print "Exiting\n";
-  exit(0);
+  goto FASTA;
 }
 
 # check cache dir exists
@@ -316,10 +381,10 @@ if($CACHE_URL =~ /^ftp/i) {
     $ftp->cwd($sub) or die "ERROR: Could not change directory to $sub\n$@\n";
   }
   
-  push @files, grep {$_ =~ /tar.gz/} $ftp->ls;
+  push @files, sort grep {$_ =~ /tar.gz/} $ftp->ls;
 }
 else {
-  push @files, map {$_->[0]} grep {$_->[0] =~ /tar.gz/} @{parse_dir(get($CACHE_URL))};
+  push @files, sort map {$_->[0]} grep {$_->[0] =~ /tar.gz/} @{parse_dir(get($CACHE_URL))};
 }
 
 # if we don't have a species list, we'll have to guess
@@ -341,6 +406,7 @@ foreach my $file(@files) {
 }
 
 print "The following species/files are available; which do you want (can specify multiple separated by spaces): \n$species_list\n? ";
+my @store_species;
 
 foreach my $file(split /\s+/, <>) {
   my $file_path = $files[$file - 1];
@@ -355,6 +421,8 @@ foreach my $file(split /\s+/, <>) {
     $file_name =~ m/^(\w+?)\_vep/;
     $species = $1;
   }
+  
+  push @store_species, $species;
   
   # check if user already has this species and version
   if(-e "$CACHE_DIR/$species/$API_VERSION") {
@@ -374,9 +442,7 @@ foreach my $file(split /\s+/, <>) {
   
   print " - downloading $CACHE_URL/$file_path\n";
   
-  unless(getstore("$CACHE_URL/$file_path", $target_file) == 200) {
-    die "ERROR: Failed to fetch cache file $file_name from $CACHE_URL/$file_path - perhaps you have a proxy/firewall? Set the http_proxy ENV variable if you do\nError code: $response\n";
-  }  
+  download_to_file("$CACHE_URL/$file_path", $target_file);
   
   print " - unpacking $file_name\n";
   
@@ -394,14 +460,161 @@ foreach my $file(split /\s+/, <>) {
   closedir CACHEDIR;
 }
 
-# cleanup
-rmtree("$CACHE_DIR/tmp") or die "ERROR: Could not delete directory $CACHE_DIR/tmp\n";
+
+
+# FASTA FILES
+#############
+
+FASTA:
+
+print "\nThe VEP can use FASTA files to retrieve sequence data.\n";
+print "FASTA files will be stored in $CACHE_DIR\n";
+print "Do you want to install any FASTA files (y/n)? ";
+
+my $ok = <>;
+
+if($ok !~ /^y/i) {
+  print "Exiting\n";
+  exit(0);
+}
+
+my @dirs = ();
+my $ftp;
+
+if($FASTA_URL =~ /^ftp/i) {
+  $FASTA_URL =~ m/(ftp:\/\/)?(.+?)\/(.+)/;
+  $ftp = Net::FTP->new($2) or die "ERROR: Could not connect to FTP host $2\n$@\n";
+  $ftp->login($FTP_USER) or die "ERROR: Could not login as $FTP_USER\n$@\n";
+  
+  foreach my $sub(split /\//, $3) {
+    $ftp->cwd($sub) or die "ERROR: Could not change directory to $sub\n$@\n";
+  }
+  
+  push @dirs, sort $ftp->ls;
+}
+else {
+  push @dirs, sort map {$_->[0]} grep {$_->[0] =~ /tar.gz/} @{parse_dir(get($FASTA_URL))};
+}
+
+$species_list = '';
+$num = 1;
+foreach my $dir(@dirs) {
+  $species_list .= $num++." : ".$dir."\n";
+}
+
+print "FASTA files for the following species are available; which do you want (can specify multiple separated by spaces, \"0\" to install for species specified for cache download): \n$species_list\n? ";
+
+my $input = <>;
+my @nums = split /\s+/, $input;
+
+my @species = @store_species if grep {$_ eq '0'} @nums;
+push @species, $dirs[$_ - 1] for grep {$_ > 0} @nums;
+
+foreach my $species(@species) {
+  $ftp->cwd($species) or die "ERROR: Could not change directory to $species\n$@\n";
+  $ftp->cwd('dna') or die "ERROR: Could not change directory to dna\n$@\n";
+  
+  my @files = grep {!/_(s|r)m\./} $ftp->ls;
+  
+  my ($file) = grep {/primary_assembly.fa.gz$/} @files;
+  my ($file) = grep {/toplevel.fa.gz$/} @files if !defined($file);
+  
+  unless(defined($file)) {
+    warn "WARNING: No download found for $species\n";
+    next;
+  }
+  
+  my $ex = "$CACHE_DIR/$species/$API_VERSION/$file";
+  $ex =~ s/\.gz$//;
+  if(-e $ex) {
+    print "Looks like you already have the FASTA file for $species, skipping\n";
+    $ftp->cwd('../');
+    $ftp->cwd('../');
+    next;
+  }
+  
+  # create path
+  mkdir($CACHE_DIR) unless -d $CACHE_DIR;
+  mkdir("$CACHE_DIR/$species") unless -d "$CACHE_DIR/$species";
+  mkdir("$CACHE_DIR/$species/$API_VERSION") unless -d "$CACHE_DIR/$species/$API_VERSION";
+  
+  print "Downloading $file\n";
+  download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file");
+  
+  print "Extracting data\n";
+  my $ar = Archive::Extract->new(archive => "$CACHE_DIR/$species/$API_VERSION/$file");
+  my $ok = $ar->extract(to => "$CACHE_DIR/$species/$API_VERSION/") or die $ae->error;
+  unlink("$CACHE_DIR/$species/$API_VERSION/$file");
+  
+  print "Use \"--fasta $ex\" to use this FASTA file with the VEP\n";
+  
+  $ftp->cwd('../');
+  $ftp->cwd('../');
+}
+
+
+# CLEANUP
+#########
+if(-d "$CACHE_DIR/tmp") {
+  rmtree("$CACHE_DIR/tmp") or die "ERROR: Could not delete directory $CACHE_DIR/tmp\n";
+}
 
 print "\nSuccess\n";
 
 
 # SUBS
 ######
+
+sub download_to_file {
+  my ($url, $file) = @_;
+  
+  $url =~ s/([a-z])\//$1\:21\// if $url =~ /ftp/;
+  
+  if(have_LWP()) {
+    my $response = getstore($url, $file);
+    
+    unless($response == 200) {
+      die "ERROR: Failed to fetch from $url - perhaps you have a proxy/firewall? Set the http_proxy ENV variable if you do\nError code: $response\n";
+    }
+  }
+  else {
+    my $response = HTTP::Tiny->new->get($url);
+    
+    if($response->{success}) {
+      open OUT, ">$file" or die "Could not write to file $file\n";
+      binmode OUT;
+      print OUT $response->{content};
+      close OUT;
+    }
+    else {
+      die "ERROR: Failed to fetch from $url - perhaps you have a proxy/firewall? Set the http_proxy ENV variable if you do\nError code: $response->{reason}\n";
+    } 
+  }
+}
+
+sub have_LWP {
+  return $have_LWP if defined($have_LWP);
+  
+  eval q{
+    use LWP::Simple qw($ua getstore get);
+  };
+  
+  if($@) {
+    $have_LWP = 0;
+    warn("Using HTTP::Tiny - this may fail when downloading large files; install LWP::Simple to avoid this issue\n");
+  }
+  else {
+    $have_LWP = 1;
+    
+    # set up a user agent's proxy
+    $ua->env_proxy;
+    
+    # enable progress
+    eval q{
+      $ua->show_progress(1);
+    };
+  }
+}
 
 # unpack a tarball
 sub unpack_tar {
@@ -454,6 +667,7 @@ Options
 -d | --DESTDIR     Set destination directory for API install (default = './')
 -v | --VERSION     Set API version to install (default = $VERSION)
 -c | --CACHEDIR    Set destination directory for cache files (default = '$HOME/.vep/')
+-u | --UPDATE      EXPERIMENTAL! Check for and download new VEP versions
 END
 
     print $usage;
