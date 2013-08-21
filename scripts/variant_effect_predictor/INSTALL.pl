@@ -5,13 +5,12 @@ use HTTP::Tiny;
 use File::Listing qw(parse_dir);
 use File::Path;
 use File::Copy;
-use Archive::Tar;
 use Archive::Extract;
 use Net::FTP;
 use Cwd;
 
 $| = 1;
-our $VERSION = 72;
+our $VERSION = 73;
 our $have_LWP;
 
 # CONFIGURE
@@ -65,7 +64,6 @@ our $prev_progress = 0;
 
 print "\nHello! This installer is configured to install v$API_VERSION of the Ensembl API for use by the VEP.\nIt will not affect any existing installations of the Ensembl API that you may have.\n\nIt will also download and install cache files from Ensembl's FTP server.\n\n";
 
-
 # UPDATE
 ########
 
@@ -108,7 +106,7 @@ if($UPDATE) {
       download_to_file($url, $tmpdir.'/variant_effect_predictor.tar.gz');
       
       print "Unpacking\n";
-      unpack_tar($tmpdir.'/variant_effect_predictor.tar.gz', $tmpdir);
+      unpack_arch($tmpdir.'/variant_effect_predictor.tar.gz', $tmpdir);
       unlink($tmpdir.'/variant_effect_predictor.tar.gz');
       
       opendir NEWDIR, $tmpdir.'/variant_effect_predictor';
@@ -275,7 +273,7 @@ foreach my $module(qw(ensembl ensembl-variation ensembl-functgenomics)) {
   }
   
   print " - unpacking $target_file\n";
-  unpack_tar("$DEST_DIR/tmp/$module.tar.gz", "$DEST_DIR/tmp/");
+  unpack_arch("$DEST_DIR/tmp/$module.tar.gz", "$DEST_DIR/tmp/");
   
   print " - moving files\n";
   
@@ -307,7 +305,7 @@ my $target_file = $DEST_DIR.'/tmp/'.$bioperl_file;
 download_to_file($BIOPERL_URL, $target_file);
 
 print " - unpacking $target_file\n";
-unpack_tar("$DEST_DIR/tmp/$bioperl_file", "$DEST_DIR/tmp/");
+unpack_arch("$DEST_DIR/tmp/$bioperl_file", "$DEST_DIR/tmp/");
 
 print " - moving files\n";
 
@@ -319,6 +317,7 @@ move("$DEST_DIR/tmp/$bioperl_dir/Bio/$_", "$DEST_DIR/$_") for readdir BIO;
 closedir BIO;
 
 rmtree("$DEST_DIR/tmp") or die "ERROR: Failed to remove directory $DEST_DIR/tmp\n";
+
 
 
 # TEST
@@ -339,7 +338,7 @@ print " - OK!\n";
 
 CACHE:
 
-print "\nThe VEP can either connect to remote or local databases, or use local cache files.\n";
+print "\nThe VEP can either connect to remote or local databases, or use local cache files. Using local cache files is the fastest and most efficient way to run the VEP\n";
 print "Cache files will be stored in $CACHE_DIR\n";
 print "Do you want to install any cache files (y/n)? ";
 
@@ -447,7 +446,7 @@ foreach my $file(split /\s+/, <>) {
   print " - unpacking $file_name\n";
   
   
-  unpack_tar($target_file, $CACHE_DIR.'/tmp/');
+  unpack_arch($target_file, $CACHE_DIR.'/tmp/');
   
   # does species dir exist?
   if(!-e "$CACHE_DIR/$species") {
@@ -467,7 +466,7 @@ foreach my $file(split /\s+/, <>) {
 
 FASTA:
 
-print "\nThe VEP can use FASTA files to retrieve sequence data.\n";
+print "\nThe VEP can use FASTA files to retrieve sequence data for HGVS notations and reference sequence checks.\n";
 print "FASTA files will be stored in $CACHE_DIR\n";
 print "Do you want to install any FASTA files (y/n)? ";
 
@@ -517,7 +516,7 @@ foreach my $species(@species) {
   my @files = grep {!/_(s|r)m\./} $ftp->ls;
   
   my ($file) = grep {/primary_assembly.fa.gz$/} @files;
-  my ($file) = grep {/toplevel.fa.gz$/} @files if !defined($file);
+  ($file) = grep {/toplevel.fa.gz$/} @files if !defined($file);
   
   unless(defined($file)) {
     warn "WARNING: No download found for $species\n";
@@ -542,11 +541,9 @@ foreach my $species(@species) {
   download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file");
   
   print "Extracting data\n";
-  my $ar = Archive::Extract->new(archive => "$CACHE_DIR/$species/$API_VERSION/$file");
-  my $ok = $ar->extract(to => "$CACHE_DIR/$species/$API_VERSION/") or die $ae->error;
-  unlink("$CACHE_DIR/$species/$API_VERSION/$file");
+  unpack_arch("$CACHE_DIR/$species/$API_VERSION/$file", "$CACHE_DIR/$species/$API_VERSION/");
   
-  print "Use \"--fasta $ex\" to use this FASTA file with the VEP\n";
+  print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex\"\n";
   
   $ftp->cwd('../');
   $ftp->cwd('../');
@@ -617,18 +614,12 @@ sub have_LWP {
 }
 
 # unpack a tarball
-sub unpack_tar {
+sub unpack_arch {
   my ($arch_file, $dir) = @_;
   
-  my $prev_dir = getcwd;
-  chdir($dir);
-  
-  $arch_file =~ s/.+\///g;
-  my $tar = Archive::Tar->new;
-  $tar->read($arch_file);
-  $tar->extract;
-  
-  chdir($prev_dir);
+  my $ar = Archive::Extract->new(archive => $arch_file);
+  my $ok = $ar->extract(to => $dir) or die $ae->error;
+  unlink($arch_file);
 }
 
 # update or initiate progress bar

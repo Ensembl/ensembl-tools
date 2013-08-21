@@ -16,7 +16,7 @@ use Bio::EnsEMBL::Translation;
 use Bio::EnsEMBL::Utils::Sequence qw(reverse_comp);
 use Bio::DB::Fasta;
 
-our $VERSION = 2.7;
+our $VERSION = 73;
 
 my $config = {};
 
@@ -93,7 +93,7 @@ else {
 
 while(<$in_file_handle>) {
 	chomp;
-	
+  
 	my @split = split /\t/, $_;
 	
 	my $data;
