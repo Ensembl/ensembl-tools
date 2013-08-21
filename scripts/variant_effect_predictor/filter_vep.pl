@@ -24,7 +24,7 @@
 
 filter_vep.pl - a script to filter results from the Variant Effect Predictor
 
-http://www.ensembl.org/info/docs/variation/vep/vep_script.html#filter
+http://www.ensembl.org/info/docs/tools/vep/script/vep_filter.html
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -58,7 +58,7 @@ sub configure {
     'input_file|i=s',          # input file
     'output_file|o=s',         # output file
     'force_overwrite',         # force overwrite output
-    'format',                  # input format
+    'format=s',                # input format
     'gz',                      # force read as gzipped
     'only_matched',            # rewrite CSQ field in VCF with only matched "blobs"
     
@@ -168,7 +168,13 @@ sub main {
         # get main data
         my $main_data = parse_line($line, $config->{col_headers}, "\t");
         
-        # now add chunks from CSQ field
+        # get info fields
+        foreach my $info_field(split /\;/, (split /\s+/, $line)[7]) {
+          my ($field, $value) = split /\=/, $info_field;
+          $main_data->{$field} = $value;
+        }
+        
+        # get CSQ stuff
         if($line =~ m/CSQ\=(.+?)(\;|$|\s)/) {
           @chunks = split('\,', $1);
           push @data,
@@ -176,6 +182,9 @@ sub main {
             map {parse_line($_, \@headers, '\|')}
             @chunks;
         }
+      }
+      else {
+        die("ERROR: Unable to parse data in format ".$config->{format}."\n");
       }
       
       my ($line_pass, @new_chunks);
@@ -221,7 +230,10 @@ sub parse_headers {
         $raw_header =~ m/Format\: (.+?)\"/;
         $config->{headers} = [split '\|', $1];
       }
-      elsif($raw_header =~ m/ (\w+) \:/) {
+      elsif($raw_header =~ /INFO\=\<ID\=(.+?)\,/) {
+        $config->{allowed_fields}->{$1} = 1;
+      }
+      elsif($raw_header =~ m/ (.+?) \:/) {
         $config->{allowed_fields}->{$1} = 1;
       }
     }
@@ -305,6 +317,16 @@ sub parse_filters {
       
       # operator?
       my $operator = scalar @words ? shift @words : 'ex';
+      
+      # value?
+      my $value = scalar @words ? shift @words : undef;
+      
+      if(!defined($value)) {
+        $operator = 'nex' if $operator eq 'ne';
+        $operator = 'ex' if $operator eq 'is';
+      }
+      
+      # sub
       my $sub_name = 'filter_'.$operator;
       
       if(!defined(&$sub_name)) {
@@ -317,9 +339,6 @@ sub parse_filters {
         }
       }
       
-      # value?
-      my $value = scalar @words ? shift @words : undef;
-      
       # match field
       if(!defined($config->{allowed_fields}->{$field})) {
         my @matched_fields = grep {$_ =~ /^$field/i} keys %{$config->{allowed_fields}};
@@ -327,9 +346,9 @@ sub parse_filters {
         if(scalar @matched_fields == 1) {
           $field = $matched_fields[0];
         }
-        else {
-          die("ERROR: No field matching $field found\n");
-        }
+        #else {
+        #  die("ERROR: No field matching $field found\n");
+        #}
       }
       
       push @return, {
@@ -470,9 +489,11 @@ sub filter_lt  { return $_[0] <  $_[1] }
 sub filter_gte { return $_[0] >= $_[1] }
 sub filter_lte { return $_[0] <= $_[1] }
 sub filter_ex  { return defined($_[0]) }
+sub filter_nex { return !defined($_[0]) }
 
 # string
 sub filter_re  { return $_[0] =~ /$_[1]/i }
+sub filter_nre { return $_[0] !~ /$_[1]/i }
 
 # checks if a value exists in a file or list
 sub filter_in {

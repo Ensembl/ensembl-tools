@@ -24,7 +24,7 @@
 
 convert_cache.pl - a script to convert VEP caches to use tabix
 
-http://www.ensembl.org/info/docs/variation/vep/vep_script.html#convert_cache
+http://www.ensembl.org/info/docs/tools/vep/script/vep_cache.html#convert
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -33,6 +33,9 @@ use strict;
 use Getopt::Long;
 use FileHandle;
 use Bio::EnsEMBL::Variation::Utils::VEP qw(read_cache_info);
+use Bio::EnsEMBL::Variation::Utils::VariationEffect qw(MAX_DISTANCE_FROM_TRANSCRIPT);
+use Storable qw(nstore_fd fd_retrieve freeze thaw);
+use MIME::Base64;
 
 # set output autoflush for progress bars
 $| = 1;
@@ -55,13 +58,13 @@ sub configure {
     'force_overwrite|f', # force overwrite existing files
     'remove|r',          # remove cache files after we finish
     
-    'species|s=s',  # species
-    'dir|d=s',      # cache dir
-    'version|v=s',  # version number
+    'species|s=s',       # species
+    'dir|d=s',           # cache dir
+    'version|v=s',       # version number
     
-    'compress|c=s', # eg zcat
-    'bgzip|b=s',    # path to bgzip
-    'tabix|t=s',    # path to tabix
+    'compress|c=s',      # eg zcat
+    'bgzip|b=s',         # path to bgzip
+    'tabix|t=s',         # path to tabix
   ) or die "ERROR: Failed to parse command-line flags\n";
   
   # print usage message if requested or no args supplied
@@ -149,107 +152,103 @@ sub main {
       my @chrs = grep {-d $dir.'/'.$_ && !/^\./} readdir DIR;
       closedir DIR;
       
-      my %chr_files;
-      my $total = 0;
-      my $i = 0;
-      
-      foreach my $chr(@chrs) {
-        opendir DIR, $dir.'/'.$chr;
-        my @files = grep {-f $dir.'/'.$chr.'/'.$_ && /\_var\.gz$/} readdir DIR;
-        closedir DIR;
+      foreach my $t(qw(_var)) {
+      #foreach my $t(qw(_tr _reg _var)) {
         
-        # make sure we process in chromosomal order
-        my @tmp;
+        my %chr_files;
+        my $total = 0;
+        my $i = 0;
         
-        foreach my $file(@files) {
-          if($file =~ m/(\d+)\-\d+\_var\.gz/) {
-            push @tmp, {
-              s => $1,
-              f => $file,
-            };
-          }
-          else {
-            die("ERROR: Filename $file doesn't look right\n");
-          }
-        }
+        debug($config, "Processing $t cache type");
         
-        @files = map {$_->{f}} sort {$a->{s} <=> $b->{s}} @tmp;
+        my $type = $t;
+        my $orig_type = $type;
+        $type = '' if $type eq '_tr';
         
-        $chr_files{$chr} = \@files;
-        $total += scalar @files;
-      }
-      
-      foreach my $chr(@chrs) {
+        my $method = 'process'.$orig_type;
+        my $method_ref = \&$method;
         
-        my $outfilepath = join('/', ($dir, $chr, "all_vars"));
-        
-        # check if files exist
-        foreach my $file($outfilepath.'.gz', $outfilepath.'.gz.tbi') {
-          if(-e $file) {
-            if(defined($config->{force_overwrite})) {
-              unlink($file) or die("ERROR: Failed to delete file $file\n");
-            }
-            else {
-              die("ERROR: File $file already exists - use --force_overwrite to overwrite\n");
-            }
-          }
-        }
-        
-        open OUT, ">$outfilepath" or die("ERROR: Could not write to file $outfilepath\n");
-        
-        foreach my $file(@{$chr_files{$chr}}) {
-          progress($config, $i++, $total);
+        foreach my $chr(@chrs) {    
+          opendir DIR, $dir.'/'.$chr;
+          my @files = grep {-f $dir.'/'.$chr.'/'.$_ && /\d+$type\.gz$/} readdir DIR;
+          closedir DIR;
           
-          my $infilepath = join('/', ($dir, $chr, $file));
-          
+          # make sure we process in chromosomal order
           my @tmp;
           
-          open IN, "$zcat $infilepath | " or die("ERROR: Could not read from file $infilepath\n");
-          while(<IN>) {
-            chomp;
-            my $l = length($_);
-            
-            while(1) {
-              s/  / \. /g;
-              s/ $/ \./g;
-              last if length($_) == $l;
-              $l = length($_);
+          foreach my $file(@files) {
+            if($file =~ m/(\d+)\-\d+$type\.gz/) {
+              push @tmp, {
+                s => $1,
+                f => $file,
+              };
             }
-            
-            s/ /\t/g;
-            
-            my @data = split /\t/, $_;
-            my $pos = $data[2];
-            
-            push @tmp, {
-              p => $pos,
-              d => "$chr\t$_\n"
+            else {
+              die("ERROR: Filename $file doesn't look right\n");
             }
           }
-          close IN;
           
-          print OUT $_ for map {$_->{d}} sort {$a->{p} <=> $b->{p}} @tmp;
+          @files = map {$_->{f}} sort {$a->{s} <=> $b->{s}} @tmp;
           
-          push @files_to_remove, $infilepath if defined($config->{remove});
+          $chr_files{$chr} = \@files;
+          $total += scalar @files;
         }
         
-        close OUT;
+        foreach my $chr(@chrs) {
+          
+          my $outfilepath = join('/', ($dir, $chr, "all".$orig_type."s"));
+          
+          # check if files exist
+          foreach my $file($outfilepath.'.gz', $outfilepath.'.gz.tbi') {
+            if(-e $file) {
+              if(defined($config->{force_overwrite})) {
+                unlink($file) or die("ERROR: Failed to delete file $file\n");
+              }
+              else {
+                die("ERROR: File $file already exists - use --force_overwrite to overwrite\n");
+              }
+            }
+          }
+          
+          my $out_fh = new FileHandle;
+          $out_fh->open(">$outfilepath") or die("ERROR: Could not write to file $outfilepath\n");
+          
+          foreach my $file(@{$chr_files{$chr}}) {
+            progress($config, $i++, $total);
+            
+            my $infilepath = join('/', ($dir, $chr, $file));
+            
+            &$method_ref($config, $chr, $infilepath, $out_fh);
+            
+            push @files_to_remove, $infilepath if defined($config->{remove});
+          }
+          
+          $out_fh->close();
+          
+          # sort
+          if($type ne '_var') {
+            `sort -k2,2n -k3,3n $outfilepath > $outfilepath\.sorted; mv $outfilepath\.sorted $outfilepath`;
+          }
+          
+          # bgzip
+          my $bgzipout = `$bgzip $outfilepath`;
+          die("ERROR: bgzip failed\n$bgzipout") if $bgzipout;
+          
+          # tabix
+          my ($b, $e) = $type eq '_var' ? (4, 4) : (2, 3);
+          my $tabixout = `$tabix -s 1 -b $b -e $e $outfilepath\.gz`;
+          die("ERROR: tabix failed\n$tabixout") if $tabixout;
+        }
         
-        # bgzip
-        my $bgzipout = `$bgzip $outfilepath`;
-        die("ERROR: bgzip failed\n$bgzipout") if $bgzipout;
-        
-        # tabix
-        my $tabixout = `$tabix -s 1 -b 4 -e 4 $outfilepath\.gz`;
-        die("ERROR: tabix failed\n$tabixout") if $tabixout;
+        end_progress($config);
       }
-      
-      end_progress($config);
       
       # now update info.txt
       read_cache_info($config);
       
       $config->{cache_var_type} = 'tabix';
+      #$config->{cache_tr_type} = 'tabix';
+      #$config->{cache_reg_type} = 'tabix';
       $config->{cache_variation_cols} = 'chr,'.join(",", @{$config->{cache_variation_cols}}) unless $config->{cache_variation_cols}->[0] eq 'chr';
       
       open OUT, ">".$config->{dir}.'/info.txt' or die("ERROR: Could not write to info.txt\n");
@@ -274,28 +273,122 @@ sub main {
   debug($config, "All done!");
 }
 
+sub process_tr {
+  my ($config, $chr, $infilepath, $out_fh) = @_;
+  my $zcat = $config->{compress};
+  
+  open my $fh, $zcat." ".$infilepath." |" or die("ERROR: Could not read from file $infilepath\n");
+  my $tr_cache;
+  $tr_cache = fd_retrieve($fh);
+  close $fh;
+  
+  foreach my $tmp_chr(keys %$tr_cache) {
+    my @tmp;
+    
+    foreach my $tr(@{$tr_cache->{$tmp_chr}}) {
+      next if $config->{seen}->{$tr->stable_id};
+      $config->{seen}->{$tr->stable_id} = 1;
+      
+      my ($s, $e) = ($tr->start, $tr->end);
+      $s -= MAX_DISTANCE_FROM_TRANSCRIPT;
+      $e += MAX_DISTANCE_FROM_TRANSCRIPT;
+      $s = 1 if $s < 1;
+      
+      push @tmp, {
+        s => $s,
+        e => $e,
+        d => encode_base64(freeze($tr), " ")
+      };
+    }
+    
+    print $out_fh join("\t", ($chr, $_->{s}, $_->{e}, $_->{d}))."\n" for sort {$a->{s} <=> $b->{s} || $a->{e} <=> $b->{e}} @tmp;
+  }
+}
+
+sub process_rf {
+  my ($config, $chr, $infilepath, $out_fh) = @_;
+  my $zcat = $config->{compress};
+  
+  open my $fh, $zcat." ".$infilepath." |" or die("ERROR: Could not read from file $infilepath\n");
+  my $rf_cache;
+  $rf_cache = fd_retrieve($fh);
+  close $fh;
+  
+  foreach my $tmp_chr(keys %$rf_cache) {
+    my @tmp;
+    
+    foreach my $type(keys %{$rf_cache->{$tmp_chr}}) {
+      foreach my $rf(@{$rf_cache->{$tmp_chr}}) {
+        my ($s, $e) = $rf->start, $rf->end;
+        $s = 1 if $s < 1;
+        
+        push @tmp, {
+          s => $s,
+          e => $e,
+          d => encode_base64(freeze($rf), " ")
+        };
+      }
+    }
+    
+    print $out_fh join("\t", ($chr, $_->{s}, $_->{e}, $_->{d}))."\n" for sort {$a->{s} <=> $b->{s} || $a->{e} <=> $b->{e}} @tmp;
+  }
+}
+
+sub process_var {
+  my ($config, $chr, $infilepath, $out_fh) = @_;
+  my $zcat = $config->{compress};
+  
+  my @tmp;
+  
+  open IN, "$zcat $infilepath | " or die("ERROR: Could not read from file $infilepath\n");
+  while(<IN>) {
+    chomp;
+    my $l = length($_);
+    
+    while(1) {
+      s/  / \. /g;
+      s/ $/ \./g;
+      last if length($_) == $l;
+      $l = length($_);
+    }
+    
+    s/ /\t/g;
+    
+    my @data = split /\t/, $_;
+    my $pos = $data[2];
+    
+    push @tmp, {
+      p => $pos,
+      d => "$chr\t$_\n"
+    }
+  }
+  close IN;
+  
+  print $out_fh $_ for map {$_->{d}} sort {$a->{p} <=> $b->{p}} @tmp;
+}
+
 # gets time
 sub get_time() {
-    my @time = localtime(time());
+  my @time = localtime(time());
 
-    # increment the month (Jan = 0)
-    $time[4]++;
+  # increment the month (Jan = 0)
+  $time[4]++;
 
-    # add leading zeroes as required
-    for my $i(0..4) {
-        $time[$i] = "0".$time[$i] if $time[$i] < 10;
-    }
+  # add leading zeroes as required
+  for my $i(0..4) {
+    $time[$i] = "0".$time[$i] if $time[$i] < 10;
+  }
 
-    # put the components together in a string
-    my $time =
-        ($time[5] + 1900)."-".
-        $time[4]."-".
-        $time[3]." ".
-        $time[2].":".
-        $time[1].":".
-        $time[0];
+  # put the components together in a string
+  my $time =
+    ($time[5] + 1900)."-".
+    $time[4]."-".
+    $time[3]." ".
+    $time[2].":".
+    $time[1].":".
+    $time[0];
 
-    return $time;
+  return $time;
 }
 
 # prints debug output with time
