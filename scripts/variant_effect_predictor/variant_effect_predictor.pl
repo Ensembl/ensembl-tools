@@ -491,6 +491,7 @@ sub configure {
         'freq_pop=s',              # population to filter on
         'filter_common',           # shortcut to MAF filtering
         'allow_non_variant',       # allow non-variant VCF lines through
+        'process_ref_homs',        # force processing of individuals with homozygous ref genotype
         'individual=s',            # give results by genotype for individuals
         'phased',                  # force VCF genotypes to be interpreted as phased
         'fork=i',                  # fork into N processes
@@ -1619,10 +1620,12 @@ sub get_out_file_handle {
     }
     
     # get stats file handle
-    die("ERROR: Stats file name ", $config->{stats_file}, " doesn't end in \".htm\" or \".html\" - some browsers may not be able to open this file\n") unless $config->{stats_file} =~ /htm(l)?$/ || defined($config->{stats_text});
-    my $stats_file_handle = new FileHandle;
-    $stats_file_handle->open(">".$config->{stats_file}) or die("ERROR: Could not write to stats file ", $config->{stats_file}, "\n");
-    $config->{stats_file_handle} = $stats_file_handle;
+    unless(defined $config->{no_stats}) {
+      die("ERROR: Stats file name ", $config->{stats_file}, " doesn't end in \".htm\" or \".html\" - some browsers may not be able to open this file\n") unless $config->{stats_file} =~ /htm(l)?$/ || defined($config->{stats_text});
+      my $stats_file_handle = new FileHandle;
+      $stats_file_handle->open(">".$config->{stats_file}) or die("ERROR: Could not write to stats file ", $config->{stats_file}, "\n");
+      $config->{stats_file_handle} = $stats_file_handle;
+    }
     
     # HTML output?
     my $html_file_handle;
