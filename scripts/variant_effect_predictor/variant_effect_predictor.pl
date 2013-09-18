@@ -2899,6 +2899,7 @@ NB: Regulatory consequences are currently available for human and mouse only
                        doing file conversion. [default: off]
                        
 --cache                Enables read-only use of cache [default: off]
+--offline              Use cache and never connect to databases [default: off]
 --dir [directory]      Specify the base cache directory to use [default: "\$HOME/.vep/"]
 --dir_cache [dir]      Specify cache directory (if different from --dir)
 --dir_plugins [dir]    Specify plugins directory (if different from --dir)
