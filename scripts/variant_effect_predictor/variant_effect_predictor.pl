@@ -947,18 +947,6 @@ INTRO
     # cluck and display executed SQL?
     $Bio::EnsEMBL::DBSQL::StatementHandle::cluck = 1 if defined($config->{cluck});
     
-    # offline needs cache, can't use HGVS
-    if(defined($config->{offline})) {
-        $config->{cache} = 1;
-        
-        die("ERROR: Cannot generate HGVS coordinates in offline mode without a FASTA file (see --fasta)\n") if defined($config->{hgvs}) && !defined($config->{fasta_db});
-        die("ERROR: Cannot use HGVS as input in offline mode\n") if $config->{format} eq 'hgvs';
-        die("ERROR: Cannot use variant identifiers as input in offline mode\n") if $config->{format} eq 'id';
-        die("ERROR: Cannot do frequency filtering in offline mode\n") if defined($config->{check_frequency}) && $config->{freq_pop} !~ /1kg.*(all|afr|amr|asn|eur)/i;
-        die("ERROR: Cannot retrieve overlapping structural variants in offline mode\n") if defined($config->{check_sv});
-        die("ERROR: Cannot check reference sequences without a FASTA file (see --fasta)\n") if defined($config->{check_ref}) && !defined($config->{fasta_db});
-    }
-    
     # write_cache needs cache
     $config->{cache} = 1 if defined $config->{write_cache};
     
@@ -1094,6 +1082,18 @@ INTRO
         
         debug("Checking/creating FASTA index") unless defined($config->{quiet});
         $config->{fasta_db} = Bio::DB::Fasta->new($config->{fasta});
+    }
+    
+    # offline needs cache, can't use HGVS
+    if(defined($config->{offline})) {
+        $config->{cache} = 1;
+        
+        die("ERROR: Cannot generate HGVS coordinates in offline mode without a FASTA file (see --fasta)\n") if defined($config->{hgvs}) && !defined($config->{fasta_db});
+        die("ERROR: Cannot use HGVS as input in offline mode\n") if $config->{format} eq 'hgvs';
+        die("ERROR: Cannot use variant identifiers as input in offline mode\n") if $config->{format} eq 'id';
+        die("ERROR: Cannot do frequency filtering in offline mode\n") if defined($config->{check_frequency}) && $config->{freq_pop} !~ /1kg.*(all|afr|amr|asn|eur)/i;
+        die("ERROR: Cannot retrieve overlapping structural variants in offline mode\n") if defined($config->{check_sv});
+        die("ERROR: Cannot check reference sequences without a FASTA file (see --fasta)\n") if defined($config->{check_ref}) && !defined($config->{fasta_db});
     }
    
     # we configure plugins here because they can sometimes switch on the 
