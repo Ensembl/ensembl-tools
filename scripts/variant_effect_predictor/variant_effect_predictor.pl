@@ -424,7 +424,7 @@ sub main {
       
       unless($is_sorted) {
         system('grep "^#" '.$config->{output_file}.' > '.$config->{output_file}.'.sorted');
-        system('grep -v "^#" '.$config->{output_file}.' | sort -k1,1 -k2,2 >> '.$config->{output_file}.'.sorted');
+        system('grep -v "^#" '.$config->{output_file}.' | sort -k1,1 -k2,2n >> '.$config->{output_file}.'.sorted');
         system('mv '.$config->{output_file}.'.sorted '.$config->{output_file});
       }
       
