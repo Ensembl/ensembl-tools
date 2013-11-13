@@ -1320,9 +1320,19 @@ sub read_config_from_file {
     
     while(<CONFIG>) {
         next if /^\#/;
+        
+        # preserve spaces between quotes
+        s/([\"\'].*)(\s)(.*[\"\'])/$1\_\_\_SPACE\_\_\_$3/g;
+        
         my @split = split /\s+|\=/;
         my $key = shift @split;
         $key =~ s/^\-//g;
+        
+        # restore spaces
+        s/\_\_\_SPACE\_\_\_/ /g for @split;
+        
+        # remove quotes
+        s/[\"\']//g;
         
         if(defined($config->{$key}) && ref($config->{$key}) eq 'ARRAY') {
             push @{$config->{$key}}, @split;
