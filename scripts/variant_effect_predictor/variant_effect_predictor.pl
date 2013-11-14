@@ -1332,7 +1332,7 @@ sub read_config_from_file {
         s/\_\_\_SPACE\_\_\_/ /g for @split;
         
         # remove quotes
-        s/[\"\']//g;
+        s/[\"\']//g for @split;
         
         if(defined($config->{$key}) && ref($config->{$key}) eq 'ARRAY') {
             push @{$config->{$key}}, @split;
