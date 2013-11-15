@@ -1095,6 +1095,9 @@ INTRO
         die("ERROR: Cannot retrieve overlapping structural variants in offline mode\n") if defined($config->{check_sv});
         die("ERROR: Cannot check reference sequences without a FASTA file (see --fasta)\n") if defined($config->{check_ref}) && !defined($config->{fasta});
     }
+    
+    # suppress warnings that the FeatureAdpators spit if using no_slice_cache
+    Bio::EnsEMBL::Utils::Exception::verbose(1999) if defined($config->{no_slice_cache});
    
     # we configure plugins here because they can sometimes switch on the 
     # regulatory config option
@@ -1124,9 +1127,6 @@ INTRO
         $config->{fields_redefined} = 1;
     }
     $config->{fields} ||= \@OUTPUT_COLS;
-    
-    # suppress warnings that the FeatureAdpators spit if using no_slice_cache
-    Bio::EnsEMBL::Utils::Exception::verbose(1999) if defined($config->{no_slice_cache});
     
     # get adaptors (don't get them in offline mode)
     unless(defined($config->{offline})) {
