@@ -26,7 +26,7 @@ Variant Effect Predictor - a script to predict the consequences of genomic varia
 
 http://www.ensembl.org/info/docs/tools/vep/script/index.html
 
-Version 73
+Version 74
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -53,12 +53,13 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
     get_time
     debug
     @OUTPUT_COLS
+    %COL_DESCS
     @REG_FEAT_TYPES
     %FILTER_SHORTCUTS
 );
 
 # global vars
-my $VERSION = '73';
+my $VERSION = '74';
 
  
 # define headers that would normally go in the extra field
@@ -68,7 +69,7 @@ my %extra_headers = (
     canonical       => ['CANONICAL'],
     ccds            => ['CCDS'],
     hgvs            => ['HGVSc','HGVSp'],
-    symbol          => ['SYMBOL'],
+    symbol          => ['SYMBOL','SYMBOL_SOURCE'],
     sift            => ['SIFT'],
     polyphen        => ['PolyPhen'],
     numbers         => ['EXON','INTRON'],
@@ -87,41 +88,6 @@ my %extra_headers = (
     check_existing  => ['CLIN_SIG'],
     biotype         => ['BIOTYPE'],
     allele_number   => ['ALLELE_NUM'],
-);
-
-my %extra_descs = (
-    'CANONICAL'    => 'Indicates if transcript is canonical for this gene',
-    'CCDS'         => 'Indicates if transcript is a CCDS transcript',
-    'SYMBOL'       => 'Gene symbol (e.g. HGNC)',
-    'ENSP'         => 'Ensembl protein identifer',
-    'HGVSc'        => 'HGVS coding sequence name',
-    'HGVSp'        => 'HGVS protein sequence name',
-    'SIFT'         => 'SIFT prediction',
-    'PolyPhen'     => 'PolyPhen prediction',
-    'EXON'         => 'Exon number(s) / total',
-    'INTRON'       => 'Intron number(s) / total',
-    'DOMAINS'      => 'The source and identifer of any overlapping protein domains',
-    'MOTIF_NAME'   => 'The source and identifier of a transcription factor binding profile (TFBP) aligned at this position',
-    'MOTIF_POS'    => 'The relative position of the variation in the aligned TFBP',
-    'HIGH_INF_POS' => 'A flag indicating if the variant falls in a high information position of the TFBP',
-    'MOTIF_SCORE_CHANGE' => 'The difference in motif score of the reference and variant sequences for the TFBP',
-    'CELL_TYPE'    => 'List of cell types and classifications for regulatory feature',
-    'IND'          => 'Individual name',
-    'ZYG'          => 'Zygosity of individual genotype at this locus',
-    'SV'           => 'IDs of overlapping structural variants',
-    'FREQS'        => 'Frequencies of overlapping variants used in filtering',
-    'GMAF'         => 'Minor allele and frequency of existing variant in 1000 Genomes Phase 1 combined population',
-    'AFR_MAF'      => 'Minor allele and frequency of existing variant in 1000 Genomes Phase 1 combined African population',
-    'AMR_MAF'      => 'Minor allele and frequency of existing variant in 1000 Genomes Phase 1 combined American population',
-    'ASN_MAF'      => 'Minor allele and frequency of existing variant in 1000 Genomes Phase 1 combined Asian population',
-    'EUR_MAF'      => 'Minor allele and frequency of existing variant in 1000 Genomes Phase 1 combined European population',
-    'AA_MAF'       => 'Minor allele and frequency of existing variant in NHLBI-ESP African American population',
-    'EA_MAF'       => 'Minor allele and frequency of existing variant in NHLBI-ESP European American population',
-    'DISTANCE'     => 'Shortest distance from variant to transcript',
-    'CLIN_SIG'     => 'Clinical significance of variant from dbSNP',
-    'BIOTYPE'      => 'Biotype of transcript',
-    'PUBMED'       => 'Pubmed ID(s) of publications that cite existing variant',
-    'ALLELE_NUM'   => 'Allele number from input; 0 is reference, 1 is first alternate etc'
 );
 
 my %ts_tv = (
@@ -402,22 +368,25 @@ sub main {
       open SORT, $config->{output_file};
       my $prev_pos = 0;
       my $prev_chr = 0;
-      my $is_sorted = 1;
+      my $is_sorted = 0;
       my %seen_chrs;
       
       while(<SORT>) {
-        my @data = split /\s+/, $_;
-        if(
-          ($data[0] eq $prev_chr && $data[1] < $prev_pos) ||
-          ($data[0] ne $prev_chr && defined($seen_chrs{$data[0]}))
-        ) {
-          $is_sorted = 0;
-          last;
+        if(!/^\#/) {
+          $is_sorted = 1;
+          my @data = split /\s+/, $_;
+          if(
+            ($data[0] eq $prev_chr && $data[1] < $prev_pos) ||
+            ($data[0] ne $prev_chr && defined($seen_chrs{$data[0]}))
+          ) {
+            $is_sorted = 0;
+            last;
+          }
+          
+          $prev_pos = $data[1];
+          $prev_chr = $data[0];
+          $seen_chrs{$data[0]} = 1;
         }
-        
-        $prev_pos = $data[1];
-        $prev_chr = $data[0];
-        $seen_chrs{$data[0]} = 1;
       }
       
       close SORT;
@@ -522,6 +491,7 @@ sub configure {
         'hgvs',                    # add HGVS names to extra column
         'sift=s',                  # SIFT predictions
         'polyphen=s',              # PolyPhen predictions
+        'humdiv',                  # use humDiv instead of humVar for PolyPhen
         'condel=s',                # Condel predictions
         'regulatory',              # enable regulatory stuff
         'cell_type=s' => ($config->{cell_type} ||= []),             # filter cell types for regfeats
@@ -893,6 +863,7 @@ INTRO
     $config->{terms}             ||= 'SO';
     $config->{cache_region_size} ||= 1000000;
     $config->{compress}          ||= 'zcat';
+    $config->{polyphen_analysis}   = defined($config->{humdiv}) ? 'humdiv' : 'humvar';
     
     # can't use a whole bunch of options with most_severe
     if(defined($config->{most_severe})) {
@@ -949,6 +920,7 @@ INTRO
     
     # write_cache needs cache
     $config->{cache} = 1 if defined $config->{write_cache};
+    $config->{cache} = 1 if defined $config->{offline};
     
     # no_slice_cache, prefetch and whole_genome have to be on to use cache
     if(defined($config->{cache})) {
@@ -1010,6 +982,16 @@ INTRO
           if(defined $fa) {
             $config->{fasta} = $config->{dir}.'/'.$fa;
             debug("Auto-detected FASTA file in cache directory") unless defined $config->{quiet};
+          }
+        }
+        
+        # check if any disabled options are in use
+        # these are set in the cache info file
+        if(defined($config->{cache_disabled})) {
+          my @arr = ref($config->{cache_disabled} eq 'ARRAY') ? @{$config->{cache_disabled}} : ($config->{cache_disabled});
+          
+          if(my ($disabled) = grep {defined($config->{$_})} @arr) {
+            die("ERROR: Unable to use --".$disabled." with this cache\n");
           }
         }
     }
@@ -1086,7 +1068,6 @@ INTRO
     
     # offline needs cache, can't use HGVS
     if(defined($config->{offline})) {
-        $config->{cache} = 1;
         
         die("ERROR: Cannot generate HGVS coordinates in offline mode without a FASTA file (see --fasta)\n") if defined($config->{hgvs}) && !defined($config->{fasta});
         die("ERROR: Cannot use HGVS as input in offline mode\n") if $config->{format} eq 'hgvs';
@@ -1614,11 +1595,6 @@ sub get_out_file_handle {
         die("ERROR: Output file ", $config->{output_file}, " already exists. Specify a different output file with --output_file or overwrite existing file with --force_overwrite\n");
     }
     
-    # do same for stats file
-    if(-e $config->{stats_file} && !defined($config->{force_overwrite})) {
-        die("ERROR: Stats file ", $config->{stats_file}, " already exists. Specify a different output file with --stats_file or overwrite existing file with --force_overwrite\n");
-    }
-    
     if($config->{output_file} =~ /stdout/i) {
         $out_file_handle = *STDOUT;
     }
@@ -1631,6 +1607,12 @@ sub get_out_file_handle {
     
     # get stats file handle
     unless(defined $config->{no_stats}) {
+      
+      # do same for stats file
+      if(-e $config->{stats_file} && !defined($config->{force_overwrite})) {
+          die("ERROR: Stats file ", $config->{stats_file}, " already exists. Specify a different output file with --stats_file or overwrite existing file with --force_overwrite\n");
+      }
+      
       die("ERROR: Stats file name ", $config->{stats_file}, " doesn't end in \".htm\" or \".html\" - some browsers may not be able to open this file\n") unless $config->{stats_file} =~ /htm(l)?$/ || defined($config->{stats_text});
       my $stats_file_handle = new FileHandle;
       $stats_file_handle->open(">".$config->{stats_file}) or die("ERROR: Could not write to stats file ", $config->{stats_file}, "\n");
@@ -1832,7 +1814,7 @@ sub get_out_file_handle {
     
     # add key for extra column headers based on config
     my $extra_column_keys = join "\n",
-        map {'## '.$_.' : '.$extra_descs{$_}}
+        map {'## '.$_.' : '.$COL_DESCS{$_}}
         sort map {@{$extra_headers{$_}}}
         grep {defined $config->{$_}}
         keys %extra_headers;

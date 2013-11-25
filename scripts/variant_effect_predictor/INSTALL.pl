@@ -1,22 +1,23 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 use Getopt::Long;
-use HTTP::Tiny;
-use File::Listing qw(parse_dir);
 use File::Path;
 use File::Copy;
 use Archive::Extract;
 use Net::FTP;
 use Cwd;
 
+# use prefer_bin to save memory when extracting archives
+$Archive::Extract::PREFER_BIN = 1;
+
 $| = 1;
-our $VERSION = 73;
+our $VERSION = 74;
 our $have_LWP;
 
 # CONFIGURE
 ###########
 
-my ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $BIOPERL_URL, $CACHE_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE);
+my ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $BIOPERL_URL, $CACHE_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET);
 
 GetOptions(
   'DESTDIR|d=s'  => \$DEST_DIR,
@@ -26,8 +27,11 @@ GetOptions(
   'CACHEDIR|c=s' => \$CACHE_DIR,
   'FASTAURL|f=s' => \$FASTA_URL,
   'HELP|h'       => \$help,
-  'UPDATE|n'     => \$UPDATE
-);
+  'UPDATE|n'     => \$UPDATE,
+  'SPECIES|s=s'  => \$SPECIES,
+  'AUTO|a=s'     => \$AUTO,
+  'QUIET|q'      => \$QUIET
+) or die("ERROR: Failed to parse arguments");
 
 if(defined($help)) {
   usage();
@@ -57,12 +61,27 @@ $CACHE_DIR    ||= $ENV{HOME} ? $ENV{HOME}.'/.vep' : 'cache';
 $FTP_USER     ||= 'anonymous';
 $FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
 
+$QUIET = 0 unless $UPDATE || $AUTO;
+
 # set up the URLs
 my $ensembl_url_tail = '.tar.gz?root=ensembl&view=tar&only_with_tag=branch-ensembl-';
 
+# auto?
+if($AUTO) {
+  
+  # check
+  die("ERROR: Failed to parse AUTO string - must contain any of a (API), c (cache), f (FASTA)\n") unless $AUTO =~ /^[acf]+$/i;
+  
+  # require species
+  if($AUTO =~ /[cf]/i) {
+    die("ERROR: No species specified") unless $SPECIES;
+    $SPECIES = [split /\,/, $SPECIES];
+  }
+}
+
 our $prev_progress = 0;
 
-print "\nHello! This installer is configured to install v$API_VERSION of the Ensembl API for use by the VEP.\nIt will not affect any existing installations of the Ensembl API that you may have.\n\nIt will also download and install cache files from Ensembl's FTP server.\n\n";
+print "\nHello! This installer is configured to install v$API_VERSION of the Ensembl API for use by the VEP.\nIt will not affect any existing installations of the Ensembl API that you may have.\n\nIt will also download and install cache files from Ensembl's FTP server.\n\n" unless $QUIET;
 
 # UPDATE
 ########
@@ -72,6 +91,11 @@ if($UPDATE) {
   die("ERROR: Updating requires JSON Perl module\n$@") if $@;
   
   print "Checking for newer version of the VEP\n";
+  
+  eval q{
+    use HTTP::Tiny;
+  };
+  die("ERROR: Updating requires HTTP::Tiny Perl module\n$@") if $@;
   my $http = HTTP::Tiny->new();
  
   my $server = 'http://beta.rest.ensembl.org';
@@ -141,7 +165,8 @@ if($UPDATE) {
 # CHECK EXISTING
 ################
 
-print "Checking for installed versions of the Ensembl API...";
+goto CACHE if $AUTO && $AUTO !~ /a/i;
+print "Checking for installed versions of the Ensembl API..." unless $QUIET;
 
 # test if the user has the API installed
 my $has_api = {
@@ -208,12 +233,21 @@ elsif($total > 0) {
 }
 
 if(defined($message)) {
-  print "$message\n\nSkip to the next step (n) to install cache files\n\nDo you want to continue installing the API (y/n)? ";
+  print $message unless $QUIET;
   
-  my $ok = <>;
+  my $ok;
+  
+  if($AUTO) {
+    $ok = $AUTO =~ /a/i ? 'y' : 'n';
+  }
+  else {
+    print "\n\nSkip to the next step (n) to install cache files\n\nDo you want to continue installing the API (y/n)? ";
+    
+    my $ok = <>;
+  }
   
   if($ok !~ /^y/i) {
-    print " - skipping API installation\n";
+    print " - skipping API installation\n" unless $QUIET;
     goto CACHE;
   }
 }
@@ -223,13 +257,20 @@ if(defined($message)) {
 # SETUP
 #######
 
-print "\nSetting up directories\n";
+print "\nSetting up directories\n" unless $QUIET;
 
 # check if install dir exists
 if(-e $DEST_DIR) {
-  print "Destination directory $DEST_DIR already exists.\nDo you want to overwrite it (if updating VEP this is probably OK) (y/n)? ";
+  my $ok;
   
-  my $ok = <>;
+  if($AUTO) {
+    $ok = 'y';
+  }
+  else {
+    print "Destination directory $DEST_DIR already exists.\nDo you want to overwrite it (if updating VEP this is probably OK) (y/n)? ";
+    
+    $ok = <>;
+  }
   
   if($ok !~ /^y/i) {
     print "Exiting\n";
@@ -237,7 +278,7 @@ if(-e $DEST_DIR) {
   }
   
   else {
-    unless($default_dir_used) {
+    unless($default_dir_used || $AUTO) {
       print "WARNING: You are using a non-default install directory.\nPressing \"y\" again will remove $DEST_DIR and its contents!!!\nAre you really, really sure (y/n)? ";
       $ok = <>;
       
@@ -259,12 +300,12 @@ mkdir($DEST_DIR.'/tmp') or die "ERROR: Could not make directory $DEST_DIR/tmp\n"
 # API
 #####
 
-print "\nDownloading required files\n";
+print "\nDownloading required files\n" unless $QUIET;
 
 foreach my $module(qw(ensembl ensembl-variation ensembl-functgenomics)) {
   my $url = $ENS_CVS_ROOT.$module.$ensembl_url_tail.$API_VERSION;
   
-  print " - fetching $module\n";
+  print " - fetching $module\n" unless $QUIET;
   
   my $target_file = $DEST_DIR.'/tmp/'.$module.'.tar.gz';
   
@@ -272,10 +313,10 @@ foreach my $module(qw(ensembl ensembl-variation ensembl-functgenomics)) {
     download_to_file($url, $target_file);
   }
   
-  print " - unpacking $target_file\n";
+  print " - unpacking $target_file\n" unless $QUIET;
   unpack_arch("$DEST_DIR/tmp/$module.tar.gz", "$DEST_DIR/tmp/");
   
-  print " - moving files\n";
+  print " - moving files\n" unless $QUIET;
   
   if($module eq 'ensembl') {
     move("$DEST_DIR/tmp/$module/modules/Bio/EnsEMBL", "$DEST_DIR/EnsEMBL") or die "ERROR: Could not move directory\n".$!;
@@ -296,7 +337,7 @@ foreach my $module(qw(ensembl ensembl-variation ensembl-functgenomics)) {
 #########
 
 # now get BioPerl
-print " - fetching BioPerl\n";
+print " - fetching BioPerl\n" unless $QUIET;
 
 $bioperl_file = (split /\//, $BIOPERL_URL)[-1];
 
@@ -304,10 +345,10 @@ my $target_file = $DEST_DIR.'/tmp/'.$bioperl_file;
 
 download_to_file($BIOPERL_URL, $target_file);
 
-print " - unpacking $target_file\n";
+print " - unpacking $target_file\n" unless $QUIET;
 unpack_arch("$DEST_DIR/tmp/$bioperl_file", "$DEST_DIR/tmp/");
 
-print " - moving files\n";
+print " - moving files\n" unless $QUIET;
 
 $bioperl_file =~ /(bioperl.+?)\.tar\.gz/i;
 my $bioperl_dir = $1;
@@ -323,40 +364,49 @@ rmtree("$DEST_DIR/tmp") or die "ERROR: Failed to remove directory $DEST_DIR/tmp\
 # TEST
 ######
 
-print "\nTesting VEP script\n";
+print "\nTesting VEP script\n" unless $QUIET;
 
 my $test_vep = `perl variant_effect_predictor.pl --help 2>&1`;
 
 $test_vep =~ /ENSEMBL VARIANT EFFECT PREDICTOR/ or die "ERROR: Testing VEP script failed with the following error\n$test_vep\n";
 
-print " - OK!\n";
-
-
+print " - OK!\n" unless $QUIET;
 
 # CACHE FILES
 #############
 
 CACHE:
 
-print "\nThe VEP can either connect to remote or local databases, or use local cache files. Using local cache files is the fastest and most efficient way to run the VEP\n";
-print "Cache files will be stored in $CACHE_DIR\n";
-print "Do you want to install any cache files (y/n)? ";
+print "\nThe VEP can either connect to remote or local databases, or use local cache files. Using local cache files is the fastest and most efficient way to run the VEP\n" unless $QUIET;
+print "Cache files will be stored in $CACHE_DIR\n" unless $QUIET;
 
-my $ok = <>;
+my $ok;
+
+if($AUTO) {
+  $ok = $AUTO =~ /c/i ? 'y' : 'n';
+}
+else {
+  print "Do you want to install any cache files (y/n)? ";
+  
+  $ok = <>;
+}
 
 if($ok !~ /^y/i) {
+  print "Skipping cache installation\n" unless $QUIET;
   goto FASTA;
 }
 
 # check cache dir exists
 if(!(-e $CACHE_DIR)) {
-  print "Cache directory $CACHE_DIR does not exists - do you want to create it (y/n)? ";
-
-  my $ok = <>;
-
-  if($ok !~ /^y/i) {
-    print "Exiting\n";
-    exit(0);
+  if(!$AUTO) {
+    print "Cache directory $CACHE_DIR does not exists - do you want to create it (y/n)? ";
+  
+    my $ok = <>;
+  
+    if($ok !~ /^y/i) {
+      print "Exiting\n";
+      exit(0);
+    }
   }
   
   mkdir($CACHE_DIR) or die "ERROR: Could not create directory $CACHE_DIR\n";
@@ -365,7 +415,7 @@ if(!(-e $CACHE_DIR)) {
 mkdir($CACHE_DIR.'/tmp') unless -e $CACHE_DIR.'/tmp';
 
 # get list of species
-print "\nDownloading list of available cache files\n";
+print "\nDownloading list of available cache files\n" unless $QUIET;
 
 my $num = 1;
 my $species_list;
@@ -383,6 +433,9 @@ if($CACHE_URL =~ /^ftp/i) {
   push @files, sort grep {$_ =~ /tar.gz/} $ftp->ls;
 }
 else {
+  eval q{
+    use File::Listing qw(parse_dir);
+  };
   push @files, sort map {$_->[0]} grep {$_->[0] =~ /tar.gz/} @{parse_dir(get($CACHE_URL))};
 }
 
@@ -394,7 +447,6 @@ if(!scalar(@files)) {
     "bos_taurus_vep_$API_VERSION.tar.gz",
     "danio_rerio_vep_$API_VERSION.tar.gz",
     "homo_sapiens_vep_$API_VERSION.tar.gz",
-    "homo_sapiens_vep_$API_VERSION\_sift_polyphen.tar.gz",
     "mus_musculus_vep_$API_VERSION.tar.gz",
     "rattus_norvegicus_vep_$API_VERSION.tar.gz",
   );
@@ -404,12 +456,30 @@ foreach my $file(@files) {
   $species_list .= $num++." : ".$file."\n";
 }
 
-print "The following species/files are available; which do you want (can specify multiple separated by spaces): \n$species_list\n? ";
 my @store_species;
+my @indexes;
 
-foreach my $file(split /\s+/, <>) {
+if($AUTO) {
+  foreach my $sp(@$SPECIES) {
+    for my $i(0..$#files) {
+      push @indexes, $i + 1 if $files[$i] =~ /$sp/i; 
+    }
+  }
+  
+  die("ERROR: No matching species found") unless scalar @indexes;
+  
+  # uniquify and sort
+  @indexes = sort {$a <=> $b} keys %{{map {$_ => 1} @indexes}};
+}
+else {
+  print "The following species/files are available; which do you want (can specify multiple separated by spaces): \n$species_list\n? ";
+  @indexes = split /\s+/, <>;
+}
+
+foreach my $file(@indexes) {
   my $file_path = $files[$file - 1];
   
+  my $refseq = 0;
   my ($species, $file_name);
   
   if($file_path =~ /\//) {
@@ -419,18 +489,34 @@ foreach my $file(split /\s+/, <>) {
     $file_name = $file_path;
     $file_name =~ m/^(\w+?)\_vep/;
     $species = $1;
+    
+    # special case refseq
+    if($species =~ /\_refseq/) {
+      $species =~ s/\_refseq//;
+      $refseq = 1;
+    }
   }
   
   push @store_species, $species;
   
   # check if user already has this species and version
   if(-e "$CACHE_DIR/$species/$API_VERSION") {
-    print "\nWARNING: It looks like you already have the cache for $species (v$API_VERSION) installed.\nIf you continue the existing cache will be overwritten.\nAre you sure you want to continue (y/n)? ";
     
-    my $ok = <>;
+    my $ok;
+    
+    print "\nWARNING: It looks like you already have the cache for $species (v$API_VERSION) installed.\n" unless $QUIET;
+    
+    if($AUTO) {
+      $ok = 'y';
+    }
+    else {
+      print "If you continue the existing cache will be overwritten.\nAre you sure you want to continue (y/n)? ";
+      
+      $ok = <>;
+    }
     
     if($ok !~ /^y/i) {
-      print " - skipping $species\n";
+      print " - skipping $species\n" unless $QUIET;
       next;
     }
     
@@ -439,11 +525,11 @@ foreach my $file(split /\s+/, <>) {
   
   my $target_file = "$CACHE_DIR/tmp/$file_name";
   
-  print " - downloading $CACHE_URL/$file_path\n";
+  print " - downloading $CACHE_URL/$file_path\n" unless $QUIET;
   
   download_to_file("$CACHE_URL/$file_path", $target_file);
   
-  print " - unpacking $file_name\n";
+  print " - unpacking $file_name\n" unless $QUIET;
   
   
   unpack_arch($target_file, $CACHE_DIR.'/tmp/');
@@ -466,14 +552,20 @@ foreach my $file(split /\s+/, <>) {
 
 FASTA:
 
-print "\nThe VEP can use FASTA files to retrieve sequence data for HGVS notations and reference sequence checks.\n";
-print "FASTA files will be stored in $CACHE_DIR\n";
-print "Do you want to install any FASTA files (y/n)? ";
+print "\nThe VEP can use FASTA files to retrieve sequence data for HGVS notations and reference sequence checks.\n" unless $QUIET;
+print "FASTA files will be stored in $CACHE_DIR\n" unless $QUIET;
 
-my $ok = <>;
+if($AUTO) {
+  $ok = $AUTO =~ /f/i ? 'y' : 'n';
+}
+else {
+  print "Do you want to install any FASTA files (y/n)? ";
+  
+  $ok = <>;
+}
 
 if($ok !~ /^y/i) {
-  print "Exiting\n";
+  print "Skipping FASTA installation - Exiting\n";
   exit(0);
 }
 
@@ -492,6 +584,9 @@ if($FASTA_URL =~ /^ftp/i) {
   push @dirs, sort $ftp->ls;
 }
 else {
+  eval q{
+    use File::Listing qw(parse_dir);
+  };
   push @dirs, sort map {$_->[0]} grep {$_->[0] =~ /tar.gz/} @{parse_dir(get($FASTA_URL))};
 }
 
@@ -501,13 +596,19 @@ foreach my $dir(@dirs) {
   $species_list .= $num++." : ".$dir."\n";
 }
 
-print "FASTA files for the following species are available; which do you want (can specify multiple separated by spaces, \"0\" to install for species specified for cache download): \n$species_list\n? ";
-
-my $input = <>;
-my @nums = split /\s+/, $input;
-
-my @species = @store_species if grep {$_ eq '0'} @nums;
-push @species, $dirs[$_ - 1] for grep {$_ > 0} @nums;
+my @species;
+if($AUTO) {
+  @species = @store_species || @$SPECIES;
+}
+else {
+  print "FASTA files for the following species are available; which do you want (can specify multiple separated by spaces, \"0\" to install for species specified for cache download): \n$species_list\n? ";
+  
+  my $input = <>;
+  my @nums = split /\s+/, $input;
+  
+  @species = @store_species if grep {$_ eq '0'} @nums;
+  push @species, $dirs[$_ - 1] for grep {$_ > 0} @nums;
+}
 
 foreach my $species(@species) {
   $ftp->cwd($species) or die "ERROR: Could not change directory to $species\n$@\n";
@@ -526,7 +627,7 @@ foreach my $species(@species) {
   my $ex = "$CACHE_DIR/$species/$API_VERSION/$file";
   $ex =~ s/\.gz$//;
   if(-e $ex) {
-    print "Looks like you already have the FASTA file for $species, skipping\n";
+    print "Looks like you already have the FASTA file for $species, skipping\n" unless $QUIET;
     $ftp->cwd('../');
     $ftp->cwd('../');
     next;
@@ -537,13 +638,13 @@ foreach my $species(@species) {
   mkdir("$CACHE_DIR/$species") unless -d "$CACHE_DIR/$species";
   mkdir("$CACHE_DIR/$species/$API_VERSION") unless -d "$CACHE_DIR/$species/$API_VERSION";
   
-  print "Downloading $file\n";
+  print "Downloading $file\n" unless $QUIET;
   download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file");
   
-  print "Extracting data\n";
+  print "Extracting data\n" unless $QUIET;
   unpack_arch("$CACHE_DIR/$species/$API_VERSION/$file", "$CACHE_DIR/$species/$API_VERSION/");
   
-  print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex\"\n";
+  print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex\"\n" unless $QUIET;
   
   $ftp->cwd('../');
   $ftp->cwd('../');
@@ -556,7 +657,7 @@ if(-d "$CACHE_DIR/tmp") {
   rmtree("$CACHE_DIR/tmp") or die "ERROR: Could not delete directory $CACHE_DIR/tmp\n";
 }
 
-print "\nSuccess\n";
+print "\nSuccess\n" unless $QUIET;
 
 
 # SUBS
@@ -599,6 +700,14 @@ sub have_LWP {
   if($@) {
     $have_LWP = 0;
     warn("Using HTTP::Tiny - this may fail when downloading large files; install LWP::Simple to avoid this issue\n");
+    
+    eval q{
+      use HTTP::Tiny;
+    };
+    
+    if($@) {
+      die("ERROR: No suitable package installed - this installer requires either HTTP::Tiny or LWP::Simple\n");
+    }
   }
   else {
     $have_LWP = 1;
@@ -609,7 +718,7 @@ sub have_LWP {
     # enable progress
     eval q{
       $ua->show_progress(1);
-    };
+    } unless $QUIET;
   }
 }
 
@@ -655,10 +764,18 @@ Options
 =======
 
 -h | --help        Display this message and quit
+
 -d | --DESTDIR     Set destination directory for API install (default = './')
 -v | --VERSION     Set API version to install (default = $VERSION)
 -c | --CACHEDIR    Set destination directory for cache files (default = '$HOME/.vep/')
+
 -u | --UPDATE      EXPERIMENTAL! Check for and download new VEP versions
+
+-a | --AUTO        Run installer without user prompts. Use a (API), c (cache),
+                   f (FASTA) to specify parts to install e.g. -a ac for API and
+                   cache
+-s | --SPECIES     Comma-separated list of species to install when using --AUTO
+-q | --QUIET       Don't write any status output when using --AUTO
 END
 
     print $usage;
