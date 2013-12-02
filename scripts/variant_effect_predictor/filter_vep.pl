@@ -388,7 +388,7 @@ sub run_filters {
     my $input = $data->{$filter->{field}};
     my $value = $filter->{value};
     
-    if(defined($input) && $input =~ /(\w+)\:?\(?([\d\.]*)\)?/ && $filter->{field} ne 'CELL_TYPE') {
+    if(defined($input) && $input =~ /([\w\.]+)?\:?\(?([\d\.]*)\)?/ && $filter->{field} ne 'CELL_TYPE') {
       my ($text, $num) = ($1, $2);
       
       if($value =~ /^[\d\.]+$/) {
