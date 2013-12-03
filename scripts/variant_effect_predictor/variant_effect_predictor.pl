@@ -2724,228 +2724,33 @@ sub usage {
 #----------------------------------#
 
 version $VERSION
+by Will McLaren (wm2\@ebi.ac.uk)
 
-By Will McLaren (wm2\@ebi.ac.uk)
+Help: dev\@ensembl.org , helpdesk\@ensembl.org
+Twitter: \@ensembl , \@EnsemblWill
 
-http://www.ensembl.org/info/docs/variation/vep/vep_script.html
+http://www.ensembl.org/info/docs/tools/vep/script/index.html
 
 Usage:
-perl variant_effect_predictor.pl [arguments]
+perl variant_effect_predictor.pl [--cache|--offline|--database] [arguments]
 
-Options
-=======
+Basic options
+=============
 
 --help                 Display this message and quit
---verbose              Display verbose output as the script runs [default: off]
---quiet                Suppress status and warning messages [default: off]
---no_progress          Suppress progress bars [default: off]
 
---config               Load configuration from file. Any command line options
-                       specified overwrite those in the file [default: off]
+-i | --input_file      Input file
+-o | --output_file     Output file
+--force_overwrite      Force overwriting of output file
+--species [species]    Species to use [default: "human"]
                        
 --everything           Shortcut switch to turn on commonly used options. See web
-                       documentation for details [default: off]
-                       
---fork [num_forks]     Use forking to improve script runtime [default: off]
+                       documentation for details [default: off]                       
+--fork [num_forks]     Use forking to improve script runtime
 
--i | --input_file      Input file - if not specified, reads from STDIN. Files
-                       may be gzip compressed.
---format               Specify input file format - one of "ensembl", "pileup",
-                       "vcf", "hgvs", "id" or "guess" to try and work out format.
--o | --output_file     Output file. Write to STDOUT by specifying -o STDOUT - this
-                       will force --quiet [default: "variant_effect_output.txt"]
---force_overwrite      Force overwriting of output file [default: quit if file
-                       exists]
---original             Writes output as it was in input - must be used with --filter
-                       since no consequence data is added [default: off]
---vcf                  Write output as VCF [default: off]
---gvf                  Write output as GVF [default: off]
---html                 Write output also as HTML (filename: [output_file].html)
---stats_file           Specify stats summary file [default: [output_file]_summary.html]
---stats_text           Write stats as plain text file [default: HTML]
---no_stats             Don't write stats summary file
---fields [field list]  Define a custom output format by specifying a comma-separated
-                       list of field names. Field names normally present in the
-                       "Extra" field may also be specified, including those added by
-                       plugin modules. Can also be used to configure VCF output
-                       columns [default: off]
-                       
---species [species]    Species to use [default: "human"]
+For full option documentation see:
+http://www.ensembl.org/info/docs/tools/vep/script/vep_options.html
 
--t | --terms           Type of consequence terms to output - one of "SO", "ensembl"
-                       [default: SO]
- 
---sift=[p|s|b]         Add SIFT [p]rediction, [s]core or [b]oth [default: off]
---polyphen=[p|s|b]     Add PolyPhen [p]rediction, [s]core or [b]oth [default: off]
-
-NB: SIFT predictions are only available for some species, PolyPhen for human only
-
---regulatory           Look for overlaps with regulatory regions. The script can
-                       also call if a variant falls in a high information position
-                       within a transcription factor binding site. Output lines have
-                       a Feature type of RegulatoryFeature or MotifFeature
-                       [default: off]
---cell_type [types]    Report only regulatory regions that are found in the given cell
-                       type(s). Can be a single cell type or a comma-separated list.
-                       The functional type in each cell type is reported under
-                       CELL_TYPE in the output. To retrieve a list of cell types, use
-                       "--cell_type list" [default: off]
-                       
-NB: Regulatory consequences are currently available for human and mouse only
-
---custom [file list]   Add custom annotations from tabix-indexed files. See
-                       documentation for full details [default: off]
---plugin [plugin_name] Use named plugin module [default: off]
---symbol               Add gene symbol (e.g. HGNC) to output [default: off]
---hgvs                 Output HGVS identifiers (coding and protein). Requires database
-                       connection or --fasta [default: off]
---ccds                 Output CCDS transcript identifiers [default: off]
---xref_refseq          Output aligned RefSeq mRNA identifier for transcript. NB: the
-                       RefSeq and Ensembl transcripts aligned in this way MAY NOT, AND
-                       FREQUENTLY WILL NOT, match exactly in sequence, exon structure
-                       and protein product [default: off]
---protein              Output Ensembl protein identifer [default: off]
---biotype              Output transcript biotype [default: off]
---canonical            Indicate if the transcript for this consequence is the canonical
-                       transcript for this gene [default: off]
---allele_number        Identify allele number from VCF input, where 1 = first ALT
-                       allele, 2 = second ALT allele etc. [default: off]
---total_length         Give cDNA, CDS and protein positions as Position/Length.
-                       [default: off]
---domains              Include details of any overlapping protein domains [default: off]
---numbers              Include exon & intron numbers [default: off]
-
---no_intergenic        Excludes intergenic consequences from the output [default: off]
---coding_only          Only return consequences that fall in the coding region of
-                       transcripts [default: off]
---most_severe          Ouptut only the most severe consequence per variation.
-                       Transcript-specific columns will be left blank. [default: off]
---summary              Output only a comma-separated list of all consequences per
-                       variation. Transcript-specific columns will be left blank.
-                       [default: off]
---per_gene             Output only the most severe consequence per gene. Where more
-                       than one transcript has the same consequence, the transcript
-                       chosen is arbitrary. [default: off]
-
-
---check_ref            If specified, checks supplied reference allele against stored
-                       entry in Ensembl Core database [default: off]
---check_existing       If specified, checks for existing co-located variations in the
-                       Ensembl Variation database [default: off]
---failed [0|1]         Include (1) or exclude (0) variants that have been flagged as
-                       failed by Ensembl when checking for existing variants.
-                       [default: exclude]
---check_alleles        If specified, the alleles of existing co-located variations
-                       are compared to the input; an existing variation will only
-                       be reported if no novel allele is in the input (strand is
-                       accounted for) [default: off]
---check_svs            Report overlapping structural variants [default: off]
-
---filter [filters]     Filter output by consequence type. Use this to output only
-                       variants that have at least one consequence type matching the
-                       filter. Multiple filters can be used separated by ",". By
-                       combining this with --original it is possible to run the VEP
-                       iteratively to progressively filter a set of variants. See
-                       documentation for full details [default: off]
-
---filter_common        Shortcut flag for the filters below - this will exclude
-                       variants that have a co-located existing variant with global
-                       MAF > 0.01 (1%). May be modified using any of the following
-                       freq_* filters. For human, this can be used in offline mode
-                       for the following populations: 1KG_ALL, 1KG_AFR, 1KG_AMR,
-                       1KG_ASN, 1KG_EUR
---check_frequency      Turns on frequency filtering. Use this to include or exclude
-                       variants based on the frequency of co-located existing
-                       variants in the Ensembl Variation database. You must also
-                       specify all of the following --freq flags [default: off]
---freq_pop [pop]       Name of the population to use e.g. hapmap_ceu for CEU HapMap,
-                       1kg_yri for YRI 1000 genomes. See documentation for more
-                       details
---freq_freq [freq]     Frequency to use in filter. Must be a number between 0 and 0.5
---freq_gt_lt [gt|lt]   Specify whether the frequency should be greater than (gt) or
-                       less than (lt) --freq_freq
---freq_filter          Specify whether variants that pass the above should be included
-  [exclude|include]    or excluded from analysis
---gmaf                 Include global MAF of existing variant from 1000 Genomes
-                       Phase 1 in output
---maf_1kg              Include MAF from continental populations (AFR,AMR,ASN,EUR) of
-                       1000 Genomes Phase 1 in output. Must be used with --cache
---maf_esp              Include MAF from NHLBI-ESP populations. Must be used with
-                       --cache
---pubmed               Report Pubmed IDs for publications that cite existing variant.
-                       Must be used with --cache
-  
---individual [id]      Consider only alternate alleles present in the genotypes of the
-                       specified individual(s). May be a single individual, a comma-
-                       separated list or "all" to assess all individuals separately.
-                       Each individual and variant combination is given on a separate
-                       line of output. Only works with VCF files containing individual
-                       genotype data; individual IDs are taken from column headers.
---allow_non_variant    Prints out non-variant lines when using VCF input
---phased               Force VCF individual genotypes to be interpreted as phased.
-                       For use with plugins that depend on phased state.
-                       
---chr [list]           Select a subset of chromosomes to analyse from your file. Any
-                       data not on this chromosome in the input will be skipped. The
-                       list can be comma separated, with "-" characters representing
-                       a range e.g. 1-5,8,15,X [default: off]
---gp                   If specified, tries to read GRCh37 position from GP field in the
-                       INFO column of a VCF file. Only applies when VCF is the input
-                       format and human is the species [default: off]
-                       
---convert              Convert the input file to the output format specified.
-  [ensembl|vcf|pileup] Converted output is written to the file specified in
-                       --output_file. No consequence calculation is carried out when
-                       doing file conversion. [default: off]
-                       
---cache                Enables read-only use of cache [default: off]
---offline              Use cache and never connect to databases [default: off]
---dir [directory]      Specify the base cache directory to use [default: "\$HOME/.vep/"]
---dir_cache [dir]      Specify cache directory (if different from --dir)
---dir_plugins [dir]    Specify plugins directory (if different from --dir)
---fasta [file|dir]     Specify a FASTA file or a directory containing FASTA files
-                       to use to look up reference sequence. The first time you
-                       run the script with this parameter an index will be built
-                       which can take a few minutes. This is required if
-                       fetching HGVS annotations (--hgvs) or checking reference
-                       sequences (--check_ref) in offline mode (--offline), and
-                       optional with some performance increase in cache mode
-                       (--cache). See documentation for more details
-
---refseq               Use the otherfeatures database to retrieve transcripts - this
-                       database contains RefSeq transcripts (as well as CCDS and
-                       Ensembl EST alignments) [default: off]
---database             Enable using databases [default: off]
---host                 Manually define database host [default: "ensembldb.ensembl.org"]
--u | --user            Database username [default: "anonymous"]
---port                 Database port [default: 5306]
---password             Database password [default: no password]
---genomes              Sets DB connection params for Ensembl Genomes [default: off]
---registry             Registry file to use defines DB connections [default: off]
-                       Defining a registry file overrides above connection settings.
---db_version=[number]  Force script to load DBs from a specific Ensembl version. Not
-                       advised due to likely incompatibilities between API and DB
-                       
---write_cache          Enable writing to cache [default: off]
---build [all|list]     Build a complete cache for the selected species. Build for all
-                       chromosomes with --build all, or a list of chromosomes (see
-                       --chr). DO NOT USE WHEN CONNECTED TO PUBLIC DB SERVERS AS THIS
-                       VIOLATES OUR FAIR USAGE POLICY [default: off]
-                       
---compress             Specify utility to decompress cache files - may be "gzcat" or
-                       "gzip -dc" Only use if default does not work [default: zcat]
-                       
---skip_db_check        ADVANCED! Force the script to use a cache built from a different
-                       database than specified with --host. Only use this if you are
-                       sure the hosts are compatible (e.g. ensembldb.ensembl.org and
-                       useastdb.ensembl.org) [default: off]
---cache_region_size    ADVANCED! The size in base-pairs of the region covered by one
-                       file in the cache. [default: 1MB]
-                       
---buffer_size          Sets the number of variants sent in each batch [default: 5000]
-                       Increasing buffer size can retrieve results more quickly
-                       but requires more memory. Only applies to whole genome mode.
---no_whole_genome      Run in old-style, non-whole genome mode [default: off]
 END
 
     print $usage;
