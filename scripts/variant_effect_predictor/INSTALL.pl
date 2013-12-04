@@ -13,6 +13,7 @@ $Archive::Extract::PREFER_BIN = 1;
 $| = 1;
 our $VERSION = 74;
 our $have_LWP;
+have_LWP();
 
 # CONFIGURE
 ###########
