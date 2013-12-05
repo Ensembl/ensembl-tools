@@ -244,7 +244,7 @@ if(defined($message)) {
   else {
     print "\n\nSkip to the next step (n) to install cache files\n\nDo you want to continue installing the API (y/n)? ";
     
-    my $ok = <>;
+    $ok = <>;
   }
   
   if($ok !~ /^y/i) {
