@@ -599,7 +599,7 @@ foreach my $dir(@dirs) {
 
 my @species;
 if($AUTO) {
-  @species = @store_species || @$SPECIES;
+  @species = scalar @store_species ? @store_species : @$SPECIES;
 }
 else {
   print "FASTA files for the following species are available; which do you want (can specify multiple separated by spaces, \"0\" to install for species specified for cache download): \n$species_list\n? ";
@@ -770,7 +770,7 @@ Options
 -v | --VERSION     Set API version to install (default = $VERSION)
 -c | --CACHEDIR    Set destination directory for cache files (default = '$HOME/.vep/')
 
--u | --UPDATE      EXPERIMENTAL! Check for and download new VEP versions
+-n | --UPDATE      EXPERIMENTAL! Check for and download new VEP versions
 
 -a | --AUTO        Run installer without user prompts. Use a (API), c (cache),
                    f (FASTA) to specify parts to install e.g. -a ac for API and
