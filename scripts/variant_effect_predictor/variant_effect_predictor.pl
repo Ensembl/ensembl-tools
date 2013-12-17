@@ -446,6 +446,7 @@ sub configure {
         'most_severe',             # only return most severe consequence
         'summary',                 # only return one line per variation with all consquence types
         'per_gene',                # only return most severe per gene
+        'pick',                    # used defined criteria to return most severe line
         'buffer_size=i',           # number of variations to read in before analysis
         'chunk_size=s',            # size in bases of "chunks" used in internal hash structure
         'failed=i',                # include failed variations when finding existing
