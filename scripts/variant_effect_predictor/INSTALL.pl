@@ -54,7 +54,7 @@ else {
 my $lib_dir = $DEST_DIR;
 
 $DEST_DIR       .= '/Bio';
-$ENS_CVS_ROOT ||= 'http://cvs.sanger.ac.uk/cgi-bin/viewvc.cgi/';
+$ENS_GIT_ROOT ||= 'https://github.com/Ensembl/';
 $BIOPERL_URL  ||= 'http://bioperl.org/DIST/BioPerl-1.6.1.tar.gz';
 $API_VERSION  ||= $VERSION;
 $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP";
@@ -65,7 +65,8 @@ $FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
 $QUIET = 0 unless $UPDATE || $AUTO;
 
 # set up the URLs
-my $ensembl_url_tail = '.tar.gz?root=ensembl&view=tar&only_with_tag=branch-ensembl-';
+my $ensembl_url_tail = '/archive/release/';
+my $archive_type = '.zip';
 
 # auto?
 if($AUTO) {
@@ -122,19 +123,19 @@ if($UPDATE) {
         exit(0);
       }
       
-      my $url = 'http://cvs.sanger.ac.uk/cgi-bin/viewvc.cgi/ensembl-tools/scripts/variant_effect_predictor.tar.gz?view=tar&root=ensembl&pathrev=branch-ensembl-'.$hash->{release};
-      my $tmpdir = '.'.$$.'_tmp';
+      my $url = $ENS_GIT_ROOT.'ensembl-tools'.$ensembl_url_tail.$hash->{release}.$archive_type;
       
+      my $tmpdir = '.'.$$.'_tmp';
       mkdir($tmpdir);
       
       print "Downloading version $hash->{release}\n";
-      download_to_file($url, $tmpdir.'/variant_effect_predictor.tar.gz');
+      download_to_file($url, $tmpdir.'/variant_effect_predictor'.$archive_type);
       
       print "Unpacking\n";
-      unpack_arch($tmpdir.'/variant_effect_predictor.tar.gz', $tmpdir);
-      unlink($tmpdir.'/variant_effect_predictor.tar.gz');
+      unpack_arch($tmpdir.'/variant_effect_predictor'.$archive_type, $tmpdir);
+      unlink($tmpdir.'/variant_effect_predictor'.$archive_type);
       
-      opendir NEWDIR, $tmpdir.'/variant_effect_predictor';
+      opendir NEWDIR, $tmpdir.'/ensembl-tools-release-'.$hash->{release}.'/scripts/variant_effect_predictor';
       my @new_files = grep {!/^\./} readdir NEWDIR;
       closedir NEWDIR;
       
@@ -142,11 +143,11 @@ if($UPDATE) {
         if(-e $new_file) {
           print "Backing up $new_file to $new_file\.bak\_$VERSION\n";
           move($new_file, "$new_file\.bak\_$VERSION");
-          move("$tmpdir/variant_effect_predictor/$new_file", $new_file);
+          move($tmpdir.'/ensembl-tools-release-'.$hash->{release}.'/scripts/variant_effect_predictor/'.$new_file, $new_file);
         }
         else {
           print "Copying file $new_file\n";
-          move("$tmpdir/variant_effect_predictor/$new_file", $new_file);
+          move($tmpdir.'/ensembl-tools-release-'.$hash->{release}.'/scripts/variant_effect_predictor/'.$new_file, $new_file);
         }
       }
       
@@ -303,33 +304,33 @@ mkdir($DEST_DIR.'/tmp') or die "ERROR: Could not make directory $DEST_DIR/tmp\n"
 
 print "\nDownloading required files\n" unless $QUIET;
 
-foreach my $module(qw(ensembl ensembl-variation ensembl-functgenomics)) {
-  my $url = $ENS_CVS_ROOT.$module.$ensembl_url_tail.$API_VERSION;
+foreach my $module(qw(ensembl ensembl-variation ensembl-funcgen)) {
+  my $url = $ENS_GIT_ROOT.$module.$ensembl_url_tail.$API_VERSION.$archive_type;
   
   print " - fetching $module\n" unless $QUIET;
   
-  my $target_file = $DEST_DIR.'/tmp/'.$module.'.tar.gz';
+  my $target_file = $DEST_DIR.'/tmp/'.$module.$archive_type;
   
   if(!-e $target_file) {
     download_to_file($url, $target_file);
   }
   
   print " - unpacking $target_file\n" unless $QUIET;
-  unpack_arch("$DEST_DIR/tmp/$module.tar.gz", "$DEST_DIR/tmp/");
+  unpack_arch("$DEST_DIR/tmp/$module$archive_type", "$DEST_DIR/tmp/");
   
   print " - moving files\n" unless $QUIET;
   
   if($module eq 'ensembl') {
-    move("$DEST_DIR/tmp/$module/modules/Bio/EnsEMBL", "$DEST_DIR/EnsEMBL") or die "ERROR: Could not move directory\n".$!;
+    move("$DEST_DIR/tmp/$module\-release\-$API_VERSION/modules/Bio/EnsEMBL", "$DEST_DIR/EnsEMBL") or die "ERROR: Could not move directory\n".$!;
   }
   elsif($module eq 'ensembl-variation') {
-    move("$DEST_DIR/tmp/$module/modules/Bio/EnsEMBL/Variation", "$DEST_DIR/EnsEMBL/Variation") or die "ERROR: Could not move directory\n".$!;
+    move("$DEST_DIR/tmp/$module\-release-$API_VERSION/modules/Bio/EnsEMBL/Variation", "$DEST_DIR/EnsEMBL/Variation") or die "ERROR: Could not move directory\n".$!;
   }
-  elsif($module eq 'ensembl-functgenomics') {
-    move("$DEST_DIR/tmp/$module/modules/Bio/EnsEMBL/Funcgen", "$DEST_DIR/EnsEMBL/Funcgen") or die "ERROR: Could not move directory\n".$!;
+  elsif($module eq 'ensembl-funcgen') {
+    move("$DEST_DIR/tmp/$module\-release-$API_VERSION/modules/Bio/EnsEMBL/Funcgen", "$DEST_DIR/EnsEMBL/Funcgen") or die "ERROR: Could not move directory\n".$!;
   }
   
-  rmtree("$DEST_DIR/tmp/$module") or die "ERROR: Failed to remove directory $DEST_DIR/tmp/$module\n";
+  rmtree("$DEST_DIR/tmp/$module\-release-$API_VERSION") or die "ERROR: Failed to remove directory $DEST_DIR/tmp/$module\-release-$API_VERSION\n";
 }
 
 
