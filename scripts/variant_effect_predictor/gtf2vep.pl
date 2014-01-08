@@ -30,7 +30,7 @@ use Bio::EnsEMBL::Translation;
 use Bio::EnsEMBL::Utils::Sequence qw(reverse_comp);
 use Bio::DB::Fasta;
 
-our $VERSION = 73;
+our $VERSION = 74;
 
 my $config = {};
 
@@ -372,8 +372,15 @@ sub export_data {
 	my $hash = shift;
 	
 	foreach my $region(keys %{$hash->{$chr}}) {
-		
-		my @array = sort {$a->start <=> $b->start || $a->end <=> $b->end} @{$hash->{$chr}->{$region}};
+    
+    # unique and sort list
+		my @array =
+      sort {$a->start <=> $b->start || $a->end <=> $b->end}
+      values %{{
+        map {$_->stable_id => $_}
+        grep {defined($_)}
+        @{$hash->{$chr}->{$region}}
+      }};
 		
 		#foreach my $tr(@array) {
 		#	check_transcript($config, $tr);
@@ -426,7 +433,7 @@ sub dump_transcript_cache {
     my $dump_file = get_dump_file_name($config, $chr, $region, 'transcript');
     
     #debug("Writing to $dump_file") unless defined($config->{quiet});
-    $DB::single = 1;
+    #$DB::single = 1;
 	
     # storable
     open my $fh, "| gzip -9 -c > ".$dump_file or die "ERROR: Could not write to dump file $dump_file";
