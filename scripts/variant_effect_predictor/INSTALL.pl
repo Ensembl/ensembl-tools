@@ -7,9 +7,6 @@ use Archive::Extract;
 use Net::FTP;
 use Cwd;
 
-# use prefer_bin to save memory when extracting archives
-$Archive::Extract::PREFER_BIN = 1;
-
 $| = 1;
 our $VERSION = 74;
 our $have_LWP;
@@ -18,7 +15,7 @@ have_LWP();
 # CONFIGURE
 ###########
 
-my ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $BIOPERL_URL, $CACHE_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET);
+my ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $BIOPERL_URL, $CACHE_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN);
 
 GetOptions(
   'DESTDIR|d=s'  => \$DEST_DIR,
@@ -31,7 +28,8 @@ GetOptions(
   'UPDATE|n'     => \$UPDATE,
   'SPECIES|s=s'  => \$SPECIES,
   'AUTO|a=s'     => \$AUTO,
-  'QUIET|q'      => \$QUIET
+  'QUIET|q'      => \$QUIET,
+  'PREFER_BIN|p' => \$PREFER_BIN,
 ) or die("ERROR: Failed to parse arguments");
 
 if(defined($help)) {
@@ -61,6 +59,10 @@ $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP"
 $CACHE_DIR    ||= $ENV{HOME} ? $ENV{HOME}.'/.vep' : 'cache';
 $FTP_USER     ||= 'anonymous';
 $FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
+$PREFER_BIN     = 0 unless defined($PREFER_BIN);
+
+# using PREFER_BIN can save memory when extracting archives
+$Archive::Extract::PREFER_BIN = $PREFER_BIN == 0 ? 0 : 1;
 
 $QUIET = 0 unless $UPDATE || $AUTO;
 
@@ -778,6 +780,7 @@ Options
                    cache
 -s | --SPECIES     Comma-separated list of species to install when using --AUTO
 -q | --QUIET       Don't write any status output when using --AUTO
+-p | --PREFER_BIN  Use this if the installer fails with out of memory errors
 END
 
     print $usage;
