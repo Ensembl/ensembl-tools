@@ -874,6 +874,11 @@ INTRO
     $config->{compress}          ||= 'zcat';
     $config->{polyphen_analysis}   = defined($config->{humdiv}) ? 'humdiv' : 'humvar';
     
+    # can't use more than one of most_severe, pick, per_gene, summary
+    my $total_sev_opts = 0;
+    map {$total_sev_opts++ if defined($config->{$_})} qw(most_severe pick per_gene summary);
+    die "ERROR: Can't use more than one of --most_severe, --pick, --per_gene, --summary\n" if $total_sev_opts > 1;
+    
     # can't use a whole bunch of options with most_severe
     if(defined($config->{most_severe})) {
         foreach my $flag(qw(no_intergenic protein symbol sift polyphen coding_only ccds canonical xref_refseq numbers domains summary)) {
