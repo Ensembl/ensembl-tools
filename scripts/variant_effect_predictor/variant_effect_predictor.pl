@@ -34,7 +34,7 @@ Variant Effect Predictor - a script to predict the consequences of genomic varia
 
 http://www.ensembl.org/info/docs/tools/vep/script/index.html
 
-Version 74
+Version 75
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -67,7 +67,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 );
 
 # global vars
-my $VERSION = '74';
+my $VERSION = '75';
 
  
 # define headers that would normally go in the extra field

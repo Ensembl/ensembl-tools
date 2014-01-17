@@ -11,7 +11,7 @@ use Cwd;
 $Archive::Extract::PREFER_BIN = 1;
 
 $| = 1;
-our $VERSION = 74;
+our $VERSION = 75;
 our $have_LWP;
 have_LWP();
 
