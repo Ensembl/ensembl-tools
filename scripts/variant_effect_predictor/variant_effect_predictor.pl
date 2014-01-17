@@ -930,7 +930,10 @@ INTRO
     $config->{cache_region_size} =~ s/kb?/000/i;
     
     # cluck and display executed SQL?
-    $Bio::EnsEMBL::DBSQL::StatementHandle::cluck = 1 if defined($config->{cluck});
+    if (defined($config->{cluck})) {
+        no warnings 'once';
+        $Bio::EnsEMBL::DBSQL::StatementHandle::cluck = 1;
+    }
     
     # write_cache needs cache
     $config->{cache} = 1 if defined $config->{write_cache};
@@ -1068,7 +1071,10 @@ INTRO
         }
         
         # copy to Slice for offline sequence fetching
-        $Bio::EnsEMBL::Slice::config = $config;
+        {
+            no warnings 'once';
+            $Bio::EnsEMBL::Slice::config = $config;
+        }
         
         # spoof a coordinate system
         $config->{coord_system} = Bio::EnsEMBL::CoordSystem->new(
