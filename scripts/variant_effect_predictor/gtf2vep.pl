@@ -116,6 +116,10 @@ while(<$in_file_handle>) {
 	for my $i(0..$#split) {
 		$data->{$fields[$i]} = $split[$i];
 	}
+  
+  # check chr name exists
+  $data->{seqname} =~ s/chr//ig if !$config->{fasta_db}->length($data->{seqname});
+  die("ERROR: Could not find chromosome named ".$data->{seqname}." in FASTA file\n") unless $config->{fasta_db}->length($data->{seqname});
 	
 	debug("Processing chromosome ".$data->{seqname}) if !defined($prev_chr) || $data->{seqname} ne $prev_chr;
 	
@@ -142,18 +146,11 @@ while(<$in_file_handle>) {
 	
 	my $ref = parse_data($config, $data);
 	
-	if(defined($prev_tr_id) && $prev_tr_id ne $tr_id) {
-		
-		my $prev_tr = $config->{transcripts}->{$prev_tr_id};
-		
-		# add to by_region hash
-		push @{$by_region->{$prev_chr || $data->{seqname}}->{get_region($config, $prev_tr)}}, $prev_tr;
-		
-		# dump if into new region or new chrom
-		if(defined($prev_chr) && $prev_chr ne $data->{seqname}) {
-			export_data($config, $prev_chr, $by_region);
-		}
-	}
+  # dump if into new region or new chrom
+  # this of course assumes input file is in chrom order!!!
+  if(defined($prev_chr) && $prev_chr ne $data->{seqname}) {
+    export_data($config, $prev_chr);
+  }
 	
 	$prev_tr_id = $tr_id;
 	$prev_chr = $data->{seqname};
@@ -267,7 +264,7 @@ sub parse_cds {
 	my $tr = $config->{transcripts}->{$data->{attributes}->{transcript_id}};
 	
 	return unless $tr->biotype eq 'protein_coding';
-	
+  
 	# get matching exon
 	my ($matched_exon) = grep {$_->{_number} eq $data->{attributes}->{exon_number}} @{$tr->get_all_Exons};
 	
@@ -369,9 +366,17 @@ sub get_dump_file_name {
 sub export_data {
 	my $config = shift;
 	my $chr = shift;
-	my $hash = shift;
+  
+  my $hash;
+  foreach my $tr(values %{$config->{transcripts}}) {
+    next unless $tr->seq_region_name eq $chr;
+    
+    fix_transcript($tr);
+    
+    push @{$hash->{get_region($config, $tr)}}, $tr;
+  }
 	
-	foreach my $region(keys %{$hash->{$chr}}) {
+	foreach my $region(keys %{$hash}) {
     
     # unique and sort list
 		my @array =
@@ -379,46 +384,60 @@ sub export_data {
       values %{{
         map {$_->stable_id => $_}
         grep {defined($_)}
-        @{$hash->{$chr}->{$region}}
+        @{$hash->{$region}}
       }};
 		
-		#foreach my $tr(@array) {
-		#	check_transcript($config, $tr);
-		#}
+		foreach my $tr(@array) {
+			check_transcript($config, $tr);
+		}
 		
 		dump_transcript_cache($config, {$chr => \@array}, $chr, $region);
 		
 		# remove all the dumped transcripts
 		delete $config->{transcripts}->{$_->stable_id} for @array;
-		delete $hash->{$chr}->{$region};
+		delete $hash->{$region};
 	}
+}
+
+sub fix_transcript {
+  my $tr = shift;
+  
+  # no CDS processed, can't be protein coding
+  if(!defined($tr->{translation}->{start_exon})) {
+    delete $tr->{translation};
+    $tr->{biotype} = 'pseudogene';
+  }
 }
 
 sub check_transcript {
 	my $config = shift;
 	my $tr = shift;
-	
+  
 	my @errors;
 	
 	push @errors, "Object is not a transcript" unless $tr->isa('Bio::EnsEMBL::Transcript');
 	push @errors, "No exons found" unless scalar @{$tr->get_all_Exons};
 	push @errors, "Exon missing phase" if grep {not defined $_->phase} @{$tr->get_all_Exons};
+  
+  if($tr->biotype eq 'protein_coding') {
+    push @errors, "No start_exon defined on translation" unless defined $tr->{translation}->{start_exon};
+    push @errors, "No end_exon defined on translation" unless defined $tr->{translation}->{end_exon};
+  }
 	
-	#if(scalar @errors) {
-	#	print join "\n", @errors;
-	#	print "\n";
-	#	
-	#	
-	#	use Data::Dumper;
-	#	$Data::Dumper::Maxdepth = 3;
-	#	warn Dumper $tr;
-	#	
-	#	delete $tr->{slice};
-	#	
-	#	print $tr->translate."\n";
-	#	
-	#	die "ERROR!\n";
-	#}
+	if(scalar @errors) {
+		print join "\n", @errors;
+		print "\n";
+		
+		use Data::Dumper;
+		$Data::Dumper::Maxdepth = 3;
+		warn Dumper $tr;
+		
+		delete $tr->{slice};
+		
+		print $tr->translate."\n";
+		
+		die "ERROR!\n";
+	}
 }
 
 # dumps out transcript cache to file
