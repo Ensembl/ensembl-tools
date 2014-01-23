@@ -107,7 +107,9 @@ else {
 
 while(<$in_file_handle>) {
 	chomp;
-  
+  	
+  next if $_ ~= /^#/; #skip lines starting with comments
+  	
 	my @split = split /\t/, $_;
 	
 	my $data;
