@@ -414,7 +414,7 @@ sub help {
     ### The future ###
     
     This tool is under development. For feature requests and bug reports, please
-    contact the mailing list dev@ensembl.org or helpdesk@ensembl.org
+    contact the mailing list http://lists.ensembl.org/mailman/listinfo/dev or http://www.ensembl.org/Help/Contact
     
 MANUAL
 }
