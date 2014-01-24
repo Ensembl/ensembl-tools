@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# Copyright [1999-2013] Wellcome Trust Sanger Institute and the EMBL-European Bioinformatics Institute
+# Copyright [1999-2014] Wellcome Trust Sanger Institute and the EMBL-European Bioinformatics Institute
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -414,7 +414,7 @@ sub help {
     ### The future ###
     
     This tool is under development. For feature requests and bug reports, please
-    contact the mailing list dev@ensembl.org or helpdesk@ensembl.org
+    contact the mailing list http://lists.ensembl.org/mailman/listinfo/dev or http://www.ensembl.org/Help/Contact
     
 MANUAL
 }
