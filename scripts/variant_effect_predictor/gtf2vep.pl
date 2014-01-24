@@ -158,13 +158,8 @@ while(<$in_file_handle>) {
 	$prev_chr = $data->{seqname};
 }
 
-my $prev_tr = $config->{transcripts}->{$prev_tr_id};
-
-# add to by_region hash
-push @{$by_region->{$prev_chr}->{get_region($config, $prev_tr)}}, $prev_tr;
-
 # dump remaining transcripts
-export_data($config, $prev_chr, $by_region);
+export_data($config, $prev_chr);
 
 debug("All done!");
 
