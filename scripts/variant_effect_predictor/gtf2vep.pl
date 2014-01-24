@@ -82,7 +82,7 @@ $config->{coord_system} = Bio::EnsEMBL::CoordSystem->new(
 my @fields = qw(seqname source feature start end score strand frame attributes comments);
 my $line_num = 0;
 $config->{dbID} = 1;
-my ($prev_tr_id, $prev_chr, $by_region);
+my ($prev_chr, $by_region);
 my $in_file_handle = new FileHandle;
 
 if(defined($config->{input})) {
@@ -107,9 +107,9 @@ else {
 
 while(<$in_file_handle>) {
 	chomp;
-  	
-  next if $_ ~= /^#/; #skip lines starting with comments
-  	
+  
+  next if $_ =~ /^#/; #skip lines starting with comments
+  
 	my @split = split /\t/, $_;
 	
 	my $data;
@@ -154,7 +154,6 @@ while(<$in_file_handle>) {
     export_data($config, $prev_chr);
   }
 	
-	$prev_tr_id = $tr_id;
 	$prev_chr = $data->{seqname};
 }
 
