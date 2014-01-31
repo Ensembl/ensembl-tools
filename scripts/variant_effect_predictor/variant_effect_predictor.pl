@@ -1208,7 +1208,7 @@ INTRO
     }
     
     # get terminal width for progress bars
-    unless(defined($config->{quiet})) {
+    unless(defined($config->{quiet}) || defined($config->{no_progress})) {
         my $width;
         
         # module may not be installed
