@@ -964,9 +964,12 @@ INTRO
     $config->{reg} = &connect_to_dbs($config);
     
     # complete dir with species name and db_version
+    my $species_dir_name = defined($config->{offline}) ? $config->{species} : ($config->{reg}->get_alias($config->{species}) || $config->{species});
+    $species_dir_name .= '_refseq' if defined($config->{refseq});
+    
     $config->{dir} .= '/'.(
         join '/', (
-            defined($config->{offline}) ? $config->{species} : ($config->{reg}->get_alias($config->{species}) || $config->{species}),
+            $species_dir_name,
             $config->{db_version} || $config->{reg}->software_version
         )
     );
