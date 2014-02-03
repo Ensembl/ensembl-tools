@@ -495,12 +495,6 @@ foreach my $file(@indexes) {
     $file_name = $file_path;
     $file_name =~ m/^(\w+?)\_vep/;
     $species = $1;
-    
-    # special case refseq
-    if($species =~ /\_refseq/) {
-      $species =~ s/\_refseq//;
-      $refseq = 1;
-    }
   }
   
   push @store_species, $species;
@@ -617,6 +611,10 @@ else {
 }
 
 foreach my $species(@species) {
+  
+  # remove refseq name
+  $species =~ s/_refseq//;
+  
   $ftp->cwd($species) or die "ERROR: Could not change directory to $species\n$@\n";
   $ftp->cwd('dna') or die "ERROR: Could not change directory to dna\n$@\n";
   
