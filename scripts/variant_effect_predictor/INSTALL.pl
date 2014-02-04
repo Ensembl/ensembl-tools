@@ -523,6 +523,10 @@ foreach my $file(@indexes) {
     rmtree("$CACHE_DIR/$species/$API_VERSION") or die "ERROR: Could not delete directory $CACHE_DIR/$species/$API_VERSION\n";
   }
   
+  if($species =~ /refseq/i) {
+    print "NB: Remember to use --refseq when running the VEP with this cache!\n" unless $QUIET;
+  }
+  
   my $target_file = "$CACHE_DIR/tmp/$file_name";
   
   print " - downloading $CACHE_URL/$file_path\n" unless $QUIET;
