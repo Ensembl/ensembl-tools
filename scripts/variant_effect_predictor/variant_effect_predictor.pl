@@ -2006,7 +2006,7 @@ sub convert_to_hgvs {
     my $vf = shift;
     
     # ensure we have a slice
-    $vf->{slice} ||= get_slice($config, $vf->{chr});
+    $vf->{slice} ||= get_slice($config, $vf->{chr}, undef, 1);
     
     my $tvs = $vf->get_all_TranscriptVariations;
     
