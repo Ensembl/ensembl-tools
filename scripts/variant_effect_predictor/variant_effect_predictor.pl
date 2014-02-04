@@ -524,6 +524,7 @@ sub configure {
         # cache stuff
         'database',                # must specify this to use DB now
         'cache',                   # use cache
+        'cache_version=i',         # specify a different cache version
         'write_cache',             # enables writing to the cache
         'build=s',                 # builds cache from DB from scratch; arg is either all (all top-level seqs) or a list of chrs
         'no_adaptor_cache',        # don't write adaptor cache
@@ -970,7 +971,7 @@ INTRO
     $config->{dir} .= '/'.(
         join '/', (
             $species_dir_name,
-            $config->{db_version} || $config->{reg}->software_version
+            $config->{cache_version} || $config->{db_version} || $config->{reg}->software_version
         )
     );
     
