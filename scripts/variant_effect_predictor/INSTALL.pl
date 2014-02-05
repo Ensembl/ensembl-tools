@@ -468,7 +468,12 @@ my @indexes;
 if($AUTO) {
   foreach my $sp(@$SPECIES) {
     for my $i(0..$#files) {
-      push @indexes, $i + 1 if $files[$i] =~ /$sp/i; 
+      if($sp =~ /refseq/i) {
+        push @indexes, $i + 1 if $files[$i] =~ /$sp/i;
+      }
+      else {
+        push @indexes, $i + 1 if $files[$i] =~ /$sp/i && $files[$i] !~ /refseq/i;
+      }
     }
   }
   
