@@ -2224,7 +2224,7 @@ sub summarise_stats {
       ['Variants remaining after filtering', $config->{stats}->{filter_count}],
       ['Lines of output written', $config->{stats}->{out_count}],
       [
-        'Novel / known variants',
+        'Novel / existing variants',
         defined($config->{stats}->{existing}) ?
         sprintf("%s (%.1f\%) / %s (%.1f\%)",
           $config->{stats}->{var_count} - $config->{stats}->{existing},
