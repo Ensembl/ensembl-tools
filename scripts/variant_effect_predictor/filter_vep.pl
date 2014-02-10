@@ -70,6 +70,14 @@ sub configure {
     'gz',                      # force read as gzipped
     'only_matched',            # rewrite CSQ field in VCF with only matched "blobs"
     
+    'ontology|y',              # use ontology for matching consequence terms
+    'host=s',                  # DB options
+    'user=s',
+    'pass=s',
+    'port=i',
+    'version=i',
+    'registry=s',
+    
     'filter|f=s@',             # filter
   ) or die "ERROR: Failed to parse command-line flags\n";
   
@@ -77,6 +85,44 @@ sub configure {
   if(defined($config->{help}) || !$args) {
     &usage;
     exit(0);
+  }
+  
+  # ontology stuff
+  if(defined($config->{ontology})) {
+    eval {
+      use Bio::EnsEMBL::Registry;
+    };
+    
+    if($@) {
+      die("ERROR: Could not load Ensembl API modules\n");
+    }
+    
+    $config->{reg} = 'Bio::EnsEMBL::Registry';
+    
+    # registry file for local DBs?
+    if(defined($config->{registry})) {
+      $config->{reg}->load_all($config->{registry});
+    }
+    
+    # otherwise manually connect to DB server
+    else {
+      $config->{host} ||= 'ensembldb.ensembl.org';
+      $config->{port} ||= '3306';
+      $config->{user} ||= 'anonymous';
+      
+      $config->{reg}->load_registry_from_db(
+        -host       => $config->{host},
+        -user       => $config->{user},
+        -pass       => $config->{password},
+        -port       => $config->{port},
+        -db_version => $config->{version},
+      );
+    }
+    
+    # get ontology adaptor
+    my $oa = $config->{reg}->get_adaptor('Multi','Ontology','OntologyTerm');
+    die("ERROR: Could not fetch OntologyTerm adaptor\n") unless defined($oa);
+    $config->{ontology_adaptor} = $oa;
   }
   
   # default to stdout
@@ -359,6 +405,11 @@ sub parse_filters {
         #}
       }
       
+      if(defined($config->{ontology}) && $field eq 'Consequence' && $operator eq 'eq') {
+        $operator = 'is_child';
+        $sub_name = 'filter_is_child';
+      }
+      
       push @return, {
         predicate => \&$sub_name,
         field     => $field,
@@ -536,6 +587,25 @@ sub filter_in {
   return defined($compare{$data});
 }
 
+# uses ontology to see if term is a child term of given parent
+sub filter_is_child {
+  my ($child, $parent, $config) = @_;
+  
+  # exact match, don't need to use ontology
+  return 1 if filter_re($child, $parent);
+  
+  # get parent term and descendants and cache it on $config
+  if(!defined($config->{descendants})) {
+    my $terms = $config->{ontology_adaptor}->fetch_all_by_name($parent, 'SO');
+    die("ERROR: No matching SO terms found for $parent\n") unless $terms && scalar @$terms;
+    die("ERROR: Found more than one SO term matching $parent: ".join(", ", map {$_->name} @$terms)."\n") if scalar @$terms > 1;
+    my $parent_term = $terms->[0];
+    $config->{descendants} = $parent_term->descendants;
+  }  
+  
+  return grep {$_->name =~ /^$child$/i} @{$config->{descendants}};
+}
+
 sub usage {
   print qq{#---------------#
 # filter_vep.pl #
@@ -575,5 +645,16 @@ perl filter_vep.pl [arguments]
                           --only_matched will remove blocks that do not pass the
                           filters. By default, the script prints out the entire
                           VCF line if any of the blocks pass the filters.
+                          
+--ontology           -y   Use Sequence Ontology to match consequence terms. Use
+                          with operator "is" to match against all child terms of
+                          your value.
+                          e.g. "Consequence is coding_sequence_variant" will
+                          match missense_variant, synonymous_variant etc.
+                          Requires database connection; defaults to connecting
+                          to ensembldb.ensembl.org. Use --host, --port, --user,
+                          --password, --version as per
+                          variant_effect_predictor.pl to change connection
+                          parameters.
 };
 }
