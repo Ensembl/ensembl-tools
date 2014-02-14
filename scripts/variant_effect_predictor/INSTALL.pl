@@ -421,7 +421,7 @@ if(!(-e $CACHE_DIR)) {
 mkdir($CACHE_DIR.'/tmp') unless -e $CACHE_DIR.'/tmp';
 
 # get list of species
-print "\nDownloading list of available cache files\n" unless $QUIET;
+print "\Getting list of available cache files\n" unless $QUIET;
 
 my $num = 1;
 my $species_list;
@@ -443,6 +443,12 @@ else {
     use File::Listing qw(parse_dir);
   };
   push @files, sort map {$_->[0]} grep {$_->[0] =~ /tar.gz/} @{parse_dir(get($CACHE_URL))};
+  
+  if(!@files) {
+    opendir DIR, $CACHE_URL;
+    @files = grep {$_ =~ /tar.gz/} readdir DIR;
+    closedir DIR;
+  }
 }
 
 # if we don't have a species list, we'll have to guess
@@ -483,11 +489,18 @@ if($AUTO) {
   @indexes = sort {$a <=> $b} keys %{{map {$_ => 1} @indexes}};
 }
 else {
-  print "The following species/files are available; which do you want (can specify multiple separated by spaces): \n$species_list\n? ";
+  print "The following species/files are available; which do you want (can specify multiple separated by spaces or 0 for all): \n$species_list\n? ";
   @indexes = split /\s+/, <>;
+  
+  # user wants all species found
+  if(scalar @indexes == 1 && $indexes[0] == 0) {
+    @indexes = [1..(scalar @files)];
+  }
 }
 
 foreach my $file(@indexes) {
+  die("ERROR: File number $file not valid\n") unless defined($file) && $file =~ /^[0-9]+$/ && defined($files[$file - 1]);
+  
   my $file_path = $files[$file - 1];
   
   my $refseq = 0;
@@ -534,9 +547,14 @@ foreach my $file(@indexes) {
   
   my $target_file = "$CACHE_DIR/tmp/$file_name";
   
-  print " - downloading $CACHE_URL/$file_path\n" unless $QUIET;
-  
-  download_to_file("$CACHE_URL/$file_path", $target_file);
+  if($CACHE_URL =~ /^ftp/) {
+    print " - downloading $CACHE_URL/$file_path\n" unless $QUIET;
+    download_to_file("$CACHE_URL/$file_path", $target_file);
+  }
+  else {
+    print " - copying $CACHE_URL/$file_path\n" unless $QUIET;
+    copy("$CACHE_URL/$file_path", $target_file)
+  }
   
   print " - unpacking $file_name\n" unless $QUIET;
   
@@ -593,10 +611,9 @@ if($FASTA_URL =~ /^ftp/i) {
   push @dirs, sort $ftp->ls;
 }
 else {
-  eval q{
-    use File::Listing qw(parse_dir);
-  };
-  push @dirs, sort map {$_->[0]} grep {$_->[0] =~ /tar.gz/} @{parse_dir(get($FASTA_URL))};
+  opendir DIR, $FASTA_URL;
+  @dirs = grep {-d $FASTA_URL.'/'.$_ && $_ !~ /^\./} readdir DIR;
+  closedir DIR;
 }
 
 $species_list = '';
@@ -624,10 +641,18 @@ foreach my $species(@species) {
   # remove refseq name
   $species =~ s/_refseq//;
   
-  $ftp->cwd($species) or die "ERROR: Could not change directory to $species\n$@\n";
-  $ftp->cwd('dna') or die "ERROR: Could not change directory to dna\n$@\n";
+  my @files;
   
-  my @files = grep {!/_(s|r)m\./} $ftp->ls;
+  if($ftp) {
+    $ftp->cwd($species) or die "ERROR: Could not change directory to $species\n$@\n";
+    $ftp->cwd('dna') or die "ERROR: Could not change directory to dna\n$@\n";
+    @files = grep {!/_(s|r)m\./} $ftp->ls;
+  }
+  else {
+    opendir DIR, "$FASTA_URL/$species/dna" or die "ERROR: Could not read from directory $FASTA_URL/$species/dna\n$@\n";
+    @files = grep {$_ !~ /^\./} readdir DIR;
+    closedir DIR;
+  }
   
   my ($file) = grep {/primary_assembly.fa.gz$/} @files;
   ($file) = grep {/toplevel.fa.gz$/} @files if !defined($file);
@@ -641,8 +666,11 @@ foreach my $species(@species) {
   $ex =~ s/\.gz$//;
   if(-e $ex) {
     print "Looks like you already have the FASTA file for $species, skipping\n" unless $QUIET;
-    $ftp->cwd('../');
-    $ftp->cwd('../');
+    
+    if($ftp) {
+      $ftp->cwd('../');
+      $ftp->cwd('../');
+    }
     next;
   }
   
@@ -651,16 +679,36 @@ foreach my $species(@species) {
   mkdir("$CACHE_DIR/$species") unless -d "$CACHE_DIR/$species";
   mkdir("$CACHE_DIR/$species/$API_VERSION") unless -d "$CACHE_DIR/$species/$API_VERSION";
   
-  print "Downloading $file\n" unless $QUIET;
-  download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file");
+  if($ftp) {
+    print " - downloading $file\n" unless $QUIET;
+    download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file");
+  }
+  else {
+    print " - copying $file\n" unless $QUIET;
+    copy("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file");
+  }
   
-  print "Extracting data\n" unless $QUIET;
+  print " - extracting data\n" unless $QUIET;
   unpack_arch("$CACHE_DIR/$species/$API_VERSION/$file", "$CACHE_DIR/$species/$API_VERSION/");
   
-  print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex\"\n" unless $QUIET;
+  print " - attempting to index\n" unless $QUIET;
+  eval q{
+    use Bio::DB::Fasta;
+  };
+  if($@) {
+    print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
+  }
+  else {
+    Bio::DB::Fasta->new($ex);
+    print " - indexing OK\n" unless $QUIET;
+  }
   
-  $ftp->cwd('../');
-  $ftp->cwd('../');
+  print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex\"\n\n" unless $QUIET;
+  
+  if($ftp) {
+    $ftp->cwd('../');
+    $ftp->cwd('../');
+  }
 }
 
 
