@@ -1590,7 +1590,7 @@ sub get_in_file_handle {
         # check defined input file exists
         die("ERROR: Could not find input file ", $config->{input_file}, "\n") unless -e $config->{input_file};
         
-        if($config->{input_file} =~ /\.gz$/ && -B $config->{input_file}){
+        if(-B $config->{input_file}){
             $in_file_handle->open($config->{compress}." ". $config->{input_file} . " | " ) or die("ERROR: Could not read from input file ", $config->{input_file}, "\n");
         }
         else {
@@ -2069,7 +2069,7 @@ sub summarise_stats {
     my $config = shift;
     
     # convert gene and transcript hashes to counts
-    for my $type(qw(genes transcripts regfeats)) {
+    for my $type(qw(gene transcript regulatoryfeature)) {
       $config->{stats}->{$type} = scalar keys %{$config->{stats}->{$type}} if defined $config->{stats}->{$type};
     }
     
@@ -2234,9 +2234,9 @@ sub summarise_stats {
         )
         : '-'
       ],
-      ['Overlapped genes', $config->{stats}->{genes}],
-      ['Overlapped transcripts', $config->{stats}->{transcripts}],
-      ['Overlapped regulatory features', $config->{stats}->{regfeats} || '-'],
+      ['Overlapped genes', $config->{stats}->{gene}],
+      ['Overlapped transcripts', $config->{stats}->{transcript}],
+      ['Overlapped regulatory features', $config->{stats}->{regulatoryfeature} || '-'],
     );
     
     # get file handle
