@@ -527,6 +527,8 @@ sub configure {
         'cache_version=i',         # specify a different cache version
         'write_cache',             # enables writing to the cache
         'build=s',                 # builds cache from DB from scratch; arg is either all (all top-level seqs) or a list of chrs
+        'build_test',              # disable some slow start-up stuff for speed when testing
+        'build_parts=s',           # choose which bits of the cache to build (t=transcript, v=variants, r=regfeats)
         'no_adaptor_cache',        # don't write adaptor cache
         'prefetch',                # prefetch exons, translation, introns, codon table etc for each transcript
         'strip',                   # strips adaptors etc from objects before caching them
@@ -959,7 +961,10 @@ INTRO
         $config->{strip} = 1;
         $config->{write_cache} = 1;
         $config->{cell_type} = [1] if defined($config->{regulatory});
-    }
+        $config->{build_parts} ||= 'tvr';
+        
+        die("ERROR: --build_parts [tvr] must have at least one of t (transcripts), v (variants), r (regfeats)\n") unless $config->{build_parts} =~ /^[tvr]+$/;
+    } 
     
     # connect to databases
     $config->{reg} = &connect_to_dbs($config);
