@@ -16,7 +16,7 @@ have_LWP();
 # CONFIGURE
 ###########
 
-my ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $BIOPERL_URL, $CACHE_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN);
+my ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $BIOPERL_URL, $CACHE_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT);
 
 GetOptions(
   'DESTDIR|d=s'  => \$DEST_DIR,
@@ -31,6 +31,7 @@ GetOptions(
   'AUTO|a=s'     => \$AUTO,
   'QUIET|q'      => \$QUIET,
   'PREFER_BIN|p' => \$PREFER_BIN,
+  'CONVERT|t'    => \$CONVERT,
 ) or die("ERROR: Failed to parse arguments");
 
 if(defined($help)) {
@@ -61,6 +62,8 @@ $CACHE_DIR    ||= $ENV{HOME} ? $ENV{HOME}.'/.vep' : 'cache';
 $FTP_USER     ||= 'anonymous';
 $FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
 $PREFER_BIN     = 0 unless defined($PREFER_BIN);
+
+my $dirname = dirname(__FILE__) || '.';
 
 # using PREFER_BIN can save memory when extracting archives
 $Archive::Extract::PREFER_BIN = $PREFER_BIN == 0 ? 0 : 1;
@@ -370,8 +373,6 @@ rmtree("$DEST_DIR/tmp") or die "ERROR: Failed to remove directory $DEST_DIR/tmp\
 ######
 
 print "\nTesting VEP script\n" unless $QUIET;
-
-my $dirname = dirname(__FILE__);
 my $test_vep = `perl $dirname/variant_effect_predictor.pl --help 2>&1`;
 
 $test_vep =~ /ENSEMBL VARIANT EFFECT PREDICTOR/ or die "ERROR: Testing VEP script failed with the following error\n$test_vep\n";
@@ -570,6 +571,12 @@ foreach my $file(@indexes) {
   opendir CACHEDIR, "$CACHE_DIR/tmp/$species/";
   move("$CACHE_DIR/tmp/$species/$_", "$CACHE_DIR/$species/$_") for readdir CACHEDIR;
   closedir CACHEDIR;
+  
+  # convert?
+  if($CONVERT) {
+    print " - converting cache\n" unless $QUIET;
+    system("perl $dirname/convert_cache.pl --dir $CACHE_DIR --species $species --version $API_VERSION") == 0 or print STDERR "WARNING: Failed to run convert script\n";
+  }
 }
 
 
