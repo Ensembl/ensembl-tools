@@ -473,13 +473,19 @@ my @store_species;
 my @indexes;
 
 if($AUTO) {
-  foreach my $sp(@$SPECIES) {
-    for my $i(0..$#files) {
-      if($sp =~ /refseq/i) {
-        push @indexes, $i + 1 if $files[$i] =~ /$sp/i;
-      }
-      else {
-        push @indexes, $i + 1 if $files[$i] =~ /$sp/i && $files[$i] !~ /refseq/i;
+  if($SPECIES->[0] eq 'all') {
+    @indexes = (1..(scalar @files));
+  }
+  
+  else {
+    foreach my $sp(@$SPECIES) {
+      for my $i(0..$#files) {
+        if($sp =~ /refseq/i) {
+          push @indexes, $i + 1 if $files[$i] =~ /$sp/i;
+        }
+        else {
+          push @indexes, $i + 1 if $files[$i] =~ /$sp/i && $files[$i] !~ /refseq/i;
+        }
       }
     }
   }
@@ -631,7 +637,12 @@ foreach my $dir(@dirs) {
 
 my @species;
 if($AUTO) {
-  @species = scalar @store_species ? @store_species : @$SPECIES;
+  if($SPECIES->[0] eq 'all') {
+    @species = @dirs;
+  }
+  else {
+    @species = scalar @store_species ? @store_species : @$SPECIES;
+  }
 }
 else {
   print "FASTA files for the following species are available; which do you want (can specify multiple separated by spaces, \"0\" to install for species specified for cache download): \n$species_list\n? ";
@@ -845,6 +856,9 @@ Options
 -s | --SPECIES     Comma-separated list of species to install when using --AUTO
 -q | --QUIET       Don't write any status output when using --AUTO
 -p | --PREFER_BIN  Use this if the installer fails with out of memory errors
+
+-t | --CONVERT     Convert downloaded caches to use tabix for retrieving
+                   co-located variants (requires tabix)
 END
 
     print $usage;
