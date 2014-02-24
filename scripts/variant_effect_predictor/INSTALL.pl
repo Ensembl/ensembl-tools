@@ -16,7 +16,7 @@ have_LWP();
 # CONFIGURE
 ###########
 
-my ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $BIOPERL_URL, $CACHE_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT);
+my ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $BIOPERL_URL, $CACHE_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST);
 
 GetOptions(
   'DESTDIR|d=s'  => \$DEST_DIR,
@@ -32,6 +32,7 @@ GetOptions(
   'QUIET|q'      => \$QUIET,
   'PREFER_BIN|p' => \$PREFER_BIN,
   'CONVERT|t'    => \$CONVERT,
+  'TEST'         => \$TEST,
 ) or die("ERROR: Failed to parse arguments");
 
 if(defined($help)) {
@@ -384,7 +385,7 @@ print " - OK!\n" unless $QUIET;
 
 CACHE:
 
-print "\nThe VEP can either connect to remote or local databases, or use local cache files. Using local cache files is the fastest and most efficient way to run the VEP\n" unless $QUIET;
+print "\nThe VEP can either connect to remote or local databases, or use local cache files.\nUsing local cache files is the fastest and most efficient way to run the VEP\n" unless $QUIET;
 print "Cache files will be stored in $CACHE_DIR\n" unless $QUIET;
 
 my $ok;
@@ -532,7 +533,7 @@ foreach my $file(@indexes) {
     print "\nWARNING: It looks like you already have the cache for $species (v$API_VERSION) installed.\n" unless $QUIET;
     
     if($AUTO) {
-      $ok = 'y';
+      print "\nDelete the folder $CACHE_DIR/$species/$API_VERSION and re-run INSTALL.pl if you want to re-install\n";
     }
     else {
       print "If you continue the existing cache will be overwritten.\nAre you sure you want to continue (y/n)? ";
@@ -556,30 +557,32 @@ foreach my $file(@indexes) {
   
   if($CACHE_URL =~ /^ftp/) {
     print " - downloading $CACHE_URL/$file_path\n" unless $QUIET;
-    download_to_file("$CACHE_URL/$file_path", $target_file);
+    download_to_file("$CACHE_URL/$file_path", $target_file) unless $TEST;
   }
   else {
     print " - copying $CACHE_URL/$file_path\n" unless $QUIET;
-    copy("$CACHE_URL/$file_path", $target_file)
+    copy("$CACHE_URL/$file_path", $target_file) unless $TEST;
   }
   
   print " - unpacking $file_name\n" unless $QUIET;
   
   
-  unpack_arch($target_file, $CACHE_DIR.'/tmp/');
+  unpack_arch($target_file, $CACHE_DIR.'/tmp/') unless $TEST;
   
   # does species dir exist?
-  if(!-e "$CACHE_DIR/$species") {
+  if(!-e "$CACHE_DIR/$species" && !$TEST) {
     mkdir("$CACHE_DIR/$species") or die "ERROR: Could not create directory $CACHE_DIR/$species\n";
   }
   
   # move files
-  opendir CACHEDIR, "$CACHE_DIR/tmp/$species/";
-  move("$CACHE_DIR/tmp/$species/$_", "$CACHE_DIR/$species/$_") for readdir CACHEDIR;
-  closedir CACHEDIR;
+  unless($TEST) {
+    opendir CACHEDIR, "$CACHE_DIR/tmp/$species/";
+    move("$CACHE_DIR/tmp/$species/$_", "$CACHE_DIR/$species/$_") for readdir CACHEDIR;
+    closedir CACHEDIR;
+  }
   
   # convert?
-  if($CONVERT) {
+  if($CONVERT && !$TEST) {
     print " - converting cache\n" unless $QUIET;
     system("perl $dirname/convert_cache.pl --dir $CACHE_DIR --species $species --version $API_VERSION") == 0 or print STDERR "WARNING: Failed to run convert script\n";
   }
@@ -638,7 +641,7 @@ foreach my $dir(@dirs) {
 my @species;
 if($AUTO) {
   if($SPECIES->[0] eq 'all') {
-    @species = @dirs;
+    @species = scalar @store_species ? @store_species : @dirs;
   }
   else {
     @species = scalar @store_species ? @store_species : @$SPECIES;
@@ -667,7 +670,10 @@ foreach my $species(@species) {
     @files = grep {!/_(s|r)m\./} $ftp->ls;
   }
   else {
-    opendir DIR, "$FASTA_URL/$species/dna" or die "ERROR: Could not read from directory $FASTA_URL/$species/dna\n$@\n";
+    if(!opendir DIR, "$FASTA_URL/$species/dna") {
+      warn "WARNING: Could not read from directory $FASTA_URL/$species/dna\n$@\n";
+      next;
+    }
     @files = grep {$_ !~ /^\./} readdir DIR;
     closedir DIR;
   }
@@ -693,21 +699,21 @@ foreach my $species(@species) {
   }
   
   # create path
-  mkdir($CACHE_DIR) unless -d $CACHE_DIR;
-  mkdir("$CACHE_DIR/$species") unless -d "$CACHE_DIR/$species";
-  mkdir("$CACHE_DIR/$species/$API_VERSION") unless -d "$CACHE_DIR/$species/$API_VERSION";
+  mkdir($CACHE_DIR) unless -d $CACHE_DIR || $TEST;
+  mkdir("$CACHE_DIR/$species") unless -d "$CACHE_DIR/$species" || $TEST;
+  mkdir("$CACHE_DIR/$species/$API_VERSION") unless -d "$CACHE_DIR/$species/$API_VERSION" || $TEST;
   
   if($ftp) {
     print " - downloading $file\n" unless $QUIET;
-    download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file");
+    download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file") unless $TEST;
   }
   else {
     print " - copying $file\n" unless $QUIET;
-    copy("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file");
+    copy("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file") unless $TEST;
   }
   
   print " - extracting data\n" unless $QUIET;
-  unpack_arch("$CACHE_DIR/$species/$API_VERSION/$file", "$CACHE_DIR/$species/$API_VERSION/");
+  unpack_arch("$CACHE_DIR/$species/$API_VERSION/$file", "$CACHE_DIR/$species/$API_VERSION/") unless $TEST;
   
   print " - attempting to index\n" unless $QUIET;
   eval q{
@@ -717,7 +723,7 @@ foreach my $species(@species) {
     print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
   }
   else {
-    Bio::DB::Fasta->new($ex);
+    Bio::DB::Fasta->new($ex) unless $TEST;
     print " - indexing OK\n" unless $QUIET;
   }
   
@@ -732,7 +738,7 @@ foreach my $species(@species) {
 
 # CLEANUP
 #########
-if(-d "$CACHE_DIR/tmp") {
+if(-d "$CACHE_DIR/tmp" && !$TEST) {
   rmtree("$CACHE_DIR/tmp") or die "ERROR: Could not delete directory $CACHE_DIR/tmp\n";
 }
 
@@ -859,6 +865,14 @@ Options
 
 -t | --CONVERT     Convert downloaded caches to use tabix for retrieving
                    co-located variants (requires tabix)
+                   
+                   
+-u | --CACHEURL    Override default cache URL; this may be a local directory or
+                   a remote (e.g. FTP) address.
+-f | --FASTAURL    Override default FASTA URL; this may be a local directory or
+                   a remote (e.g. FTP) address. The FASTA URL/directory must have
+                   gzipped FASTA files under the following structure:
+                   [species]/[dna]/
 END
 
     print $usage;
