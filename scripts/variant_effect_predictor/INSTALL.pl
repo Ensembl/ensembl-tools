@@ -660,6 +660,7 @@ else {
 foreach my $species(@species) {
   
   # remove refseq name
+  my $orig_species = $species;
   $species =~ s/_refseq//;
   
   my @files;
@@ -686,10 +687,10 @@ foreach my $species(@species) {
     next;
   }
   
-  my $ex = "$CACHE_DIR/$species/$API_VERSION/$file";
+  my $ex = "$CACHE_DIR/$orig_species/$API_VERSION/$file";
   $ex =~ s/\.gz$//;
   if(-e $ex) {
-    print "Looks like you already have the FASTA file for $species, skipping\n" unless $QUIET;
+    print "Looks like you already have the FASTA file for $orig_species, skipping\n" unless $QUIET;
     
     if($ftp) {
       $ftp->cwd('../');
@@ -700,20 +701,20 @@ foreach my $species(@species) {
   
   # create path
   mkdir($CACHE_DIR) unless -d $CACHE_DIR || $TEST;
-  mkdir("$CACHE_DIR/$species") unless -d "$CACHE_DIR/$species" || $TEST;
-  mkdir("$CACHE_DIR/$species/$API_VERSION") unless -d "$CACHE_DIR/$species/$API_VERSION" || $TEST;
+  mkdir("$CACHE_DIR/$orig_species") unless -d "$CACHE_DIR/$orig_species" || $TEST;
+  mkdir("$CACHE_DIR/$orig_species/$API_VERSION") unless -d "$CACHE_DIR/$orig_species/$API_VERSION" || $TEST;
   
   if($ftp) {
     print " - downloading $file\n" unless $QUIET;
-    download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file") unless $TEST;
+    download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$orig_species/$API_VERSION/$file") unless $TEST;
   }
   else {
     print " - copying $file\n" unless $QUIET;
-    copy("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$species/$API_VERSION/$file") unless $TEST;
+    copy("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$orig_species/$API_VERSION/$file") unless $TEST;
   }
   
   print " - extracting data\n" unless $QUIET;
-  unpack_arch("$CACHE_DIR/$species/$API_VERSION/$file", "$CACHE_DIR/$species/$API_VERSION/") unless $TEST;
+  unpack_arch("$CACHE_DIR/$orig_species/$API_VERSION/$file", "$CACHE_DIR/$orig_species/$API_VERSION/") unless $TEST;
   
   print " - attempting to index\n" unless $QUIET;
   eval q{
