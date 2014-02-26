@@ -439,11 +439,11 @@ sub run_filters {
     my $input = $data->{$filter->{field}};
     my $value = $filter->{value};
     
-    if(defined($input) && $input =~ /([\w\.]+)?\:?\(?([\d\.]*)\)?/ && $filter->{field} ne 'CELL_TYPE') {
+    if(defined($input) && $input =~ /([\w\.]+)?\:?\(?([\-\d\.]*)\)?/ && $filter->{field} ne 'CELL_TYPE') {
       my ($text, $num) = ($1, $2);
       
-      if($value =~ /^[\d\.]+$/) {
-        $input = $text =~ /^[\d\.]+$/ ? $text : $num;
+      if($value =~ /^[\-\d\.]+$/) {
+        $input = $text =~ /^[\-\d\.]+$/ ? $text : $num;
       }
       else {
         $input = $text;
@@ -595,15 +595,15 @@ sub filter_is_child {
   return 1 if filter_re($child, $parent);
   
   # get parent term and descendants and cache it on $config
-  if(!defined($config->{descendants})) {
+  if(!defined($config->{descendants}) || !defined($config->{descendants}->{$parent})) {
     my $terms = $config->{ontology_adaptor}->fetch_all_by_name($parent, 'SO');
     die("ERROR: No matching SO terms found for $parent\n") unless $terms && scalar @$terms;
     die("ERROR: Found more than one SO term matching $parent: ".join(", ", map {$_->name} @$terms)."\n") if scalar @$terms > 1;
     my $parent_term = $terms->[0];
-    $config->{descendants} = $parent_term->descendants;
+    $config->{descendants}->{$parent} = $parent_term->descendants;
   }  
   
-  return grep {$_->name =~ /^$child$/i} @{$config->{descendants}};
+  return grep {$_->name =~ /^$child$/i} @{$config->{descendants}->{$parent}};
 }
 
 sub usage {
