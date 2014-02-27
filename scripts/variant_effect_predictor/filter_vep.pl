@@ -78,6 +78,9 @@ sub configure {
     'version=i',
     'registry=s',
     
+    'start|s=i',               # skip first N results
+    'limit|l=i',               # return max N results
+    
     'filter|f=s@',             # filter
   ) or die "ERROR: Failed to parse command-line flags\n";
   
@@ -86,6 +89,10 @@ sub configure {
     &usage;
     exit(0);
   }
+  
+  # set defaults
+  $config->{start} ||= 0;
+  $config->{limit} ||= 1e12;
   
   # ontology stuff
   if(defined($config->{ontology})) {
@@ -262,7 +269,12 @@ sub main {
       }
       
       $count++ if $line_pass;
+      
+      next unless $count >= $config->{start};
+      
       print $out_fh "$line\n" if $line_pass && !defined($config->{count});
+      
+      last if $count >= $config->{limit} + $config->{start} - 1;
     }
   }
   
