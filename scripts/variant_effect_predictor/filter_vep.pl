@@ -94,44 +94,6 @@ sub configure {
   $config->{start} ||= 0;
   $config->{limit} ||= 1e12;
   
-  # ontology stuff
-  if(defined($config->{ontology})) {
-    eval {
-      use Bio::EnsEMBL::Registry;
-    };
-    
-    if($@) {
-      die("ERROR: Could not load Ensembl API modules\n");
-    }
-    
-    $config->{reg} = 'Bio::EnsEMBL::Registry';
-    
-    # registry file for local DBs?
-    if(defined($config->{registry})) {
-      $config->{reg}->load_all($config->{registry});
-    }
-    
-    # otherwise manually connect to DB server
-    else {
-      $config->{host} ||= 'ensembldb.ensembl.org';
-      $config->{port} ||= '3306';
-      $config->{user} ||= 'anonymous';
-      
-      $config->{reg}->load_registry_from_db(
-        -host       => $config->{host},
-        -user       => $config->{user},
-        -pass       => $config->{password},
-        -port       => $config->{port},
-        -db_version => $config->{version},
-      );
-    }
-    
-    # get ontology adaptor
-    my $oa = $config->{reg}->get_adaptor('Multi','Ontology','OntologyTerm');
-    die("ERROR: Could not fetch OntologyTerm adaptor\n") unless defined($oa);
-    $config->{ontology_adaptor} = $oa;
-  }
-  
   # default to stdout
   $config->{output_file} ||= 'stdout';
   
@@ -608,6 +570,45 @@ sub filter_is_child {
   
   # get parent term and descendants and cache it on $config
   if(!defined($config->{descendants}) || !defined($config->{descendants}->{$parent})) {
+    
+    # connect to DBs here
+    if(!defined($config->{ontology_adaptor})) {
+      eval {
+        use Bio::EnsEMBL::Registry;
+      };
+      
+      if($@) {
+        die("ERROR: Could not load Ensembl API modules\n");
+      }
+      
+      $config->{reg} = 'Bio::EnsEMBL::Registry';
+      
+      # registry file for local DBs?
+      if(defined($config->{registry})) {
+        $config->{reg}->load_all($config->{registry});
+      }
+      
+      # otherwise manually connect to DB server
+      else {
+        $config->{host} ||= 'ensembldb.ensembl.org';
+        $config->{port} ||= '3306';
+        $config->{user} ||= 'anonymous';
+        
+        $config->{reg}->load_registry_from_db(
+          -host       => $config->{host},
+          -user       => $config->{user},
+          -pass       => $config->{password},
+          -port       => $config->{port},
+          -db_version => $config->{version},
+        );
+      }
+      
+      # get ontology adaptor
+      my $oa = $config->{reg}->get_adaptor('Multi','Ontology','OntologyTerm');
+      die("ERROR: Could not fetch OntologyTerm adaptor\n") unless defined($oa);
+      $config->{ontology_adaptor} = $oa;
+    }
+    
     my $terms = $config->{ontology_adaptor}->fetch_all_by_name($parent, 'SO');
     die("ERROR: No matching SO terms found for $parent\n") unless $terms && scalar @$terms;
     die("ERROR: Found more than one SO term matching $parent: ".join(", ", map {$_->name} @$terms)."\n") if scalar @$terms > 1;
