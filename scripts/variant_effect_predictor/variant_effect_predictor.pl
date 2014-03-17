@@ -72,30 +72,44 @@ my $VERSION = '75';
  
 # define headers that would normally go in the extra field
 # keyed on the config parameter used to turn it on
-my %extra_headers = (
-    protein         => ['ENSP'],
-    canonical       => ['CANONICAL'],
-    ccds            => ['CCDS'],
-    hgvs            => ['HGVSc','HGVSp'],
-    symbol          => ['SYMBOL','SYMBOL_SOURCE'],
-    sift            => ['SIFT'],
-    polyphen        => ['PolyPhen'],
-    numbers         => ['EXON','INTRON'],
-    domains         => ['DOMAINS'],
-    regulatory      => ['MOTIF_NAME','MOTIF_POS','HIGH_INF_POS','MOTIF_SCORE_CHANGE'],
-    cell_type       => ['CELL_TYPE'],
-    individual      => ['IND','ZYG'],
-    xref_refseq     => ['RefSeq'],
-    check_svs       => ['SV'],
-    check_frequency => ['FREQS'],
-    gmaf            => ['GMAF'],
-    maf_1kg         => ['AFR_MAF','AMR_MAF','ASN_MAF','EUR_MAF'],
-    maf_esp         => ['AA_MAF','EA_MAF'],
-    pubmed          => ['PUBMED'],
-    user            => ['DISTANCE','STRAND'],
-    check_existing  => ['CLIN_SIG'],
-    biotype         => ['BIOTYPE'],
-    allele_number   => ['ALLELE_NUM'],
+my @extra_headers = (
+  
+  # general
+  { flag => 'individual',      cols => ['IND','ZYG'] },
+  { flag => 'allele_number',   cols => ['ALLELE_NUM'] },
+  { flag => 'user',            cols => ['DISTANCE','STRAND'] },
+  
+  # gene-related
+  { flag => 'symbol',          cols => ['SYMBOL','SYMBOL_SOURCE'] },
+  { flag => 'biotype',         cols => ['BIOTYPE'] },
+  { flag => 'canonical',       cols => ['CANONICAL'] },
+  { flag => 'ccds',            cols => ['CCDS'] },
+  { flag => 'protein',         cols => ['ENSP'] },
+  { flag => 'xref_refseq',     cols => ['RefSeq'] },
+  
+  # non-synonymous predictions
+  { flag => 'sift',            cols => ['SIFT'] },
+  { flag => 'polyphen',        cols => ['PolyPhen'] },
+  
+  # transcript/protein stuff
+  { flag => 'numbers',         cols => ['EXON','INTRON'] },
+  { flag => 'domains',         cols => ['DOMAINS'] },
+  { flag => 'hgvs',            cols => ['HGVSc','HGVSp'] },
+  
+  # frequency stuff
+  { flag => 'gmaf',            cols => ['GMAF'] },
+  { flag => 'maf_1kg',         cols => ['AFR_MAF','AMR_MAF','ASN_MAF','EUR_MAF'] },
+  { flag => 'maf_esp',         cols => ['AA_MAF','EA_MAF'] },
+  { flag => 'check_frequency', cols => ['FREQS'] },
+  
+  # misc variation stuff
+  { flag => 'check_existing',  cols => ['CLIN_SIG'] },
+  { flag => 'pubmed',          cols => ['PUBMED'] },
+  { flag => 'check_svs',       cols => ['SV'] },
+  
+  # regulatory
+  { flag => 'regulatory',      cols => ['MOTIF_NAME','MOTIF_POS','HIGH_INF_POS','MOTIF_SCORE_CHANGE'] },
+  { flag => 'cell_type',       cols => ['CELL_TYPE'] },
 );
 
 my %ts_tv = (
@@ -1718,9 +1732,9 @@ sub get_out_file_handle {
                 } @{$config->{fields}},
                 
                 # get extra headers
-                map {@{$extra_headers{$_}}}
-                grep {defined $config->{$_}}
-                keys %extra_headers
+                map {@{$_->{cols}}}
+                grep {defined $config->{$_->{flag}}}
+                @extra_headers
             );
             
             # plugin headers
@@ -1801,9 +1815,9 @@ sub get_out_file_handle {
                 grep {$_ ne 'Extra'} @{$config->{fields}},
                 
                 # get extra headers
-                map {@{$extra_headers{$_}}}
-                grep {defined $config->{$_}}
-                keys %extra_headers
+                map {@{$_->{cols}}}
+                grep {defined $config->{$_->{flag}}}
+                @extra_headers
             );
             
             # plugin headers
@@ -1853,9 +1867,9 @@ sub get_out_file_handle {
     # add key for extra column headers based on config
     my $extra_column_keys = join "\n",
         map {'## '.$_.' : '.$COL_DESCS{$_}}
-        sort map {@{$extra_headers{$_}}}
-        grep {defined $config->{$_}}
-        keys %extra_headers;
+        map {@{$_->{cols}}}
+        grep {defined $config->{$_->{flag}}}
+        @extra_headers;
     
     my $header =<<HEAD;
 ## ENSEMBL VARIANT EFFECT PREDICTOR v$VERSION
@@ -2047,7 +2061,20 @@ sub print_line {
     if(ref($line) eq 'HASH') {
         my %extra = %{$line->{Extra}};
         
-        $line->{Extra} = join ';', map { $_.'='.$line->{Extra}->{$_} } keys %{ $line->{Extra} || {} };
+        # create extra field order?
+        if(!defined($config->{field_order})) {
+          my @extra_fields =
+            map {@{$_->{cols}}}
+            grep {defined $config->{$_->{flag}}}
+            @extra_headers;
+          
+          $config->{field_order}->{$extra_fields[$_]} = $_ for 0..$#extra_fields;
+        }
+        
+        $line->{Extra} = join ';',
+          map { $_.'='.$line->{Extra}->{$_} }
+          sort {$config->{field_order}->{$a} <=> $config->{field_order}->{$b}}
+          keys %{ $line->{Extra} || {} };
         
         # if the fields have been redefined we need to search through in case
         # any of the defined fields are actually part of the Extra hash
