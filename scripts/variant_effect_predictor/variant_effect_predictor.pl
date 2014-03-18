@@ -1835,9 +1835,17 @@ sub get_out_file_handle {
             if(!defined($config->{$string}) && !defined($config->{offline})) {
                 my $var_mca = $config->{reg}->get_adaptor($config->{species}, 'variation', 'metacontainer');
                 my $values = $var_mca->list_value_by_key($tool.'_version') if defined($var_mca);
-                $config->{$string} = $values->[0] if scalar @$values;
+                $config->{$string} = $values->[0] if $values && scalar @$values;
             }
-            $version_string .= "\n## $tool version ".$config->{$string} if defined($config->{$string});
+            
+            if(!defined($config->{$string})) {
+              debug("INFO: --$tool is not available for this species") unless defined($config->{quiet});
+              delete $config->{$tool};
+            }
+            
+            else {
+              $version_string .= "\n## $tool version ".$config->{$string};
+            }
         }
     }
     
