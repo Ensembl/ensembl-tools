@@ -80,7 +80,7 @@ my @extra_headers = (
   { flag => 'user',            cols => ['DISTANCE','STRAND'] },
   
   # gene-related
-  { flag => 'symbol',          cols => ['SYMBOL','SYMBOL_SOURCE'] },
+  { flag => 'symbol',          cols => ['SYMBOL','SYMBOL_SOURCE','HGNC_ID'] },
   { flag => 'biotype',         cols => ['BIOTYPE'] },
   { flag => 'canonical',       cols => ['CANONICAL'] },
   { flag => 'ccds',            cols => ['CCDS'] },
