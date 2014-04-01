@@ -1830,7 +1830,7 @@ sub get_out_file_handle {
     # sift/polyphen versions
     foreach my $tool(qw(sift polyphen)) {
         if(defined($config->{$tool})) {
-            my $string = 'config_'.$tool.'_version';
+            my $string = 'cache_'.$tool.'_version';
             
             if(!defined($config->{$string}) && !defined($config->{offline})) {
                 my $var_mca = $config->{reg}->get_adaptor($config->{species}, 'variation', 'metacontainer');
