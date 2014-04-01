@@ -762,7 +762,7 @@ sub download_to_file {
     }
   }
   else {
-    my $response = HTTP::Tiny->new->get($url);
+    my $response = HTTP::Tiny->new(no_proxy => 'github.com')->get($url);
     
     if($response->{success}) {
       open OUT, ">$file" or die "Could not write to file $file\n";
@@ -798,8 +798,9 @@ sub have_LWP {
   else {
     $have_LWP = 1;
     
-    # set up a user agent's proxy
+    # set up a user agent's proxy (excluding github)
     $ua->env_proxy;
+    $ua->no_proxy('github.com');
     
     # enable progress
     eval q{
