@@ -117,6 +117,9 @@ sub main {
   elsif($config->{output_file} =~ /stdout/i) {
     $out_fh = *STDOUT;
   }
+  else {
+    $out_fh->open(">".$config->{output_file}) or die("ERROR: Could not write to output file ".$config->{output_file}."\n");
+  }
   
   my (@raw_headers, @headers, $count, $line_number);
   
