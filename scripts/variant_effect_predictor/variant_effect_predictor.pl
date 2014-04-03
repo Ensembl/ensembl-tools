@@ -78,6 +78,7 @@ my @extra_headers = (
   { flag => 'individual',      cols => ['IND','ZYG'] },
   { flag => 'allele_number',   cols => ['ALLELE_NUM'] },
   { flag => 'user',            cols => ['DISTANCE','STRAND'] },
+  { flag => 'flag_pick',       cols => ['PICK'] },
   
   # gene-related
   { flag => 'symbol',          cols => ['SYMBOL','SYMBOL_SOURCE','HGNC_ID'] },
@@ -461,6 +462,7 @@ sub configure {
         'summary',                 # only return one line per variation with all consquence types
         'per_gene',                # only return most severe per gene
         'pick',                    # used defined criteria to return most severe line
+        'flag_pick',               # like --pick but just adds a flag to picked line
         'buffer_size=i',           # number of variations to read in before analysis
         'chunk_size=s',            # size in bases of "chunks" used in internal hash structure
         'failed=i',                # include failed variations when finding existing
