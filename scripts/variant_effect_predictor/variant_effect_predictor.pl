@@ -456,6 +456,7 @@ sub configure {
         'db_version=i',            # Ensembl database version to use e.g. 62
         'genomes',                 # automatically sets DB params for e!Genomes
         'refseq',                  # use otherfeatures RefSeq DB instead of Ensembl
+        'gencode_basic',           # limit to using just GenCode basic transcript set
         
         # runtime options
         'most_severe',             # only return most severe consequence
@@ -660,6 +661,9 @@ sub configure {
         $config->{host}    ||= 'ensembldb.ensembl.org';
         $config->{port}    ||= 5306;
     }
+    
+    # can't use both refseq and gencode
+    die("ERROR: Can't use both --refseq and --gencode_basic\n") if defined($config->{refseq}) && defined($config->{gencode_basic});
     
     # refseq or core?
     if(defined($config->{refseq})) {
