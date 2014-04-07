@@ -493,6 +493,7 @@ sub configure {
         'canonical',               # indicates if transcript is canonical
         'ccds',                    # output CCDS identifer
         'xref_refseq',             # output refseq mrna xref
+        'uniprot',                 # output Uniprot identifiers (includes UniParc)
         'protein',                 # add e! protein ID to extra column
         'biotype',                 # add biotype of transcript to output
         'hgnc',                    # add HGNC gene ID to extra column
