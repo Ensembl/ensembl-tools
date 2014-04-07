@@ -86,6 +86,7 @@ my @extra_headers = (
   { flag => 'canonical',       cols => ['CANONICAL'] },
   { flag => 'ccds',            cols => ['CCDS'] },
   { flag => 'protein',         cols => ['ENSP'] },
+  { flag => 'uniprot',         cols => ['SWISSPROT', 'TREMBL', 'UNIPARC'] },
   { flag => 'xref_refseq',     cols => ['RefSeq'] },
   
   # non-synonymous predictions
