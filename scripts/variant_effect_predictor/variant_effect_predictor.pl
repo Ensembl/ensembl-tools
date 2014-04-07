@@ -549,7 +549,6 @@ sub configure {
         'build_test',              # disable some slow start-up stuff for speed when testing
         'build_parts=s',           # choose which bits of the cache to build (t=transcript, v=variants, r=regfeats)
         'no_adaptor_cache',        # don't write adaptor cache
-        'prefetch',                # prefetch exons, translation, introns, codon table etc for each transcript
         'strip',                   # strips adaptors etc from objects before caching them
         'rebuild=s',               # rebuilds cache by reading in existing then redumping - probably don't need to use this any more
         'dir=s',                   # dir where cache is found (defaults to $HOME/.vep/)
@@ -964,9 +963,8 @@ INTRO
     $config->{cache} = 1 if defined $config->{write_cache};
     $config->{cache} = 1 if defined $config->{offline};
     
-    # no_slice_cache, prefetch and whole_genome have to be on to use cache
+    # no_slice_cache and whole_genome have to be on to use cache
     if(defined($config->{cache})) {
-        $config->{prefetch} = 1;
         $config->{no_slice_cache} = 1;
         $config->{whole_genome} = 1;
         $config->{strip} = 1;
@@ -976,7 +974,6 @@ INTRO
     
     # force options for full build
     if(defined($config->{build})) {
-        $config->{prefetch} = 1;
         $config->{symbol} = 1;
         $config->{no_slice_cache} = 1;
         $config->{cache} = 1;
