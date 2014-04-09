@@ -56,7 +56,7 @@ else {
 my $lib_dir = $DEST_DIR;
 
 $DEST_DIR       .= '/Bio';
-$ENS_GIT_ROOT ||= 'https://github.com/Ensembl/';
+$ENS_GIT_ROOT ||= 'https://codeload.github.com/Ensembl/';
 $BIOPERL_URL  ||= 'http://bioperl.org/DIST/BioPerl-1.6.1.tar.gz';
 $API_VERSION  ||= $VERSION;
 $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP";
@@ -73,7 +73,7 @@ $Archive::Extract::PREFER_BIN = $PREFER_BIN == 0 ? 0 : 1;
 $QUIET = 0 unless $UPDATE || $AUTO;
 
 # set up the URLs
-my $ensembl_url_tail = '/archive/release/';
+my $ensembl_url_tail = '/zip/release/';
 my $archive_type = '.zip';
 
 # auto?
@@ -131,7 +131,7 @@ if($UPDATE) {
         exit(0);
       }
       
-      my $url = $ENS_GIT_ROOT.'ensembl-tools'.$ensembl_url_tail.$hash->{release}.$archive_type;
+      my $url = $ENS_GIT_ROOT.'ensembl-tools'.$ensembl_url_tail.$hash->{release};
       
       my $tmpdir = '.'.$$.'_tmp';
       mkdir($tmpdir);
@@ -313,7 +313,7 @@ mkdir($DEST_DIR.'/tmp') or die "ERROR: Could not make directory $DEST_DIR/tmp\n"
 print "\nDownloading required files\n" unless $QUIET;
 
 foreach my $module(qw(ensembl ensembl-variation ensembl-funcgen)) {
-  my $url = $ENS_GIT_ROOT.$module.$ensembl_url_tail.$API_VERSION.$archive_type;
+  my $url = $ENS_GIT_ROOT.$module.$ensembl_url_tail.$API_VERSION;
   
   print " - fetching $module\n" unless $QUIET;
   
