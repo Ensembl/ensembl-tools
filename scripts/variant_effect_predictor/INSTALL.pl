@@ -758,7 +758,16 @@ sub download_to_file {
     my $response = getstore($url, $file);
     
     unless($response == 200) {
-      die "ERROR: Failed to fetch from $url - perhaps you have a proxy/firewall? Set the http_proxy ENV variable if you do\nError code: $response\n";
+      
+      # try no proxy
+      $ua->no_proxy('github.com');
+      
+      $response = getstore($url, $file);
+      
+      unless($response == 200) {
+        
+        die "ERROR: Failed to fetch from $url - perhaps you have a proxy/firewall? Set the http_proxy ENV variable if you do\nError code: $response\n";
+      }
     }
   }
   else {
@@ -771,8 +780,18 @@ sub download_to_file {
       close OUT;
     }
     else {
-      die "ERROR: Failed to fetch from $url - perhaps you have a proxy/firewall? Set the http_proxy ENV variable if you do\nError code: $response->{reason}\n";
-    } 
+      $response = HTTP::Tiny->get($url);
+      
+      if($response->{success}) {
+        open OUT, ">$file" or die "Could not write to file $file\n";
+        binmode OUT;
+        print OUT $response->{content};
+        close OUT;
+      }
+      else {
+        die "ERROR: Failed to fetch from $url - perhaps you have a proxy/firewall? Set the http_proxy ENV variable if you do\nError code: $response->{reason}\n";
+      } 
+    }
   }
 }
 
@@ -800,7 +819,6 @@ sub have_LWP {
     
     # set up a user agent's proxy (excluding github)
     $ua->env_proxy;
-    $ua->no_proxy('github.com');
     
     # enable progress
     eval q{
