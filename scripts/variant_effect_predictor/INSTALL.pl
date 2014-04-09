@@ -759,7 +759,7 @@ sub download_to_file {
     my $output = `curl $url > $file`;
   }
   
-  if(have_LWP()) {
+  elsif(have_LWP()) {
     my $response = getstore($url, $file);
     
     unless($response == 200) {
