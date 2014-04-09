@@ -11,6 +11,7 @@ use Cwd;
 $| = 1;
 our $VERSION = 75;
 our $have_LWP;
+our $use_curl = 0;
 have_LWP();
 
 # CONFIGURE
@@ -754,19 +755,24 @@ sub download_to_file {
   
   $url =~ s/([a-z])\//$1\:21\// if $url =~ /ftp/;
   
+  if($use_curl) {
+    my $output = `curl $url > $file`;
+  }
+  
   if(have_LWP()) {
     my $response = getstore($url, $file);
     
     unless($response == 200) {
-      
       # try no proxy
       $ua->no_proxy('github.com');
       
       $response = getstore($url, $file);
       
       unless($response == 200) {
-        
-        die "ERROR: Failed to fetch from $url - perhaps you have a proxy/firewall? Set the http_proxy ENV variable if you do\nError code: $response\n";
+        warn "WARNING: Failed to fetch from $url\nError code: $response\n" unless $QUIET;
+        print "Trying to fetch using curl\n" unless $QUIET;
+        $use_curl = 1;
+        download_to_file($url, $file);
       }
     }
   }
@@ -780,7 +786,8 @@ sub download_to_file {
       close OUT;
     }
     else {
-      $response = HTTP::Tiny->get($url);
+      warn "WARNING: Failed to fetch from $url\nError code: $response->{reason}\nError content:\n$response->{content}\nTrying without no_proxy\n" unless $QUIET;
+      $response = HTTP::Tiny->new->get($url);
       
       if($response->{success}) {
         open OUT, ">$file" or die "Could not write to file $file\n";
@@ -789,7 +796,10 @@ sub download_to_file {
         close OUT;
       }
       else {
-        die "ERROR: Failed to fetch from $url - perhaps you have a proxy/firewall? Set the http_proxy ENV variable if you do\nError code: $response->{reason}\n";
+        warn "WARNING: Failed to fetch from $url\nError code: $response->{reason}\nError content:\n$response->{content}\n" unless $QUIET;
+        print "Trying to fetch using curl\n" unless $QUIET;
+        $use_curl = 1;
+        download_to_file($url, $file);
       } 
     }
   }
