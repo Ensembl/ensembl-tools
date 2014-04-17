@@ -753,9 +753,10 @@ print "\nSuccess\n" unless $QUIET;
 sub download_to_file {
   my ($url, $file) = @_;
   
-  $url =~ s/([a-z])\//$1\:21\// if $url =~ /ftp/;
+  $url =~ s/([a-z])\//$1\:21\// if $url =~ /ftp/ && $url !~ /\:21/;
   
   if($use_curl) {
+    print "curl $url > $file\n";
     my $output = `curl $url > $file`;
   }
   
