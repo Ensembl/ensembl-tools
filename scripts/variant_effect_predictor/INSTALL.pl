@@ -429,11 +429,13 @@ print "\Getting list of available cache files\n" unless $QUIET;
 my $num = 1;
 my $species_list;
 my @files;
+my $ftp;
 
 if($CACHE_URL =~ /^ftp/i) {
   $CACHE_URL =~ m/(ftp:\/\/)?(.+?)\/(.+)/;
-  my $ftp = Net::FTP->new($2) or die "ERROR: Could not connect to FTP host $2\n$@\n";
+  $ftp = Net::FTP->new($2) or die "ERROR: Could not connect to FTP host $2\n$@\n";
   $ftp->login($FTP_USER) or die "ERROR: Could not login as $FTP_USER\n$@\n";
+  $ftp->binary();
   
   foreach my $sub(split /\//, $3) {
     $ftp->cwd($sub) or die "ERROR: Could not change directory to $sub\n$@\n";
@@ -558,7 +560,9 @@ foreach my $file(@indexes) {
   
   if($CACHE_URL =~ /^ftp/) {
     print " - downloading $CACHE_URL/$file_path\n" unless $QUIET;
-    download_to_file("$CACHE_URL/$file_path", $target_file) unless $TEST;
+    if(!$TEST) {
+      $ftp->get($file_name, $target_file) or download_to_file("$CACHE_URL/$file_path", $target_file);
+    }
   }
   else {
     print " - copying $CACHE_URL/$file_path\n" unless $QUIET;
@@ -614,12 +618,12 @@ if($ok !~ /^y/i) {
 }
 
 my @dirs = ();
-my $ftp;
 
 if($FASTA_URL =~ /^ftp/i) {
   $FASTA_URL =~ m/(ftp:\/\/)?(.+?)\/(.+)/;
   $ftp = Net::FTP->new($2) or die "ERROR: Could not connect to FTP host $2\n$@\n";
   $ftp->login($FTP_USER) or die "ERROR: Could not login as $FTP_USER\n$@\n";
+  $ftp->binary();
   
   foreach my $sub(split /\//, $3) {
     $ftp->cwd($sub) or die "ERROR: Could not change directory to $sub\n$@\n";
@@ -707,7 +711,9 @@ foreach my $species(@species) {
   
   if($ftp) {
     print " - downloading $file\n" unless $QUIET;
-    download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$orig_species/$API_VERSION/$file") unless $TEST;
+    if(!$TEST) {
+      $ftp->get($file, "$CACHE_DIR/$orig_species/$API_VERSION/$file") or download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$orig_species/$API_VERSION/$file");
+    }
   }
   else {
     print " - copying $file\n" unless $QUIET;
@@ -756,7 +762,6 @@ sub download_to_file {
   $url =~ s/([a-z])\//$1\:21\// if $url =~ /ftp/ && $url !~ /\:21/;
   
   if($use_curl) {
-    print "curl $url > $file\n";
     my $output = `curl $url > $file`;
   }
   
@@ -770,7 +775,7 @@ sub download_to_file {
       $response = getstore($url, $file);
       
       unless($response == 200) {
-        warn "WARNING: Failed to fetch from $url\nError code: $response\n" unless $QUIET;
+        #warn "WARNING: Failed to fetch from $url\nError code: $response\n" unless $QUIET;
         print "Trying to fetch using curl\n" unless $QUIET;
         $use_curl = 1;
         download_to_file($url, $file);
@@ -787,7 +792,7 @@ sub download_to_file {
       close OUT;
     }
     else {
-      warn "WARNING: Failed to fetch from $url\nError code: $response->{reason}\nError content:\n$response->{content}\nTrying without no_proxy\n" unless $QUIET;
+      #warn "WARNING: Failed to fetch from $url\nError code: $response->{reason}\nError content:\n$response->{content}\nTrying without no_proxy\n" unless $QUIET;
       $response = HTTP::Tiny->new->get($url);
       
       if($response->{success}) {
@@ -797,7 +802,7 @@ sub download_to_file {
         close OUT;
       }
       else {
-        warn "WARNING: Failed to fetch from $url\nError code: $response->{reason}\nError content:\n$response->{content}\n" unless $QUIET;
+        #warn "WARNING: Failed to fetch from $url\nError code: $response->{reason}\nError content:\n$response->{content}\n" unless $QUIET;
         print "Trying to fetch using curl\n" unless $QUIET;
         $use_curl = 1;
         download_to_file($url, $file);
@@ -844,7 +849,7 @@ sub unpack_arch {
   
   my $ar = Archive::Extract->new(archive => $arch_file);
   my $ok = $ar->extract(to => $dir) or die $ae->error;
-  unlink($arch_file);
+  #unlink($arch_file);
 }
 
 # update or initiate progress bar
