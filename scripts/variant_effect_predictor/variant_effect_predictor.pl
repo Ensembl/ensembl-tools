@@ -466,6 +466,7 @@ sub configure {
         'per_gene',                # only return most severe per gene
         'pick',                    # used defined criteria to return most severe line
         'flag_pick',               # like --pick but just adds a flag to picked line
+        'pick_allele',             # like --pick but chooses one con per allele
         'buffer_size=i',           # number of variations to read in before analysis
         'chunk_size=s',            # size in bases of "chunks" used in internal hash structure
         'failed=i',                # include failed variations when finding existing
