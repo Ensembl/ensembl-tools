@@ -2568,8 +2568,8 @@ sub html_head {
 <html>
 <head>
   <title>VEP output</title>
-  <script type="text/javascript" language="javascript" src="http://www.datatables.net/media/javascript/complete.min.js"></script>
-  <script class="jsbin" src="http://datatables.net/download/build/jquery.dataTables.nightly.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+  <script src="http://ajax.aspnetcdn.com/ajax/jquery.dataTables/1.9.4/jquery.dataTables.min.js"></script>
   <script type="text/javascript" language="javascript">
     \$(document).ready(function() {
       \$('#data').dataTable({
