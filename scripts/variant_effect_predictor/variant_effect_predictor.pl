@@ -1218,6 +1218,18 @@ INTRO
         &get_reg_adaptors($config) if defined($config->{regulatory});
     }
     
+    # check regulatory available
+    if(defined($config->{regulatory}) && defined($config->{cache}) && !defined($config->{write_cache}) && !defined($config->{cache_regulatory})) {
+        
+        # --everything this option is implicit so don't die
+        if(defined($config->{everything})) {
+            delete $config->{regulatory};
+        }
+        else {
+            die("ERROR: --regulatory is not available for this species");
+        }
+    }
+    
     # check cell types
     if(defined($config->{cell_type}) && scalar @{$config->{cell_type}} && !defined($config->{build})) {
         my $cls = '';
@@ -1232,6 +1244,28 @@ INTRO
         
         foreach my $cl(@{$config->{cell_type}}) {
             die "ERROR: cell type $cl not recognised; available cell types are:\n$cls\n" unless $cls =~ /(^|,)$cl(,|$)/;
+        }
+    }
+    
+    # check SIFT/PolyPhen available?
+    foreach my $tool(grep {defined($config->{$_})} qw(sift polyphen)) {
+        my $string = 'cache_'.$tool.'_version';
+        
+        if(!defined($config->{$string}) && !defined($config->{offline})) {
+            my $var_mca = $config->{reg}->get_adaptor($config->{species}, 'variation', 'metacontainer');
+            my $values = $var_mca->list_value_by_key($tool.'_version') if defined($var_mca);
+            $config->{$string} = $values->[0] if $values && scalar @$values;
+        }
+        
+        if(!defined($config->{$string})) {
+            
+            # --everything this option is implicit so don't die
+            if(defined($config->{everything})) {
+                delete $config->{$tool};
+            }
+            else {
+                die("ERROR: --$tool is not available for this species");
+            }
         }
     }
     
@@ -1298,7 +1332,6 @@ INTRO
         exit(0);
     }
     
-    
     # warn user DB will be used for SIFT/PolyPhen/HGVS/frequency/LRG
     if(defined($config->{cache})) {
         
@@ -1311,12 +1344,6 @@ INTRO
         
         # as does using HGVS or IDs as input
         debug("INFO: Database will be accessed when using --format ", $config->{format}) if ($config->{format} eq 'id' || $config->{format} eq 'hgvs') && !defined($config->{quiet});
-        
-        # the rest may be in the cache
-        foreach my $param(grep {defined $config->{$_}} qw(sift polyphen regulatory)) {
-            next if defined($config->{'cache_'.$param});
-            debug("INFO: Database will be accessed when using --$param; consider using the complete cache containing $param data (see documentation for details)") unless defined($config->{quiet});
-        }
     }
     
     # get list of chrs if supplied
@@ -1596,8 +1623,7 @@ sub get_reg_adaptors {
             $config->{$type.'_adaptor'} = $adaptor;
         }
         else {
-            delete $config->{regulatory};
-            last;
+            die("ERROR: --regulatory is not available for this species");
         }
     }
 }
@@ -1850,21 +1876,7 @@ sub get_out_file_handle {
     foreach my $tool(qw(sift polyphen)) {
         if(defined($config->{$tool})) {
             my $string = 'cache_'.$tool.'_version';
-            
-            if(!defined($config->{$string}) && !defined($config->{offline})) {
-                my $var_mca = $config->{reg}->get_adaptor($config->{species}, 'variation', 'metacontainer');
-                my $values = $var_mca->list_value_by_key($tool.'_version') if defined($var_mca);
-                $config->{$string} = $values->[0] if $values && scalar @$values;
-            }
-            
-            if(!defined($config->{$string})) {
-              debug("INFO: --$tool is not available for this species") unless defined($config->{quiet});
-              delete $config->{$tool};
-            }
-            
-            else {
-              $version_string .= "\n## $tool version ".$config->{$string};
-            }
+            $version_string .= "\n## $tool version ".$config->{$string};
         }
     }
     
