@@ -530,6 +530,7 @@ sub configure {
         'gvf',                     # produce gvf output
         'vcf',                     # produce vcf output
         'solr',                    # produce XML output for Solr
+        'json',                    # produce JSON document output
         'keep_csq',                # don't nuke existing CSQ fields in VCF
         'original',                # produce output in input format
         'no_consequences',         # don't calculate consequences
@@ -1901,7 +1902,7 @@ sub get_out_file_handle {
         return $out_file_handle;
     }
     
-    elsif(defined($config->{solr})) {
+    elsif(defined($config->{solr}) || defined($config->{json})) {
         my @new_headers;
         
         # if the user has defined the fields themselves, we don't need to worry
@@ -1927,7 +1928,7 @@ sub get_out_file_handle {
             $config->{fields} = \@new_headers;
         }
         
-        print $out_file_handle "<add>\n";
+        print $out_file_handle "<add>\n" if defined($config->{solr});
         return $out_file_handle;
     }
     
