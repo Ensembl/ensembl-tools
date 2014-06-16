@@ -1745,7 +1745,16 @@ sub get_out_file_handle {
     elsif(defined($config->{vcf})) {
         
         # create an info string for the VCF header        
-        my @new_headers;
+        my (@new_headers, @vcf_info_strings);
+        
+        push @vcf_info_strings, sprintf(
+          "##VEP=v%i cache=%s db=%s",
+          $VERSION,
+          $config->{cache} ? $config->{dir} : '.',
+          $config->{offline} ? '.' : (
+            $config->{mca} ? $config->{mca}->dbc->dbname.'@'.$config->{mca}->dbc->host : '.'
+          )
+        );
         
         # if the user has defined the fields themselves, we don't need to worry
         if(defined $config->{fields_redefined}) {
@@ -1769,6 +1778,12 @@ sub get_out_file_handle {
             
             # plugin headers
             foreach my $plugin_header(split /\n/, get_plugin_headers($config)) {
+                my $h = $plugin_header;
+                $h =~ s/\s+/ /g;
+                $h =~ s/ \: /\=/;
+                $h =~ s/\#\# /\#\#/;
+                push @vcf_info_strings, $h;
+              
                 $plugin_header =~ /\#\# (.+?)\t\:.+/;
                 push @new_headers, $1;
             }
@@ -1779,7 +1794,7 @@ sub get_out_file_handle {
         
         # add the newly defined headers as a header to the VCF
         my $string = join '|', @{$config->{fields}};
-        my @vcf_info_strings = ('##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence type as predicted by VEP. Format: '.$string.'">');
+        push @vcf_info_strings, '##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence type as predicted by VEP. Format: '.$string.'">';
         
         # add custom headers
         foreach my $custom(@{$config->{custom}}) {
