@@ -993,16 +993,41 @@ INTRO
     my $species_dir_name = defined($config->{offline}) ? $config->{species} : ($config->{reg}->get_alias($config->{species}) || $config->{species});
     $species_dir_name .= '_refseq' if defined($config->{refseq});
     
-    $config->{dir} .= '/'.(
-        join '/', (
-            $species_dir_name,
-            $config->{cache_version} || $config->{db_version} || $config->{reg}->software_version
-        )
-    );
+    # add species dir name
+    $config->{dir} .= '/'.$species_dir_name;
+    
+    # check whats in here to match to assembly if given
+    die("ERROR: Cache directory ", $config->{dir}, " not found\n") if !-e $config->{dir} && !defined($config->{write_cache});
+    
+    my $cache_version = $config->{cache_version} || $config->{db_version} || $config->{reg}->software_version;
+    
+    opendir DIR, $config->{dir};
+    my @dir_contents = grep {!/^\./} readdir DIR;
+    my @matched_contents = grep {/^$cache_version/} @dir_contents;
+    closedir DIR;
+    
+    # did user specify assembly version?
+    if(!defined($config->{assembly})) {
+      
+      # only 1 entry, can assume this is OK
+      if(scalar @matched_contents == 1) {
+        $config->{dir} .= '/'.$matched_contents[0];
+      }
+      
+      else {
+        my $possibles = join(", ", map {s/^$cache_version\_//; $_} @matched_contents);
+        die("ERROR: Multiple assemblies found for cache version $cache_version ($possibles) - specify one using --assembly [assembly]\n");
+      }
+    }
+    
+    # add cache version and assembly
+    else {
+      $config->{dir} .= '/'.$cache_version.(defined($config->{assembly}) ? '_'.$config->{assembly} : '');
+    }
     
     # warn user cache directory doesn't exist
     if(!-e $config->{dir}) {
-        
+      
         # if using write_cache
         if(defined($config->{write_cache})) {
             debug("INFO: Cache directory ", $config->{dir}, " not found - it will be created") unless defined($config->{quiet});
@@ -1010,7 +1035,8 @@ INTRO
         
         # want to read cache, not found
         elsif(defined($config->{cache})) {
-            die("ERROR: Cache directory ", $config->{dir}, " not found");
+            my $possibles = scalar @dir_contents ? "\n\nFound the following directories: ".join(", ", map {s/^$cache_version\_//; $_} @dir_contents)."    (format: [cache_version]_[assembly])" : "";
+            die("ERROR: Cache directory ", $config->{dir}, " not found$possibles\n");
         }
     }
     
@@ -1537,10 +1563,11 @@ sub connect_to_dbs {
         
         eval { $reg->set_reconnect_when_lost() };
         
+        # get meta container adaptors to check version
+        my $core_mca = $reg->get_adaptor($config->{species}, 'core', 'metacontainer');
+        my $var_mca = $reg->get_adaptor($config->{species}, 'variation', 'metacontainer');
+        
         if(defined($config->{verbose})) {
-            # get a meta container adaptors to check version
-            my $core_mca = $reg->get_adaptor($config->{species}, 'core', 'metacontainer');
-            my $var_mca = $reg->get_adaptor($config->{species}, 'variation', 'metacontainer');
             
             if($core_mca && $var_mca) {
                 debug(
@@ -1548,6 +1575,19 @@ sub connect_to_dbs {
                     "and variation version ", $var_mca->get_schema_version, " database"
                 );
             }
+        }
+        
+        # get assembly version
+        if($core_mca) {
+          my $ass = $core_mca->list_value_by_key('assembly.default');
+          if(scalar @$ass) {
+            die("ERROR: Assembly version specified by --assembly (".$config->{assembly}.") and assembly.default meta key (".$ass->[0].") do not match\n") if defined($config->{assembly}) && $config->{assembly} ne $ass->[0];
+            
+            $config->{assembly} = $ass->[0];
+          }
+          elsif(!defined($config->{assembly})) {
+            die("ERROR: No assembly version specified, use --assembly [version] or check assembly.default meta key is defined in your core database\n");
+          }
         }
     }
     
