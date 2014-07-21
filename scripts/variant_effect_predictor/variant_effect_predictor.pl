@@ -753,6 +753,17 @@ Cache: http://www.ensembl.org/info/docs/tools/vep/script/index.html#cache
         die "ERROR: $tool functionality is now available as a VEP Plugin - see http://www.ensembl.org/info/docs/variation/vep/vep_script.html#plugins\n" if $tool eq 'Condel';
     }
     
+    # turn on rest for json
+    if(defined($config->{json})) {
+      $config->{rest} = 1;
+      
+      eval q{ use JSON; };
+      
+      if($@) {
+        die("ERROR: Could not load required JSON module\n");
+      }
+    }
+    
     # force quiet if outputting to STDOUT
     if(defined($config->{output_file}) && $config->{output_file} =~ /stdout/i) {
         delete $config->{verbose} if defined($config->{verbose});
@@ -2130,8 +2141,14 @@ sub print_line {
     my $output;
     my $html_fh = $config->{html_file_handle};
     
+    # JSON
+    if(ref($line) eq 'HASH' && defined($config->{json})) {
+      $config->{json_obj} ||= JSON->new;
+      $output = $config->{json_obj}->encode($line);
+    }
+    
     # normal
-    if(ref($line) eq 'HASH') {
+    elsif(ref($line) eq 'HASH') {
         my %extra = %{$line->{Extra}};
         
         # create extra field order?
