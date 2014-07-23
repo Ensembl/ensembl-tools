@@ -105,7 +105,7 @@ my @extra_headers = (
   { flag => 'check_frequency', cols => ['FREQS'] },
   
   # misc variation stuff
-  { flag => 'check_existing',  cols => ['CLIN_SIG'] },
+  { flag => 'check_existing',  cols => ['CLIN_SIG','SOMATIC'] },
   { flag => 'pubmed',          cols => ['PUBMED'] },
   { flag => 'check_svs',       cols => ['SV'] },
   
