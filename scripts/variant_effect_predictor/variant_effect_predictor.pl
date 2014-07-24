@@ -736,7 +736,8 @@ Cache: http://www.ensembl.org/info/docs/tools/vep/script/index.html#cache
             gmaf       => 1,
             maf_1kg    => 1,
             maf_esp    => 1,
-            pubmed     => 1
+            pubmed     => 1,
+            uniprot    => 1,
         );
         
         $config->{$_} = $everything{$_} for keys %everything;
