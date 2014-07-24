@@ -598,126 +598,6 @@ sub configure {
     if(-e $ini_file) {
         read_config_from_file($config, $ini_file);
     }
-
-    # can't be both quiet and verbose
-    die "ERROR: Can't be both quiet and verbose!\n" if defined($config->{quiet}) && defined($config->{verbose});
-    
-    # check if still using hgnc
-    die "ERROR: --hgnc has been replaced by --symbol\n" if defined($config->{hgnc});
-    
-    # check forking
-    if(defined($config->{fork})) {
-        die "ERROR: Fork number must be greater than 1\n" if $config->{fork} <= 1;
-        
-        # check we can use MIME::Base64
-        eval q{ use MIME::Base64; };
-        
-        if($@) {
-            debug("WARNING: Unable to load MIME::Base64, forking disabled") unless defined($config->{quiet});
-            delete $config->{fork};
-        }
-        else {
-            
-            # try a practice fork
-            my $pid = fork;
-            
-            if(!defined($pid)) {
-                debug("WARNING: Fork test failed, forking disabled") unless defined($config->{quiet});
-                delete $config->{fork};
-            }
-            elsif($pid) {
-                waitpid($pid, 0);
-            }
-            elsif($pid == 0) {
-                exit(0);
-            }
-        }
-    }
-    
-    # check file format
-    if(defined $config->{format}) {
-        die "ERROR: Unrecognised input format specified \"".$config->{format}."\"\n" unless $config->{format} =~ /^(pileup|vcf|guess|hgvs|ensembl|id|vep)$/i;
-    }
-    
-    # check convert format
-    if(defined $config->{convert}) {
-        die "ERROR: Unrecognised output format for conversion specified \"".$config->{convert}."\"\n" unless $config->{convert} =~ /vcf|ensembl|pileup|hgvs/i;
-        
-        # disable stats
-        $config->{no_stats} = 1;
-    }
-    
-    # check if user still using --standalone
-    if(defined $config->{standalone}) {
-        die "ERROR: --standalone replaced by --offline\n";
-    }
-    
-    # connection settings for Ensembl Genomes
-    if($config->{genomes}) {
-        $config->{host} ||= 'mysql.ebi.ac.uk';
-        $config->{port} ||= 4157;
-    }
-    
-    # connection settings for main Ensembl
-    else {
-        $config->{species} ||= "homo_sapiens";
-        $config->{host}    ||= 'ensembldb.ensembl.org';
-        $config->{port}    ||= 5306;
-    }
-    
-    # can't use both refseq and gencode
-    die("ERROR: Can't use both --refseq and --gencode_basic\n") if defined($config->{refseq}) && defined($config->{gencode_basic});
-    
-    # refseq or core?
-    if(defined($config->{refseq})) {
-        $config->{core_type} = 'otherfeatures';
-    }
-    else {
-        $config->{core_type} = 'core';
-    }
-    
-    # check one of database/cache/offline/build
-    if(!grep {defined($config->{$_})} qw(database cache offline build convert)) {
-      die qq{
-IMPORTANT INFORMATION:
-
-The VEP can read gene data from either a local cache or local/remote databases.
-
-Using a cache is the fastest and most efficient way to use the VEP. The
-included INSTALL.pl script can be used to fetch and set up cache files from the
-Ensembl FTP server. Simply run "perl INSTALL.pl" and follow the instructions, or
-see the documentation pages listed below.
-
-If you have already set up a cache, use "--cache" or "--offline" to use it.
-
-It is possible to use the public databases hosted at ensembldb.ensembl.org, but
-this is slower than using the cache and concurrent and/or long running VEP jobs
-can put strain on the Ensembl servers, limiting availability to other users.
-
-To enable using databases, add the flag "--database".
-
-Documentation
-Installer: http://www.ensembl.org/info/docs/tools/vep/vep_script.html#installer
-Cache: http://www.ensembl.org/info/docs/tools/vep/script/index.html#cache
-
-      }
-    };
-    
-    foreach my $flag(qw(maf_1kg maf_esp pubmed)) {
-      die("ERROR: \-\-$flag can only be used with --cache or --offline")
-        if defined($config->{$flag}) && !(defined($config->{cache}) || defined($config->{offline}));
-    }
-    
-    # output term
-    if(defined $config->{terms}) {
-        die "ERROR: Unrecognised consequence term type specified \"".$config->{terms}."\" - must be one of ensembl, so, ncbi\n" unless $config->{terms} =~ /ensembl|display|so|ncbi/i;
-        if($config->{terms} =~ /ensembl|display/i) {
-            $config->{terms} = 'display';
-        }
-        else {
-            $config->{terms} = uc($config->{terms});
-        }
-    }
     
     # everything?
     if(defined($config->{everything})) {
@@ -741,18 +621,30 @@ Cache: http://www.ensembl.org/info/docs/tools/vep/script/index.html#cache
         );
         
         $config->{$_} = $everything{$_} for keys %everything;
-        
-        # these ones won't work with offline
-        delete $config->{hgvs} if defined($config->{offline}) && !defined($config->{fasta});
     }
     
-    # check nsSNP tools
-    foreach my $tool(grep {defined $config->{lc($_)}} qw(SIFT PolyPhen Condel)) {
-        die "ERROR: Unrecognised option for $tool \"", $config->{lc($tool)}, "\" - must be one of p (prediction), s (score) or b (both)\n" unless $config->{lc($tool)} =~ /^(s|p|b)/;
-        
-        #die "ERROR: $tool not available for this species\n" unless $config->{species} =~ /human|homo/i;
-        
-        die "ERROR: $tool functionality is now available as a VEP Plugin - see http://www.ensembl.org/info/docs/variation/vep/vep_script.html#plugins\n" if $tool eq 'Condel';
+    # subroutine to check for illegal flags or combinations
+    check_flags($config);
+    
+    # connection settings for Ensembl Genomes
+    if($config->{genomes}) {
+        $config->{host} ||= 'mysql.ebi.ac.uk';
+        $config->{port} ||= 4157;
+    }
+    
+    # connection settings for main Ensembl
+    else {
+        $config->{species} ||= "homo_sapiens";
+        $config->{host}    ||= 'ensembldb.ensembl.org';
+        $config->{port}    ||= 5306;
+    }
+    
+    # refseq or core?
+    if(defined($config->{refseq})) {
+        $config->{core_type} = 'otherfeatures';
+    }
+    else {
+        $config->{core_type} = 'core';
     }
     
     # turn on rest for json
@@ -771,9 +663,6 @@ Cache: http://www.ensembl.org/info/docs/tools/vep/script/index.html#cache
         delete $config->{verbose} if defined($config->{verbose});
         $config->{quiet} = 1;
     }
-    
-    # output format has to be VCF for tabix
-    die "ERROR: Output must be vcf (--vcf) to use --tabix\n" if defined($config->{tabix}) && !defined($config->{vcf});
     
     # individual(s) specified?
     if(defined($config->{individual})) {
@@ -818,35 +707,6 @@ INTRO
         print "\n".("-" x 20)."\n\n";
     }
     
-    # check if using filter and original
-    die "ERROR: You must also provide output filters using --filter to use --original\n" if defined($config->{original}) && !defined($config->{filter});
-    
-    # filter by consequence?
-    if(defined($config->{filter})) {
-        
-        my %filters = map {$_ => 1} split /\,/, $config->{filter};
-        
-        # add in shortcuts
-        foreach my $filter(keys %filters) {
-            my $value = 1;
-            if($filter =~ /^no_/) {
-                delete $filters{$filter};
-                $filter =~ s/^no_//g;
-                $value = 0;
-                $filters{$filter} = $value;
-            }
-            
-            if(defined($FILTER_SHORTCUTS{$filter})) {
-                delete $filters{$filter};
-                $filters{$_} = $value for keys %{$FILTER_SHORTCUTS{$filter}};
-            }
-        }
-        
-        $config->{filter} = \%filters;
-        
-        $config->{stats}->{filter_count} = 0;
-    }
-    
     # set defaults
     $config->{user}              ||= 'anonymous';
     $config->{buffer_size}       ||= 5000;
@@ -859,25 +719,6 @@ INTRO
     $config->{cache_region_size} ||= 1000000;
     $config->{compress}          ||= 'zcat';
     $config->{polyphen_analysis}   = defined($config->{humdiv}) ? 'humdiv' : 'humvar';
-    
-    # can't use more than one of most_severe, pick, per_gene, summary
-    my $total_sev_opts = 0;
-    map {$total_sev_opts++ if defined($config->{$_})} qw(most_severe pick per_gene summary);
-    die "ERROR: Can't use more than one of --most_severe, --pick, --per_gene, --summary\n" if $total_sev_opts > 1;
-    
-    # can't use a whole bunch of options with most_severe
-    if(defined($config->{most_severe})) {
-        foreach my $flag(qw(no_intergenic protein symbol sift polyphen coding_only ccds canonical xref_refseq numbers domains summary)) {
-            die "ERROR: --most_severe is not compatible with --$flag\n" if defined($config->{$flag});
-        }
-    }
-    
-    # can't use a whole bunch of options with summary
-    if(defined($config->{summary})) {
-        foreach my $flag(qw(no_intergenic protein symbol sift polyphen coding_only ccds canonical xref_refseq numbers domains most_severe)) {
-            die "ERROR: --summary is not compatible with --$flag\n" if defined($config->{$flag});
-        }
-    }
     
     # frequency filtering
     if(defined($config->{filter_common})) {
@@ -958,6 +799,12 @@ INTRO
     
     # setup custom files
     setup_custom($config) if defined($config->{custom});
+    
+    # setup forking
+    setup_forking($config) if defined($config->{fork});
+    
+    # setup filter
+    setup_filter($config) if defined($config->{filter});
     
     # offline needs cache, can't use HGVS
     if(defined($config->{offline})) {
@@ -1470,6 +1317,108 @@ sub get_adaptors {
     die("ERROR: Could not connect to core database\n") unless defined $config->{sa};
 }
 
+sub check_flags() {
+  my $config = shift;
+  
+  # can't be both quiet and verbose
+  die "ERROR: Can't be both quiet and verbose!\n" if defined($config->{quiet}) && defined($config->{verbose});
+  
+  # can't use both refseq and gencode
+  die("ERROR: Can't use both --refseq and --gencode_basic\n") if defined($config->{refseq}) && defined($config->{gencode_basic});
+  
+  # check for deprecated flags
+  die "ERROR: --hgnc has been replaced by --symbol\n" if defined($config->{hgnc});
+  die "ERROR: --standalone replaced by --offline\n" if(defined $config->{standalone});
+  
+  # check one of database/cache/offline/build
+  if(!grep {defined($config->{$_})} qw(database cache offline build convert)) {
+    die qq{
+IMPORTANT INFORMATION:
+
+The VEP can read gene data from either a local cache or local/remote databases.
+
+Using a cache is the fastest and most efficient way to use the VEP. The
+included INSTALL.pl script can be used to fetch and set up cache files from the
+Ensembl FTP server. Simply run "perl INSTALL.pl" and follow the instructions, or
+see the documentation pages listed below.
+
+If you have already set up a cache, use "--cache" or "--offline" to use it.
+
+It is possible to use the public databases hosted at ensembldb.ensembl.org, but
+this is slower than using the cache and concurrent and/or long running VEP jobs
+can put strain on the Ensembl servers, limiting availability to other users.
+
+To enable using databases, add the flag "--database".
+
+Documentation
+Installer: http://www.ensembl.org/info/docs/tools/vep/vep_script.html#installer
+Cache: http://www.ensembl.org/info/docs/tools/vep/script/index.html#cache
+
+    }
+  };
+  
+  foreach my $flag(qw(maf_1kg maf_esp pubmed)) {
+    die("ERROR: \-\-$flag can only be used with --cache or --offline")
+      if defined($config->{$flag}) && !(defined($config->{cache}) || defined($config->{offline}));
+  }
+  
+  # output term
+  if(defined $config->{terms}) {
+    die "ERROR: Unrecognised consequence term type specified \"".$config->{terms}."\" - must be one of ensembl, so, ncbi\n" unless $config->{terms} =~ /ensembl|display|so|ncbi/i;
+    if($config->{terms} =~ /ensembl|display/i) {
+      $config->{terms} = 'display';
+    }
+    else {
+      $config->{terms} = uc($config->{terms});
+    }
+  }
+  
+  # check file format
+  if(defined $config->{format}) {
+    die "ERROR: Unrecognised input format specified \"".$config->{format}."\"\n" unless $config->{format} =~ /^(pileup|vcf|guess|hgvs|ensembl|id|vep)$/i;
+  }
+  
+  # check convert format
+  if(defined $config->{convert}) {
+    die "ERROR: Unrecognised output format for conversion specified \"".$config->{convert}."\"\n" unless $config->{convert} =~ /vcf|ensembl|pileup|hgvs/i;
+    
+    # disable stats
+    $config->{no_stats} = 1;
+  }
+  
+  # check nsSNP tools
+  foreach my $tool(grep {defined $config->{lc($_)}} qw(SIFT PolyPhen Condel)) {
+    die "ERROR: Unrecognised option for $tool \"", $config->{lc($tool)}, "\" - must be one of p (prediction), s (score) or b (both)\n" unless $config->{lc($tool)} =~ /^(s|p|b)/;
+    
+    die "ERROR: $tool functionality is now available as a VEP Plugin - see http://www.ensembl.org/info/docs/variation/vep/vep_script.html#plugins\n" if $tool eq 'Condel';
+  }
+  
+  # output format has to be VCF for tabix
+  die "ERROR: Output must be vcf (--vcf) to use --tabix\n" if defined($config->{tabix}) && !defined($config->{vcf});
+  
+  # check if using filter and original
+  die "ERROR: You must also provide output filters using --filter to use --original\n" if defined($config->{original}) && !defined($config->{filter});
+  
+  # can't use more than one of most_severe, pick, per_gene, summary
+  my $total_sev_opts = 0;
+  map {$total_sev_opts++ if defined($config->{$_})} qw(most_severe pick pick_allele per_gene summary);
+  die "ERROR: Can't use more than one of --most_severe, --pick, --per_gene, --summary\n" if $total_sev_opts > 1;
+  
+  # can't use a whole bunch of options with most_severe
+  if(defined($config->{most_severe})) {
+    foreach my $flag(qw(no_intergenic protein symbol sift polyphen coding_only ccds canonical xref_refseq numbers domains summary)) {
+      die "ERROR: --most_severe is not compatible with --$flag\n" if defined($config->{$flag});
+    }
+  }
+  
+  # can't use a whole bunch of options with summary
+  if(defined($config->{summary})) {
+    foreach my $flag(qw(no_intergenic protein symbol sift polyphen coding_only ccds canonical xref_refseq numbers domains most_severe)) {
+      die "ERROR: --summary is not compatible with --$flag\n" if defined($config->{$flag});
+    }
+  }
+}
+
 sub setup_cache() {
   my $config = shift;   
   
@@ -1540,6 +1489,17 @@ sub setup_cache() {
       $config->{fasta} = $config->{dir}.'/'.$fa;
       debug("Auto-detected FASTA file in cache directory") unless defined $config->{quiet};
     }
+  }
+  
+  # disable HGVS if no FASTA file found and it was switched on by --everything
+  if(
+    defined($config->{hgvs}) &&
+    defined($config->{offline}) &&
+    !defined($config->{fasta}) &&
+    defined($config->{everything})
+  ) {
+    debug("INFO: Disabling --hgvs; using --offline and no FASTA file found\n");
+    delete $config->{hgvs};
   }
   
   # check if any disabled options are in use
@@ -1684,6 +1644,62 @@ sub setup_custom {
       'fields' => \@fields
     };
   }
+}
+
+sub setup_forking {
+  my $config = shift;
+  
+  die "ERROR: Fork number must be greater than 1\n" if $config->{fork} <= 1;
+  
+  # check we can use MIME::Base64
+  eval q{ use MIME::Base64; };
+  
+  if($@) {
+    debug("WARNING: Unable to load MIME::Base64, forking disabled") unless defined($config->{quiet});
+    delete $config->{fork};
+  }
+  else {
+    
+    # try a practice fork
+    my $pid = fork;
+    
+    if(!defined($pid)) {
+      debug("WARNING: Fork test failed, forking disabled") unless defined($config->{quiet});
+      delete $config->{fork};
+    }
+    elsif($pid) {
+      waitpid($pid, 0);
+    }
+    elsif($pid == 0) {
+      exit(0);
+    }
+  }
+}
+
+sub setup_filter {
+  my $config = shift;
+  
+  my %filters = map {$_ => 1} split /\,/, $config->{filter};
+  
+  # add in shortcuts
+  foreach my $filter(keys %filters) {
+    my $value = 1;
+    if($filter =~ /^no_/) {
+      delete $filters{$filter};
+      $filter =~ s/^no_//g;
+      $value = 0;
+      $filters{$filter} = $value;
+    }
+    
+    if(defined($FILTER_SHORTCUTS{$filter})) {
+      delete $filters{$filter};
+      $filters{$_} = $value for keys %{$FILTER_SHORTCUTS{$filter}};
+    }
+  }
+  
+  $config->{filter} = \%filters;
+  
+  $config->{stats}->{filter_count} = 0;
 }
 
 # gets regulatory adaptors
