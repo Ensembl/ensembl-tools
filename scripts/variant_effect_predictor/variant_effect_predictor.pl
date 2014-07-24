@@ -1436,44 +1436,54 @@ sub setup_cache() {
   
   opendir DIR, $config->{dir};
   my @dir_contents = grep {!/^\./} readdir DIR;
-  my @matched_contents = grep {/^$cache_version/} @dir_contents;
   closedir DIR;
   
-  # no matched entries, cache not installed
-  if(scalar @matched_contents == 0) {
-    die("ERROR: No cache found for ".$config->{species}.", version $cache_version\n");
-  }
-  
-  # only 1 entry, can assume this is OK
-  elsif(scalar @matched_contents == 1) {
-    $config->{dir} .= '/'.$matched_contents[0];
-  }
-  
-  # did user specify assembly version?
-  elsif(!defined($config->{assembly})) {
-    my $possibles = join(", ", map {s/^$cache_version\_//; $_} @matched_contents);
-    die("ERROR: Multiple assemblies found for cache version $cache_version ($possibles) - specify one using --assembly [assembly]\n");
-  }
-  
-  # add cache version and assembly
-  else {
-    $config->{dir} .= '/'.$cache_version.'_'.$config->{assembly};
-  }
-  
-  # warn user cache directory doesn't exist
-  if(!-e $config->{dir}) {
-  
-    # if using write_cache
-    if(defined($config->{write_cache})) {
-      debug("INFO: Cache directory ", $config->{dir}, " not found - it will be created") unless defined($config->{quiet});
+  # writing to cache?
+  if(defined($config->{write_cache})) {
+    
+    if(!defined($config->{assembly})) {
+      die("ERROR: No assembly specified, or assembly version not found in core DB meta table\n");
     }
     
-    # want to read cache, not found
-    elsif(defined($config->{cache})) {
-      my $possibles = scalar @dir_contents ? "\n\nFound the following directories: ".join(", ", map {s/^$cache_version\_//; $_} @dir_contents)."    (format: [cache_version]_[assembly])" : "";
-      die("ERROR: Cache directory ", $config->{dir}, " not found$possibles\n");
+    else {
+      $config->{dir} .= '/'.$cache_version.'_'.$config->{assembly};
+      
+      if(-e $config->{dir}) {
+        debug("INFO: Existing cache directory ", $config->{dir}, " found - contents may be overwritten") unless defined($config->{quiet});
+      }
+      
+      else {
+        debug("INFO: Cache directory ", $config->{dir}, " not found - it will be created") unless defined($config->{quiet});
+      }
     }
-  }  
+  }
+  
+  # just reading from cache
+  else {
+    my @matched_contents = grep {/^$cache_version/} @dir_contents;
+    
+    # no matched entries, cache not installed
+    if(scalar @matched_contents == 0) {
+      die("ERROR: No cache found for ".$config->{species}.", version $cache_version\n");
+    }
+    
+    # only 1 entry, can assume this is OK
+    elsif(scalar @matched_contents == 1) {
+      $config->{dir} .= '/'.$matched_contents[0];
+    }
+    
+    # did user specify assembly version?
+    elsif(!defined($config->{assembly})) {
+      my $possibles = join(", ", map {s/^$cache_version\_//; $_} @matched_contents);
+      die("ERROR: Multiple assemblies found for cache version $cache_version ($possibles) - specify one using --assembly [assembly]\n");
+    }
+    
+    # add cache version and assembly
+    else {
+      $config->{dir} .= '/'.$cache_version.'_'.$config->{assembly};
+      die("ERROR: No cache found for ".$config->{species}.", version $cache_version, assembly ".$config->{assembly}."\n") unless -e $config->{dir};
+    }
+  }
   
   # read cache info
   if(read_cache_info($config)) {
