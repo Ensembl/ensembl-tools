@@ -818,59 +818,6 @@ INTRO
         print "\n".("-" x 20)."\n\n";
     }
     
-    # check custom annotations
-    for my $i(0..$#{$config->{custom}}) {
-        my $custom = $config->{custom}->[$i];
-        
-        my ($filepath, $shortname, $format, $type, $coords, @fields) = split /\,/, $custom;
-        $type ||= 'exact';
-        $format ||= 'bed';
-        $coords ||= 0;
-        
-        # check type
-        die "ERROR: Type $type for custom annotation file $filepath is not allowed (must be one of \"exact\", \"overlap\")\n" unless $type =~ /exact|overlap/;
-        
-        # check format
-        die "ERROR: Format $format for custom annotation file $filepath is not allowed (must be one of \"bed\", \"vcf\", \"gtf\", \"gff\", \"bigwig\")\n" unless $format =~ /bed|vcf|gff|gtf|bigwig/;
-        
-        # bigwig format
-        if($format eq 'bigwig') {
-            # check for bigWigToWig
-            die "ERROR: bigWigToWig does not seem to be in your path - this is required to use bigwig format custom annotations\n" unless `which bigWigToWig 2>&1` =~ /bigWigToWig$/;
-        }
-        
-        else {
-            # check for tabix
-            die "ERROR: tabix does not seem to be in your path - this is required to use custom annotations\n" unless `which tabix 2>&1` =~ /tabix$/;
-            
-            # remote files?
-            if($filepath =~ /tp\:\/\//) {
-                my $remote_test = `tabix $filepath 1:1-1 2>&1`;
-                if($remote_test =~ /fail/) {
-                    die "$remote_test\nERROR: Could not find file or index file for remote annotation file $filepath\n";
-                }
-                elsif($remote_test =~ /get_local_version/) {
-                    debug("Downloaded tabix index file for remote annotation file $filepath") unless defined($config->{quiet});
-                }
-            }
-        
-            # check files exist
-            else {
-                die "ERROR: Custom annotation file $filepath not found\n" unless -e $filepath;
-                die "ERROR: Tabix index file $filepath\.tbi not found - perhaps you need to create it first?\n" unless -e $filepath.'.tbi';
-            }
-        }
-        
-        $config->{custom}->[$i] = {
-            'file'   => $filepath,
-            'name'   => $shortname || 'CUSTOM'.($i + 1),
-            'type'   => $type,
-            'format' => $format,
-            'coords' => $coords,
-            'fields' => \@fields
-        };
-    }
-    
     # check if using filter and original
     die "ERROR: You must also provide output filters using --filter to use --original\n" if defined($config->{original}) && !defined($config->{filter});
     
@@ -1003,157 +950,14 @@ INTRO
     # connect to databases
     $config->{reg} = &connect_to_dbs($config);
     
-    # complete dir with species name and db_version
-    my $species_dir_name = defined($config->{offline}) ? $config->{species} : ($config->{reg}->get_alias($config->{species}) || $config->{species});
-    $species_dir_name .= '_refseq' if defined($config->{refseq});
+    # setup cache dir etc
+    setup_cache($config) if defined($config->{cache});
     
-    # add species dir name
-    $config->{dir} .= '/'.$species_dir_name;
+    # setup FASTA file using Bio::DB
+    setup_fasta($config) if defined($config->{fasta});
     
-    # check whats in here to match to assembly if given
-    die("ERROR: Cache directory ", $config->{dir}, " not found\n") if !-e $config->{dir} && !defined($config->{write_cache});
-    
-    my $cache_version = $config->{cache_version} || $config->{db_version} || $config->{reg}->software_version;
-    
-    opendir DIR, $config->{dir};
-    my @dir_contents = grep {!/^\./} readdir DIR;
-    my @matched_contents = grep {/^$cache_version/} @dir_contents;
-    closedir DIR;
-    
-    # did user specify assembly version?
-    if(!defined($config->{assembly})) {
-      
-      # only 1 entry, can assume this is OK
-      if(scalar @matched_contents == 1) {
-        $config->{dir} .= '/'.$matched_contents[0];
-      }
-      
-      else {
-        my $possibles = join(", ", map {s/^$cache_version\_//; $_} @matched_contents);
-        die("ERROR: Multiple assemblies found for cache version $cache_version ($possibles) - specify one using --assembly [assembly]\n");
-      }
-    }
-    
-    # add cache version and assembly
-    else {
-      $config->{dir} .= '/'.$cache_version.(defined($config->{assembly}) ? '_'.$config->{assembly} : '');
-    }
-    
-    # warn user cache directory doesn't exist
-    if(!-e $config->{dir}) {
-      
-        # if using write_cache
-        if(defined($config->{write_cache})) {
-            debug("INFO: Cache directory ", $config->{dir}, " not found - it will be created") unless defined($config->{quiet});
-        }
-        
-        # want to read cache, not found
-        elsif(defined($config->{cache})) {
-            my $possibles = scalar @dir_contents ? "\n\nFound the following directories: ".join(", ", map {s/^$cache_version\_//; $_} @dir_contents)."    (format: [cache_version]_[assembly])" : "";
-            die("ERROR: Cache directory ", $config->{dir}, " not found$possibles\n");
-        }
-    }
-    
-    if(defined($config->{cache})) {
-        # read cache info
-        if(read_cache_info($config)) {
-            debug("Read existing cache info") unless defined $config->{quiet};
-        }
-        
-        # check if there's a FASTA file in there
-        if(!defined($config->{fasta})) {
-          opendir CACHE, $config->{dir};
-          my ($fa) = grep {/\.fa$/} readdir CACHE;
-          
-          if(defined $fa) {
-            $config->{fasta} = $config->{dir}.'/'.$fa;
-            debug("Auto-detected FASTA file in cache directory") unless defined $config->{quiet};
-          }
-        }
-        
-        # check if any disabled options are in use
-        # these are set in the cache info file
-        if(defined($config->{cache_disabled})) {
-          my @arr = ref($config->{cache_disabled} eq 'ARRAY') ? @{$config->{cache_disabled}} : ($config->{cache_disabled});
-          
-          if(my ($disabled) = grep {defined($config->{$_})} @arr) {
-            die("ERROR: Unable to use --".$disabled." with this cache\n");
-          }
-        }
-    }
-    
-    if(defined($config->{fasta})) {
-        die "ERROR: Specified FASTA file/directory not found" unless -e $config->{fasta};
-        
-        eval q{ use Bio::DB::Fasta; };
-        
-        if($@) {
-            die("ERROR: Could not load required BioPerl module\n");
-        }
-        
-        # try to overwrite sequence method in Slice
-        eval q{
-            package Bio::EnsEMBL::Slice;
-            
-            # define a global variable so that we can pull in config hash
-            our $config;
-            
-            {
-                # don't want a redefine warning spat out, thanks
-                no warnings 'redefine';
-                
-                # overwrite seq method to read from FASTA DB
-                sub seq {
-                    my $self = shift;
-                    
-                    # special case for in-between (insert) coordinates
-                    return '' if($self->start() == $self->end() + 1);
-                    
-                    my $seq;
-                    
-                    if(defined($config->{fasta_db})) {
-                        $seq = $config->{fasta_db}->seq($self->seq_region_name, $self->start => $self->end);
-                        reverse_comp(\$seq) if $self->strand < 0;
-                    }
-                    
-                    else {
-                        return $self->{'seq'} if($self->{'seq'});
-                      
-                        if($self->adaptor()) {
-                          my $seqAdaptor = $self->adaptor()->db()->get_SequenceAdaptor();
-                          return ${$seqAdaptor->fetch_by_Slice_start_end_strand($self,1,undef,1)};
-                        }
-                    }
-                    
-                    # default to a string of Ns if we couldn't get sequence
-                    $seq ||= 'N' x $self->length();
-                    
-                    return $seq;
-                }
-            }
-            
-            1;
-        };
-        
-        if($@) {
-            die("ERROR: Could not redefine sequence method\n");
-        }
-        
-        # copy to Slice for offline sequence fetching
-        {
-            no warnings 'once';
-            $Bio::EnsEMBL::Slice::config = $config;
-        }
-        
-        # spoof a coordinate system
-        $config->{coord_system} = Bio::EnsEMBL::CoordSystem->new(
-            -NAME => 'chromosome',
-            -RANK => 1,
-        );
-        
-        debug("Checking/creating FASTA index") unless defined($config->{quiet});
-        $config->{fasta_db} = Bio::DB::Fasta->new($config->{fasta});
-    }
+    # setup custom files
+    setup_custom($config) if defined($config->{custom});
     
     # offline needs cache, can't use HGVS
     if(defined($config->{offline})) {
@@ -1664,6 +1468,222 @@ sub get_adaptors {
     
     # check we got slice adaptor - can't continue without a core DB
     die("ERROR: Could not connect to core database\n") unless defined $config->{sa};
+}
+
+sub setup_cache() {
+  my $config = shift;   
+  
+  # complete dir with species name and db_version
+  my $species_dir_name = defined($config->{offline}) ? $config->{species} : ($config->{reg}->get_alias($config->{species}) || $config->{species});
+  $species_dir_name .= '_refseq' if defined($config->{refseq});
+  
+  # add species dir name
+  $config->{dir} .= '/'.$species_dir_name;
+  
+  # check whats in here to match to assembly if given
+  die("ERROR: Cache directory ", $config->{dir}, " not found\n") if !-e $config->{dir} && !defined($config->{write_cache});
+  
+  my $cache_version = $config->{cache_version} || $config->{db_version} || $config->{reg}->software_version;
+  
+  opendir DIR, $config->{dir};
+  my @dir_contents = grep {!/^\./} readdir DIR;
+  my @matched_contents = grep {/^$cache_version/} @dir_contents;
+  closedir DIR;
+  
+  # no matched entries, cache not installed
+  if(scalar @matched_contents == 0) {
+    die("ERROR: No cache found for ".$config->{species}.", version $cache_version\n");
+  }
+  
+  # only 1 entry, can assume this is OK
+  elsif(scalar @matched_contents == 1) {
+    $config->{dir} .= '/'.$matched_contents[0];
+  }
+  
+  # did user specify assembly version?
+  elsif(!defined($config->{assembly})) {
+    my $possibles = join(", ", map {s/^$cache_version\_//; $_} @matched_contents);
+    die("ERROR: Multiple assemblies found for cache version $cache_version ($possibles) - specify one using --assembly [assembly]\n");
+  }
+  
+  # add cache version and assembly
+  else {
+    $config->{dir} .= '/'.$cache_version.'_'.$config->{assembly};
+  }
+  
+  # warn user cache directory doesn't exist
+  if(!-e $config->{dir}) {
+  
+    # if using write_cache
+    if(defined($config->{write_cache})) {
+      debug("INFO: Cache directory ", $config->{dir}, " not found - it will be created") unless defined($config->{quiet});
+    }
+    
+    # want to read cache, not found
+    elsif(defined($config->{cache})) {
+      my $possibles = scalar @dir_contents ? "\n\nFound the following directories: ".join(", ", map {s/^$cache_version\_//; $_} @dir_contents)."    (format: [cache_version]_[assembly])" : "";
+      die("ERROR: Cache directory ", $config->{dir}, " not found$possibles\n");
+    }
+  }  
+  
+  # read cache info
+  if(read_cache_info($config)) {
+    debug("Read existing cache info") unless defined $config->{quiet};
+  }
+  
+  # check if there's a FASTA file in there
+  if(!defined($config->{fasta})) {
+    opendir CACHE, $config->{dir};
+    my ($fa) = grep {/\.fa$/} readdir CACHE;
+    
+    if(defined $fa) {
+      $config->{fasta} = $config->{dir}.'/'.$fa;
+      debug("Auto-detected FASTA file in cache directory") unless defined $config->{quiet};
+    }
+  }
+  
+  # check if any disabled options are in use
+  # these are set in the cache info file
+  if(defined($config->{cache_disabled})) {
+    my @arr = ref($config->{cache_disabled} eq 'ARRAY') ? @{$config->{cache_disabled}} : ($config->{cache_disabled});
+    
+    if(my ($disabled) = grep {defined($config->{$_})} @arr) {
+      die("ERROR: Unable to use --".$disabled." with this cache\n");
+    }
+  }
+}
+
+# setup FASTA file
+sub setup_fasta() {
+  my $config = shift;
+  
+  die "ERROR: Specified FASTA file/directory not found" unless -e $config->{fasta};
+  
+  eval q{ use Bio::DB::Fasta; };
+  
+  if($@) {
+    die("ERROR: Could not load required BioPerl module\n");
+  }
+  
+  # try to overwrite sequence method in Slice
+  eval q{
+    package Bio::EnsEMBL::Slice;
+    
+    # define a global variable so that we can pull in config hash
+    our $config;
+    
+    {
+      # don't want a redefine warning spat out, thanks
+      no warnings 'redefine';
+      
+      # overwrite seq method to read from FASTA DB
+      sub seq {
+        my $self = shift;
+        
+        # special case for in-between (insert) coordinates
+        return '' if($self->start() == $self->end() + 1);
+        
+        my $seq;
+        
+        if(defined($config->{fasta_db})) {
+          $seq = $config->{fasta_db}->seq($self->seq_region_name, $self->start => $self->end);
+          reverse_comp(\$seq) if $self->strand < 0;
+        }
+        
+        else {
+          return $self->{'seq'} if($self->{'seq'});
+        
+          if($self->adaptor()) {
+            my $seqAdaptor = $self->adaptor()->db()->get_SequenceAdaptor();
+            return ${$seqAdaptor->fetch_by_Slice_start_end_strand($self,1,undef,1)};
+          }
+        }
+        
+        # default to a string of Ns if we couldn't get sequence
+        $seq ||= 'N' x $self->length();
+        
+        return $seq;
+      }
+    }
+    
+    1;
+  };
+  
+  if($@) {
+    die("ERROR: Could not redefine sequence method\n");
+  }
+  
+  # copy to Slice for offline sequence fetching
+  {
+    no warnings 'once';
+    $Bio::EnsEMBL::Slice::config = $config;
+  }
+  
+  # spoof a coordinate system
+  $config->{coord_system} = Bio::EnsEMBL::CoordSystem->new(
+    -NAME => 'chromosome',
+    -RANK => 1,
+  );
+  
+  debug("Checking/creating FASTA index") unless defined($config->{quiet});
+  $config->{fasta_db} = Bio::DB::Fasta->new($config->{fasta});
+}
+
+sub setup_custom {
+  my $config = shift;
+  
+  # check custom annotations
+  for my $i(0..$#{$config->{custom}}) {
+    my $custom = $config->{custom}->[$i];
+    
+    my ($filepath, $shortname, $format, $type, $coords, @fields) = split /\,/, $custom;
+    $type ||= 'exact';
+    $format ||= 'bed';
+    $coords ||= 0;
+    
+    # check type
+    die "ERROR: Type $type for custom annotation file $filepath is not allowed (must be one of \"exact\", \"overlap\")\n" unless $type =~ /exact|overlap/;
+    
+    # check format
+    die "ERROR: Format $format for custom annotation file $filepath is not allowed (must be one of \"bed\", \"vcf\", \"gtf\", \"gff\", \"bigwig\")\n" unless $format =~ /bed|vcf|gff|gtf|bigwig/;
+    
+    # bigwig format
+    if($format eq 'bigwig') {
+      # check for bigWigToWig
+      die "ERROR: bigWigToWig does not seem to be in your path - this is required to use bigwig format custom annotations\n" unless `which bigWigToWig 2>&1` =~ /bigWigToWig$/;
+    }
+    
+    else {
+    # check for tabix
+    die "ERROR: tabix does not seem to be in your path - this is required to use custom annotations\n" unless `which tabix 2>&1` =~ /tabix$/;
+    
+    # remote files?
+    if($filepath =~ /tp\:\/\//) {
+        my $remote_test = `tabix $filepath 1:1-1 2>&1`;
+        if($remote_test =~ /fail/) {
+          die "$remote_test\nERROR: Could not find file or index file for remote annotation file $filepath\n";
+        }
+        elsif($remote_test =~ /get_local_version/) {
+          debug("Downloaded tabix index file for remote annotation file $filepath") unless defined($config->{quiet});
+        }
+      }
+  
+      # check files exist
+      else {
+        die "ERROR: Custom annotation file $filepath not found\n" unless -e $filepath;
+        die "ERROR: Tabix index file $filepath\.tbi not found - perhaps you need to create it first?\n" unless -e $filepath.'.tbi';
+      }
+    }
+    
+    $config->{custom}->[$i] = {
+      'file'   => $filepath,
+      'name'   => $shortname || 'CUSTOM'.($i + 1),
+      'type'   => $type,
+      'format' => $format,
+      'coords' => $coords,
+      'fields' => \@fields
+    };
+  }
 }
 
 # gets regulatory adaptors
