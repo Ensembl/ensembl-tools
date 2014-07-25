@@ -1246,7 +1246,16 @@ sub connect_to_dbs {
         if($core_mca) {
           my $ass = $core_mca->list_value_by_key('assembly.default');
           if(scalar @$ass) {
-            die("ERROR: Assembly version specified by --assembly (".$config->{assembly}.") and assembly.default meta key (".$ass->[0].") do not match\n") if defined($config->{assembly}) && $config->{assembly} ne $ass->[0];
+            die(
+              "ERROR: Assembly version specified by --assembly (".$config->{assembly}.
+              ") and assembly.default meta key (".$ass->[0].") do not match\n".
+              (
+                $config->{host} eq 'ensembldb.ensembl.org' ?
+                "\nIf using human GRCh37 add \"--port 3337\"".
+                " to use the GRCh37 database, or --offline to avoid database connection entirely\n" :
+                ''
+              )
+            ) if defined($config->{assembly}) && $config->{assembly} ne $ass->[0];
             
             $config->{assembly} = $ass->[0];
           }
@@ -1470,6 +1479,25 @@ sub setup_cache() {
     # only 1 entry, can assume this is OK
     elsif(scalar @matched_contents == 1) {
       $config->{dir} .= '/'.$matched_contents[0];
+      
+      # is there an assembly here?
+      if($matched_contents[0] =~ /\d+\_(.+)/) {
+        my $matched_assembly = $1;
+        
+        if(defined($config->{assembly}) && $config->{assembly} ne $matched_assembly) {
+          die(
+            "ERROR: Cache assembly version ($matched_assembly) ".
+            "and database or selected assembly version (".$config->{assembly}.
+            ") do not match\n".
+            (
+              $config->{host} eq 'ensembldb.ensembl.org' ?
+              "\nIf using human GRCh37 add \"--port 3337\"".
+              " to use the GRCh37 database, or --offline to avoid database connection entirely\n" :
+              ''
+            )
+          );
+        }
+      }
     }
     
     # did user specify assembly version?
