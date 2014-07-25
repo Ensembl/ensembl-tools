@@ -1002,7 +1002,7 @@ INTRO
             while(<IN>) {
                 chomp;
                 
-                if(m/^(\w+)(\t)/) {
+                if(m/^(\w+)(\s)/) {
                   my $id = $1;
                   s/^$1$2//;
                   tr/\t/ /;
@@ -1464,7 +1464,7 @@ sub setup_cache() {
     
     # no matched entries, cache not installed
     if(scalar @matched_contents == 0) {
-      die("ERROR: No cache found for ".$config->{species}.", version $cache_version\n");
+      die("ERROR: No cache found for $species_dir_name, version $cache_version\n");
     }
     
     # only 1 entry, can assume this is OK
