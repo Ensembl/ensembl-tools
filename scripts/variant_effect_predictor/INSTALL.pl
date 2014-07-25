@@ -9,7 +9,7 @@ use Net::FTP;
 use Cwd;
 
 $| = 1;
-our $VERSION = 75;
+our $VERSION = 76;
 our $have_LWP;
 our $use_curl = 0;
 have_LWP();
@@ -445,16 +445,9 @@ if($CACHE_URL =~ /^ftp/i) {
   push @files, sort grep {$_ =~ /tar.gz/} $ftp->ls;
 }
 else {
-  eval q{
-    use File::Listing qw(parse_dir);
-  };
-  push @files, sort map {$_->[0]} grep {$_->[0] =~ /tar.gz/} @{parse_dir(get($CACHE_URL))};
-  
-  if(!@files) {
-    opendir DIR, $CACHE_URL;
-    @files = grep {$_ =~ /tar.gz/} readdir DIR;
-    closedir DIR;
-  }
+  opendir DIR, $CACHE_URL;
+  @files = sort grep {$_ =~ /tar.gz/} readdir DIR;
+  closedir DIR;
 }
 
 # if we don't have a species list, we'll have to guess
@@ -484,13 +477,33 @@ if($AUTO) {
   
   else {
     foreach my $sp(@$SPECIES) {
+      my @matches;
+      
       for my $i(0..$#files) {
         if($sp =~ /refseq/i) {
-          push @indexes, $i + 1 if $files[$i] =~ /$sp/i;
+          push @matches, $i + 1 if $files[$i] =~ /$sp/i;
         }
         else {
-          push @indexes, $i + 1 if $files[$i] =~ /$sp/i && $files[$i] !~ /refseq/i;
+          push @matches, $i + 1 if $files[$i] =~ /$sp/i && $files[$i] !~ /refseq/i;
         }
+      }
+      
+      # grep assembly if supplied
+      @matches = grep {$files[$_ - 1] =~ /\_$ASSEMBLY\./} @matches if $ASSEMBLY;
+      
+      if(scalar @matches == 1) {
+        push @indexes, @matches;
+      }
+      elsif(scalar @matches > 1) {
+        # xenopus_tropicalis_vep_76_JGI_4.2.tar.gz
+        
+        my @assemblies = ();
+        foreach my $m(@matches) {
+          $files[$m-1] =~ m/\_vep\_$API_VERSION\_(.+?)\.tar\.gz/;
+          push @assemblies, $1 if $1;
+        }
+        
+        die("ERROR: Multiple assemblies found (".join(", ", @assemblies).") for $sp; select one using --ASSEMBLY [name]\n")
       }
     }
   }
@@ -506,7 +519,22 @@ else {
   
   # user wants all species found
   if(scalar @indexes == 1 && $indexes[0] == 0) {
-    @indexes = [1..(scalar @files)];
+    @indexes = 1..(scalar @files);
+  }
+}
+
+### SPECIAL CASE GRCh37
+if((grep {$files[$_ - 1] =~ /GRCh37/} @indexes) || (defined($ASSEMBLY) && $ASSEMBLY eq 'GRCh37')) {
+  
+  # can't install other species at same time as the FASTA URL has to be changed
+  if(grep {$files[$_ - 1] !~ /GRCh37/} @indexes) {
+    die("ERROR: For technical reasons this installer is unable to install GRCh37 caches alongside others; please install them separately\n");
+  }
+  
+  # change URL to point to last e! version that had GRCh37 downloads
+  elsif($FASTA_URL =~ /ftp/) {
+    print "\nWARNING: Changing FTP URL for GRCh37\n";
+    $FASTA_URL =~ s/$API_VERSION/75/;
   }
 }
 
@@ -516,28 +544,31 @@ foreach my $file(@indexes) {
   my $file_path = $files[$file - 1];
   
   my $refseq = 0;
-  my ($species, $file_name);
+  my ($species, $assembly, $file_name);
   
   if($file_path =~ /\//) {
     ($species, $file_name) = (split /\//, $file_path);
+    $file_name =~ m/^(\w+?)\_vep\_\d+\_(.+?)\.tar\.gz/;
+    $assembly = $2;
   }
   else {
     $file_name = $file_path;
-    $file_name =~ m/^(\w+?)\_vep/;
+    $file_name =~ m/^(\w+?)\_vep\_\d+\_(.+?)\.tar\.gz/;
     $species = $1;
+    $assembly = $2;
   }
   
   push @store_species, $species;
   
   # check if user already has this species and version
-  if(-e "$CACHE_DIR/$species/$API_VERSION") {
+  if(-e "$CACHE_DIR/$species/$API_VERSION\_$assembly") {
     
     my $ok;
     
-    print "\nWARNING: It looks like you already have the cache for $species (v$API_VERSION) installed.\n" unless $QUIET;
+    print "\nWARNING: It looks like you already have the cache for $species $assembly (v$API_VERSION) installed.\n" unless $QUIET;
     
     if($AUTO) {
-      print "\nDelete the folder $CACHE_DIR/$species/$API_VERSION and re-run INSTALL.pl if you want to re-install\n";
+      print "\nDelete the folder $CACHE_DIR/$species/$API_VERSION\_$assembly and re-run INSTALL.pl if you want to re-install\n";
     }
     else {
       print "If you continue the existing cache will be overwritten.\nAre you sure you want to continue (y/n)? ";
@@ -550,7 +581,7 @@ foreach my $file(@indexes) {
       next;
     }
     
-    rmtree("$CACHE_DIR/$species/$API_VERSION") or die "ERROR: Could not delete directory $CACHE_DIR/$species/$API_VERSION\n";
+    rmtree("$CACHE_DIR/$species/$API_VERSION\_$assembly") or die "ERROR: Could not delete directory $CACHE_DIR/$species/$API_VERSION\_$assembly\n";
   }
   
   if($species =~ /refseq/i) {
@@ -590,7 +621,7 @@ foreach my $file(@indexes) {
   # convert?
   if($CONVERT && !$TEST) {
     print " - converting cache\n" unless $QUIET;
-    system("perl $dirname/convert_cache.pl --dir $CACHE_DIR --species $species --version $API_VERSION") == 0 or print STDERR "WARNING: Failed to run convert script\n";
+    system("perl $dirname/convert_cache.pl --dir $CACHE_DIR --species $species --version $API_VERSION\_$assembly") == 0 or print STDERR "WARNING: Failed to run convert script\n";
   }
 }
 
@@ -693,7 +724,13 @@ foreach my $species(@species) {
     next;
   }
   
-  my $ex = "$CACHE_DIR/$orig_species/$API_VERSION/$file";
+  # work out assembly version from file name
+  my $uc_species = ucfirst($species);
+  $file =~ m/^$uc_species\.(.+?)\.\d+\.dna/;
+  my $assembly = $1;
+  die("ERROR: Unable to parse assembly name from $file\n") unless $assembly;
+  
+  my $ex = "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file";
   $ex =~ s/\.gz$//;
   if(-e $ex) {
     print "Looks like you already have the FASTA file for $orig_species, skipping\n" unless $QUIET;
@@ -708,21 +745,21 @@ foreach my $species(@species) {
   # create path
   mkdir($CACHE_DIR) unless -d $CACHE_DIR || $TEST;
   mkdir("$CACHE_DIR/$orig_species") unless -d "$CACHE_DIR/$orig_species" || $TEST;
-  mkdir("$CACHE_DIR/$orig_species/$API_VERSION") unless -d "$CACHE_DIR/$orig_species/$API_VERSION" || $TEST;
+  mkdir("$CACHE_DIR/$orig_species/$API_VERSION\_$assembly") unless -d "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly" || $TEST;
   
   if($ftp) {
     print " - downloading $file\n" unless $QUIET;
     if(!$TEST) {
-      $ftp->get($file, "$CACHE_DIR/$orig_species/$API_VERSION/$file") or download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$orig_species/$API_VERSION/$file");
+      $ftp->get($file, "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file") or download_to_file("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file");
     }
   }
   else {
     print " - copying $file\n" unless $QUIET;
-    copy("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$orig_species/$API_VERSION/$file") unless $TEST;
+    copy("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file") unless $TEST;
   }
   
   print " - extracting data\n" unless $QUIET;
-  unpack_arch("$CACHE_DIR/$orig_species/$API_VERSION/$file", "$CACHE_DIR/$orig_species/$API_VERSION/") unless $TEST;
+  unpack_arch("$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file", "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/") unless $TEST;
   
   print " - attempting to index\n" unless $QUIET;
   eval q{
