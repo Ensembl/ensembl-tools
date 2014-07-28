@@ -482,6 +482,7 @@ sub configure {
         'gmaf',                    # add global MAF of existing var
         'maf_1kg',                 # add 1KG MAFs of existing vars
         'maf_esp',                 # add ESP MAFs of existing vars
+        'old_maf',                 # report 1KG/ESP MAFs in the old way (no allele, always < 0.5)
         'pubmed',                  # add Pubmed IDs for publications that cite existing vars
         'freq_filter=s',           # exclude or include
         'freq_freq=f',             # frequency to filter on
