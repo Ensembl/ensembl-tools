@@ -458,6 +458,7 @@ sub configure {
         'assembly|a=s',            # assembly version to use
         'genomes',                 # automatically sets DB params for e!Genomes
         'refseq',                  # use otherfeatures RefSeq DB instead of Ensembl
+        'merged',                  # use merged cache
         'gencode_basic',           # limit to using just GenCode basic transcript set
         
         # runtime options
@@ -1330,11 +1331,16 @@ sub get_adaptors {
 sub check_flags() {
   my $config = shift;
   
-  # can't be both quiet and verbose
-  die "ERROR: Can't be both quiet and verbose!\n" if defined($config->{quiet}) && defined($config->{verbose});
-  
-  # can't use both refseq and gencode
-  die("ERROR: Can't use both --refseq and --gencode_basic\n") if defined($config->{refseq}) && defined($config->{gencode_basic});
+  my @invalid = (
+    ['quiet', 'verbose'],
+    ['refseq', 'gencode_basic'],
+    ['refseq', 'merged'],
+    ['merged', 'database']
+  );
+
+  foreach my $combo(@invalid) {
+    die "ERROR: Can't use these flags together: ".join(", ", map {'--'.$_} @$combo)."\n" if scalar(grep {defined($config->{$_})} @$combo) == scalar @$combo;
+  }
   
   # check for deprecated flags
   die "ERROR: --hgnc has been replaced by --symbol\n" if defined($config->{hgnc});
@@ -1435,6 +1441,7 @@ sub setup_cache() {
   # complete dir with species name and db_version
   my $species_dir_name = defined($config->{offline}) ? $config->{species} : ($config->{reg}->get_alias($config->{species}) || $config->{species});
   $species_dir_name .= '_refseq' if defined($config->{refseq});
+  $species_dir_name .= '_merged' if defined($config->{merged});
   
   # add species dir name
   $config->{dir} .= '/'.$species_dir_name;
