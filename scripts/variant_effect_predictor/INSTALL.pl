@@ -523,21 +523,6 @@ else {
   }
 }
 
-### SPECIAL CASE GRCh37
-if((grep {$files[$_ - 1] =~ /GRCh37/} @indexes) || (defined($ASSEMBLY) && $ASSEMBLY eq 'GRCh37')) {
-  
-  # can't install other species at same time as the FASTA URL has to be changed
-  if(grep {$files[$_ - 1] !~ /GRCh37/} @indexes) {
-    die("ERROR: For technical reasons this installer is unable to install GRCh37 caches alongside others; please install them separately\n");
-  }
-  
-  # change URL to point to last e! version that had GRCh37 downloads
-  elsif($FASTA_URL =~ /ftp/) {
-    print "\nWARNING: Changing FTP URL for GRCh37\n";
-    $FASTA_URL =~ s/$API_VERSION/75/;
-  }
-}
-
 foreach my $file(@indexes) {
   die("ERROR: File number $file not valid\n") unless defined($file) && $file =~ /^[0-9]+$/ && defined($files[$file - 1]);
   
@@ -631,6 +616,21 @@ foreach my $file(@indexes) {
 #############
 
 FASTA:
+
+### SPECIAL CASE GRCh37
+if((grep {$files[$_ - 1] =~ /GRCh37/} @indexes) || (defined($ASSEMBLY) && $ASSEMBLY eq 'GRCh37')) {
+
+  # can't install other species at same time as the FASTA URL has to be changed
+  if(grep {$files[$_ - 1] !~ /GRCh37/} @indexes) {
+    die("ERROR: For technical reasons this installer is unable to install GRCh37 caches alongside others; please install them separately\n");
+  }
+
+  # change URL to point to last e! version that had GRCh37 downloads
+  elsif($FASTA_URL =~ /ftp/) {
+    print "\nWARNING: Changing FTP URL for GRCh37\n";
+    $FASTA_URL =~ s/$API_VERSION/75/;
+  }
+}
 
 print "\nThe VEP can use FASTA files to retrieve sequence data for HGVS notations and reference sequence checks.\n" unless $QUIET;
 print "FASTA files will be stored in $CACHE_DIR\n" unless $QUIET;
@@ -726,8 +726,16 @@ foreach my $species(@species) {
   
   # work out assembly version from file name
   my $uc_species = ucfirst($species);
-  $file =~ m/^$uc_species\.(.+?)\.\d+\.dna/;
+  $file =~ m/^$uc_species\.(.+?)(\.)?(\d+)?\.dna/;
   my $assembly = $1;
+
+  # second number could be an Ensembl release number (pre-76) or part of the assembly name
+  if($3) {
+    if(!grep {$3 == $_} (69..75)) {
+      $assembly .= $2.$3;
+    }
+  }
+
   die("ERROR: Unable to parse assembly name from $file\n") unless $assembly;
   
   my $ex = "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file";
