@@ -459,6 +459,7 @@ sub configure {
         'genomes',                 # automatically sets DB params for e!Genomes
         'refseq',                  # use otherfeatures RefSeq DB instead of Ensembl
         'merged',                  # use merged cache
+        'only_refseq',             # report consequences on RefSeq transcripts only (excludes CCDS, EST etc)
         'gencode_basic',           # limit to using just GenCode basic transcript set
         
         # runtime options
@@ -1341,6 +1342,9 @@ sub check_flags() {
   foreach my $combo(@invalid) {
     die "ERROR: Can't use these flags together: ".join(", ", map {'--'.$_} @$combo)."\n" if scalar(grep {defined($config->{$_})} @$combo) == scalar @$combo;
   }
+  
+  # required
+  die "ERROR: --only_refseq requires using either --refseq or --merged\n" if defined($config->{only_refseq}) && !defined($config->{refseq}) && !defined($config->{merged});
   
   # check for deprecated flags
   die "ERROR: --hgnc has been replaced by --symbol\n" if defined($config->{hgnc});
