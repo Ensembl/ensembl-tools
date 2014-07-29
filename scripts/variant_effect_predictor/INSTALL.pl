@@ -946,6 +946,7 @@ Options
                    f (FASTA) to specify parts to install e.g. -a ac for API and
                    cache
 -s | --SPECIES     Comma-separated list of species to install when using --AUTO
+-y | --ASSEMBLY    Assembly name to use if more than one during --AUTO
 -q | --QUIET       Don't write any status output when using --AUTO
 -p | --PREFER_BIN  Use this if the installer fails with out of memory errors
 
