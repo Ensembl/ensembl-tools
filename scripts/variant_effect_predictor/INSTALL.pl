@@ -480,11 +480,11 @@ if($AUTO) {
       my @matches;
       
       for my $i(0..$#files) {
-        if($sp =~ /refseq/i) {
+        if($sp =~ /refseq|merged/i) {
           push @matches, $i + 1 if $files[$i] =~ /$sp/i;
         }
         else {
-          push @matches, $i + 1 if $files[$i] =~ /$sp/i && $files[$i] !~ /refseq/i;
+          push @matches, $i + 1 if $files[$i] =~ /$sp/i && $files[$i] !~ /refseq|merged/i;
         }
       }
       
@@ -571,6 +571,9 @@ foreach my $file(@indexes) {
   
   if($species =~ /refseq/i) {
     print "NB: Remember to use --refseq when running the VEP with this cache!\n" unless $QUIET;
+  }
+  if($species =~ /merged/i) {
+    print "NB: Remember to use --merged when running the VEP with this cache!\n" unless $QUIET;
   }
   
   my $target_file = "$CACHE_DIR/tmp/$file_name";
@@ -699,6 +702,7 @@ foreach my $species(@species) {
   # remove refseq name
   my $orig_species = $species;
   $species =~ s/_refseq//;
+  $species =~ s/_merged//;
   
   my @files;
   
