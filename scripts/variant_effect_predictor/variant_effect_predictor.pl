@@ -459,7 +459,7 @@ sub configure {
         'genomes',                 # automatically sets DB params for e!Genomes
         'refseq',                  # use otherfeatures RefSeq DB instead of Ensembl
         'merged',                  # use merged cache
-        'only_refseq',             # report consequences on RefSeq transcripts only (excludes CCDS, EST etc)
+        'all_refseq',              # report consequences on all transcripts in RefSeq cache, includes CCDS, EST etc
         'gencode_basic',           # limit to using just GenCode basic transcript set
         
         # runtime options
@@ -1344,7 +1344,7 @@ sub check_flags() {
   }
   
   # required
-  die "ERROR: --only_refseq requires using either --refseq or --merged\n" if defined($config->{only_refseq}) && !defined($config->{refseq}) && !defined($config->{merged});
+  die "ERROR: --all_refseq requires using either --refseq or --merged\n" if defined($config->{all_refseq}) && !defined($config->{refseq}) && !defined($config->{merged});
   
   # check for deprecated flags
   die "ERROR: --hgnc has been replaced by --symbol\n" if defined($config->{hgnc});
