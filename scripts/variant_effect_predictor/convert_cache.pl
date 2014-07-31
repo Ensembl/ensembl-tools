@@ -74,7 +74,7 @@ sub configure {
   
   # print usage message if requested or no args supplied
   if(defined($config->{help}) || !$args) {
-    #&usage;
+    &usage;
     exit(0);
   }
   
