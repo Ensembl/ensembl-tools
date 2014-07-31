@@ -709,7 +709,7 @@ foreach my $species(@species) {
   if($ftp) {
     $ftp->cwd($species) or die "ERROR: Could not change directory to $species\n$@\n";
     $ftp->cwd('dna') or die "ERROR: Could not change directory to dna\n$@\n";
-    @files = grep {!/_(s|r)m\./} $ftp->ls;
+    @files = $ftp->ls;
   }
   else {
     if(!opendir DIR, "$FASTA_URL/$species/dna") {
@@ -719,6 +719,9 @@ foreach my $species(@species) {
     @files = grep {$_ !~ /^\./} readdir DIR;
     closedir DIR;
   }
+  
+  # remove repeat/soft-masked files
+  @files = grep {!/_(s|r)m\./} @files;
   
   my ($file) = grep {/primary_assembly.fa.gz$/} @files;
   ($file) = grep {/toplevel.fa.gz$/} @files if !defined($file);
