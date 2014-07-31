@@ -569,6 +569,7 @@ sub configure {
         'custom=s' => ($config->{custom} ||= []), # specify custom tabixed bgzipped file with annotation
         'tmpdir=s',                # tmp dir used for BigWig retrieval
         'plugin=s' => ($config->{plugin} ||= []), # specify a method in a module in the plugins directory
+        'safe',                    # die if plugins don't compile or spit warnings
         'fasta=s',                 # file or dir containing FASTA files with reference sequence
         'freq_file=s',             # file containing freqs to add to cache build
         
@@ -1129,7 +1130,9 @@ sub configure_plugins {
                 use $module;
             };
             if ($@) {
-                debug("Failed to compile plugin $module: $@") unless defined($config->{quiet});
+                my $msg = "Failed to compile plugin $module: $@\n";
+                die($msg) if defined($config->{safe});
+                debug($msg) unless defined($config->{quiet});
                 next;
             }
             
@@ -1141,7 +1144,9 @@ sub configure_plugins {
                 $instance = $module->new($config, @params);
             };
             if ($@) {
-                debug("Failed to instantiate plugin $module: $@") unless defined($config->{quiet});
+                my $msg = "Failed to instantiate plugin $module: $@\n";
+                die($msg) if defined($config->{safe});
+                debug($msg) unless defined($config->{quiet});
                 next;
             }
 
@@ -1175,7 +1180,9 @@ sub configure_plugins {
             
             for my $required(qw(run get_header_info check_feature_type check_variant_feature_type)) {
                 unless ($instance->can($required)) {
-                    debug("Plugin $module doesn't implement a required method '$required', does it inherit from BaseVepPlugin?") unless defined($config->{quiet});
+                    my $msg = "Plugin $module doesn't implement a required method '$required', does it inherit from BaseVepPlugin?\n";
+                    die($msg) if defined($config->{safe});
+                    debug($msg) unless defined($config->{quiet});
                     next;
                 }
             }
