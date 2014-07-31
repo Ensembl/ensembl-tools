@@ -1254,11 +1254,11 @@ sub connect_to_dbs {
         
         # get assembly version
         if($core_mca) {
-          my $ass = $core_mca->list_value_by_key('assembly.default');
+          my $ass = $core_mca->list_value_by_key('assembly.name');
           if(scalar @$ass) {
             die(
               "ERROR: Assembly version specified by --assembly (".$config->{assembly}.
-              ") and assembly.default meta key (".$ass->[0].") do not match\n".
+              ") and assembly.name meta key (".$ass->[0].") do not match\n".
               (
                 $config->{host} eq 'ensembldb.ensembl.org' ?
                 "\nIf using human GRCh37 add \"--port 3337\"".
@@ -1270,7 +1270,7 @@ sub connect_to_dbs {
             $config->{assembly} = $ass->[0];
           }
           elsif(!defined($config->{assembly})) {
-            die("ERROR: No assembly version specified, use --assembly [version] or check assembly.default meta key is defined in your core database\n");
+            die("ERROR: No assembly version specified, use --assembly [version] or check assembly.name meta key is defined in your core database\n");
           }
         }
     }
