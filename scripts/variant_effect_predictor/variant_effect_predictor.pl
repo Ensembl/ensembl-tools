@@ -1254,23 +1254,42 @@ sub connect_to_dbs {
         
         # get assembly version
         if($core_mca) {
-          my $ass = $core_mca->list_value_by_key('assembly.name');
-          if(scalar @$ass) {
+          my $ass_def  = $core_mca->list_value_by_key('assembly.default');
+          my $ass_name = $core_mca->list_value_by_key('assembly.name');
+          
+          if(scalar @$ass_def || scalar @$ass_name) {
+            my $assembly;
+            my $choice = 'default';
+            
+            if(scalar @$ass_def) {
+              $assembly = $ass_def->[0];
+              
+              # use assembly.name if assembly.default is too long
+              if(scalar @$ass_name && length($assembly) > 16) {
+                $assembly = $ass_name->[0];
+                $choice = 'name';
+              }
+            }
+            else {
+              $assembly = $ass_name->[0];
+              $choice = 'name';
+            }
+            
             die(
               "ERROR: Assembly version specified by --assembly (".$config->{assembly}.
-              ") and assembly.name meta key (".$ass->[0].") do not match\n".
+              ") and assembly.".$choice." meta key (".$ass_def->[0].") do not match\n".
               (
                 $config->{host} eq 'ensembldb.ensembl.org' ?
                 "\nIf using human GRCh37 add \"--port 3337\"".
                 " to use the GRCh37 database, or --offline to avoid database connection entirely\n" :
                 ''
               )
-            ) if defined($config->{assembly}) && $config->{assembly} ne $ass->[0];
+            ) if defined($config->{assembly}) && $config->{assembly} ne $assembly;
             
-            $config->{assembly} = $ass->[0];
+            $config->{assembly} = $assembly;
           }
           elsif(!defined($config->{assembly})) {
-            die("ERROR: No assembly version specified, use --assembly [version] or check assembly.name meta key is defined in your core database\n");
+            die("ERROR: No assembly version specified, use --assembly [version] or check assembly.default or assembly.name meta key is defined in your core database\n");
           }
         }
     }
