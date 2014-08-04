@@ -1277,7 +1277,7 @@ sub connect_to_dbs {
             
             die(
               "ERROR: Assembly version specified by --assembly (".$config->{assembly}.
-              ") and assembly.".$choice." meta key (".$ass_def->[0].") do not match\n".
+              ") and assembly.".$choice." meta key (".$assembly.") do not match\n".
               (
                 $config->{host} eq 'ensembldb.ensembl.org' ?
                 "\nIf using human GRCh37 add \"--port 3337\"".
