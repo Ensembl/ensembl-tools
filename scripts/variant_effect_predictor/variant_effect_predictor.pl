@@ -775,6 +775,7 @@ INTRO
         die("ERROR: Cannot do frequency filtering in offline mode\n") if defined($config->{check_frequency}) && $config->{freq_pop} !~ /1kg.*(all|afr|amr|asn|eur)/i;
         die("ERROR: Cannot retrieve overlapping structural variants in offline mode\n") if defined($config->{check_sv});
         die("ERROR: Cannot check reference sequences without a FASTA file (see --fasta)\n") if defined($config->{check_ref}) && !defined($config->{fasta});
+        die("ERROR: Cannot map to LRGs in offline mode\n") if defined($config->{lrg});
     }
     
     # suppress warnings that the FeatureAdpators spit if using no_slice_cache
