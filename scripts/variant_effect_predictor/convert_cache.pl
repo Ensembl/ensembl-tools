@@ -106,7 +106,7 @@ sub configure {
   my %versions;
   foreach my $sp(@{$config->{species}}) {
     opendir DIR, $config->{dir}.'/'.$sp;
-    %versions = map {$_ => 1} grep {-d $config->{dir}.'/'.$sp.'/'.$_ && !/^\./} readdir DIR;
+    %{$versions{$sp}} = map {$_ => 1} grep {-d $config->{dir}.'/'.$sp.'/'.$_ && !/^\./} readdir DIR;
     closedir DIR;
   }
   
@@ -115,16 +115,24 @@ sub configure {
     die("ERROR: No version specified (--version). Use \"--version all\"$msg\n");
   }
   elsif($config->{version} eq 'all') {
-    $config->{version} = [keys %versions];
+    $config->{version} = \%versions;
   }
   else {
-    $config->{version} = [split /\,/, $config->{version}];
+    $config->{version} = [split(/\,/, $config->{version})];
     
     # check they exist
     foreach my $v(@{$config->{version}}) {
-      die("ERROR: Version $v not found\n") unless $versions{$v};
+      die("ERROR: Version $v not found\n") unless grep {defined($versions{$_}->{$v})} @{$config->{species}};
     }
+    
+    my %tmp;
+    for my $sp(@{$config->{species}}) {
+      %{$tmp{$sp}} = map {$_ => 1} @{$config->{version}};
+    }
+    $config->{version} = \%tmp;
   }
+  
+  $DB::single = 1;
   
   $config->{compress} ||= 'zcat';
   $config->{bgzip}    ||= 'bgzip';
@@ -146,7 +154,7 @@ sub main {
   foreach my $sp(@{$config->{species}}) {
     debug($config, "Processing $sp");
     
-    foreach my $v(@{$config->{version}}) {
+    foreach my $v(keys %{$config->{version}->{$sp}}) {
       my $dir = join('/', ($base_dir, $sp, $v));
       $config->{dir} = $dir;
       
