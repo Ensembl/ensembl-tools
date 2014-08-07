@@ -132,8 +132,6 @@ sub configure {
     $config->{version} = \%tmp;
   }
   
-  $DB::single = 1;
-  
   $config->{compress} ||= 'zcat';
   $config->{bgzip}    ||= 'bgzip';
   $config->{tabix}    ||= 'tabix';
@@ -164,6 +162,14 @@ sub main {
       opendir DIR, $dir;
       my @chrs = grep {-d $dir.'/'.$_ && !/^\./} readdir DIR;
       closedir DIR;
+      
+      # read cache info
+      read_cache_info($config);
+      
+      # get pos col
+      my @cols = @{$config->{cache_variation_cols}};
+      my %var_cols = map {$cols[$_] => $_} (0..$#cols);
+      $config->{pos_col} = $var_cols{start};
       
       foreach my $t(qw(_var)) {
       #foreach my $t(qw(_tr _reg _var)) {
@@ -248,16 +254,13 @@ sub main {
           die("ERROR: bgzip failed\n$bgzipout") if $bgzipout;
           
           # tabix
-          my ($b, $e) = $type eq '_var' ? (4, 4) : (2, 3);
+          my ($b, $e) = $type eq '_var' ? ($config->{pos_col} + 2, $config->{pos_col} + 2) : (2, 3);
           my $tabixout = `$tabix -s 1 -b $b -e $e $outfilepath\.gz`;
           die("ERROR: tabix failed\n$tabixout") if $tabixout;
         }
         
         end_progress($config);
       }
-      
-      # now update info.txt
-      read_cache_info($config);
       
       $config->{cache_var_type} = 'tabix';
       #$config->{cache_tr_type} = 'tabix';
@@ -368,7 +371,7 @@ sub process_var {
     s/ /\t/g;
     
     my @data = split /\t/, $_;
-    my $pos = $data[2];
+    my $pos = $data[$config->{pos_col}];
     
     push @tmp, {
       p => $pos,
