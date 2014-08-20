@@ -737,7 +737,7 @@ foreach my $species(@species) {
   my $assembly = $1;
 
   # second number could be an Ensembl release number (pre-76) or part of the assembly name
-  if($3) {
+  if(defined($3)) {
     if(!grep {$3 == $_} (69..75)) {
       $assembly .= $2.$3;
     }
@@ -902,7 +902,7 @@ sub unpack_arch {
   
   my $ar = Archive::Extract->new(archive => $arch_file);
   my $ok = $ar->extract(to => $dir) or die $ae->error;
-  #unlink($arch_file);
+  unlink($arch_file);
 }
 
 # update or initiate progress bar
