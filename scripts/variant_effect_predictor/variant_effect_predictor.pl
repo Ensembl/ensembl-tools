@@ -1211,42 +1211,24 @@ sub connect_to_dbs {
         
         # get assembly version
         if($core_mca) {
-          my $ass_def  = $core_mca->list_value_by_key('assembly.default');
-          my $ass_name = $core_mca->list_value_by_key('assembly.name');
+          my ($highest_cs) = @{$core_mca->db->get_CoordSystemAdaptor->fetch_all()};
+          my $assembly = $highest_cs->version();
           
-          if(scalar @$ass_def || scalar @$ass_name) {
-            my $assembly;
-            my $choice = 'default';
-            
-            if(scalar @$ass_def) {
-              $assembly = $ass_def->[0];
-              
-              # use assembly.name if assembly.default is too long
-              if(scalar @$ass_name && length($assembly) > 16) {
-                $assembly = $ass_name->[0];
-                $choice = 'name';
-              }
-            }
-            else {
-              $assembly = $ass_name->[0];
-              $choice = 'name';
-            }
-            
-            die(
-              "ERROR: Assembly version specified by --assembly (".$config->{assembly}.
-              ") and assembly.".$choice." meta key (".$assembly.") do not match\n".
-              (
-                $config->{host} eq 'ensembldb.ensembl.org' ?
-                "\nIf using human GRCh37 add \"--port 3337\"".
-                " to use the GRCh37 database, or --offline to avoid database connection entirely\n" :
-                ''
-              )
-            ) if defined($config->{assembly}) && $config->{assembly} ne $assembly;
-            
-            $config->{assembly} = $assembly;
-          }
-          elsif(!defined($config->{assembly})) {
-            die("ERROR: No assembly version specified, use --assembly [version] or check assembly.default or assembly.name meta key is defined in your core database\n");
+          die(
+            "ERROR: Assembly version specified by --assembly (".$config->{assembly}.
+            ") and assembly version in coord_system table (".$assembly.") do not match\n".
+            (
+              $config->{host} eq 'ensembldb.ensembl.org' ?
+              "\nIf using human GRCh37 add \"--port 3337\"".
+              " to use the GRCh37 database, or --offline to avoid database connection entirely\n" :
+              ''
+            )
+          ) if defined($config->{assembly}) && $config->{assembly} ne $assembly;
+          
+          $config->{assembly} = $assembly;
+          
+          if(!defined($config->{assembly})) {
+            die("ERROR: No assembly version specified, use --assembly [version] or check the coord_system table in your core database\n");
           }
         }
     }
