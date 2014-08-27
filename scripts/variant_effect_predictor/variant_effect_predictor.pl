@@ -478,6 +478,7 @@ sub configure {
         'hgnc',                    # add HGNC gene ID to extra column
         'symbol',                  # add gene symbol (e.g. HGNC)
         'hgvs',                    # add HGVS names to extra column
+        'shift_hgvs',              # enable 3-prime shifting of HGVS indels to comply with standard
         'sift=s',                  # SIFT predictions
         'polyphen=s',              # PolyPhen predictions
         'humdiv',                  # use humDiv instead of humVar for PolyPhen
@@ -679,6 +680,13 @@ INTRO
     $config->{cache_region_size} ||= 1000000;
     $config->{compress}          ||= 'zcat';
     $config->{polyphen_analysis}   = defined($config->{humdiv}) ? 'humdiv' : 'humvar';
+    
+    # shift HGVS?
+    if(defined($config->{shift_hgvs})) {
+      use Bio::EnsEMBL::Variation::DBSQL::DBAdaptor;
+      no warnings 'once';
+      $Bio::EnsEMBL::Variation::DBSQL::DBAdaptor::DEFAULT_SHIFT_HGVS_VARIANTS_3PRIME = 1;
+    }
     
     # frequency filtering
     if(defined($config->{filter_common})) {
