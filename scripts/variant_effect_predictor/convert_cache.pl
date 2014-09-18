@@ -136,6 +136,12 @@ sub configure {
   $config->{bgzip}    ||= 'bgzip';
   $config->{tabix}    ||= 'tabix';
   
+  # check commands exist
+  foreach my $cmd(qw(tabix bgzip)) {
+    my $c = $config->{$cmd};
+    die "ERROR: $cmd binary $c does not seem to exist\n" unless `which $c 2>&1` =~ /$cmd/;
+  }
+  
   return $config;
 }
 
