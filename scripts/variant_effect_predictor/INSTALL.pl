@@ -376,7 +376,7 @@ rmtree("$DEST_DIR/tmp") or die "ERROR: Failed to remove directory $DEST_DIR/tmp\
 ######
 
 print "\nTesting VEP script\n" unless $QUIET;
-my $test_vep = `perl $dirname/variant_effect_predictor.pl --help 2>&1`;
+my $test_vep = `perl -I $DEST_DIR $dirname/variant_effect_predictor.pl --help 2>&1`;
 
 $test_vep =~ /ENSEMBL VARIANT EFFECT PREDICTOR/ or die "ERROR: Testing VEP script failed with the following error\n$test_vep\n";
 
