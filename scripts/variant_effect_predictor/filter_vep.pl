@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+!/usr/bin/env perl
 
 =head1 LICENSE
 
@@ -113,7 +113,7 @@ sub main {
     die("ERROR: Could not find input file ", $config->{input_file}, "\n") unless -e $config->{input_file};
     
     if($config->{input_file} =~ /\.gz$/ || defined($config->{gz})){
-      $in_fh->open("zcat ". $config->{input_file} . " | " ) or die("ERROR: Could not read from input file ", $config->{input_file}, "\n");
+      $in_fh->open("gzip -dc ". $config->{input_file} . " | " ) or die("ERROR: Could not read from input file ", $config->{input_file}, "\n");
     }
     else {
       $in_fh->open( $config->{input_file} ) or die("ERROR: Could not read from input file ", $config->{input_file}, "\n");
