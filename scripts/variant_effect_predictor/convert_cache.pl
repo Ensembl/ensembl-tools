@@ -132,7 +132,7 @@ sub configure {
     $config->{version} = \%tmp;
   }
   
-  $config->{compress} ||= 'zcat';
+  $config->{compress} ||= 'gzip -dc';
   $config->{bgzip}    ||= 'bgzip';
   $config->{tabix}    ||= 'tabix';
   
