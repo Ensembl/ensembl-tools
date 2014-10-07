@@ -683,7 +683,10 @@ INTRO
     
     # shift HGVS?
     if(defined($config->{shift_hgvs})) {
+      use Bio::EnsEMBL::Variation::DBSQL::TranscriptVariationAdaptor;
       use Bio::EnsEMBL::Variation::DBSQL::DBAdaptor;
+      no warnings 'once';
+      $Bio::EnsEMBL::Variation::DBSQL::TranscriptVariationAdaptor::DEFAULT_SHIFT_HGVS_VARIANTS_3PRIME = 1;
       no warnings 'once';
       $Bio::EnsEMBL::Variation::DBSQL::DBAdaptor::DEFAULT_SHIFT_HGVS_VARIANTS_3PRIME = 1;
     }
