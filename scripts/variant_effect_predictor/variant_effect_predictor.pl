@@ -34,7 +34,7 @@ Variant Effect Predictor - a script to predict the consequences of genomic varia
 
 http://www.ensembl.org/info/docs/tools/vep/script/index.html
 
-Version 76
+Version 77
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -68,7 +68,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 );
 
 # global vars
-my $VERSION = '76';
+my $VERSION = '77';
 
 my %ts_tv = (
   'A/G' => 'Ts',
@@ -597,7 +597,7 @@ sub configure {
     else {
         $config->{species} ||= "homo_sapiens";
         $config->{host}    ||= 'ensembldb.ensembl.org';
-        $config->{port}    ||= 5306;
+        $config->{port}    ||= 3306;
     }
     
     # refseq or core?
