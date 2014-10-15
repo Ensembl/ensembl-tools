@@ -52,8 +52,6 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
     vf_to_consequences
     validate_vf
     convert_to_vcf
-    load_dumped_adaptor_cache
-    dump_adaptor_cache
     get_all_consequences
     get_slice
     build_full_cache
@@ -824,59 +822,7 @@ INTRO
     # get adaptors (don't get them in offline mode)
     unless(defined($config->{offline})) {
         
-        if(defined($config->{cache}) && !defined($config->{write_cache})) {
-            
-            # try and load adaptors from cache
-            if(!&load_dumped_adaptor_cache($config)) {
-                &get_adaptors($config);
-                &dump_adaptor_cache($config) if defined($config->{write_cache}) && !defined($config->{no_adaptor_cache});
-            }
-            
-            # check cached adaptors match DB params
-            else {
-                my $dbc = $config->{sa}->{dbc};
-            
-                my $ok = 1;
-                
-                if($dbc->{_host} ne $config->{host}) {
-                    
-                    # ens-livemirror, useastdb and ensembldb should all have identical DBs
-                    unless(
-                        (
-                            $dbc->{_host} eq 'ens-livemirror'
-                            || $dbc->{_host} eq 'ensembldb.ensembl.org'
-                            || $dbc->{_host} eq 'useastdb.ensembl.org'
-                        ) && (
-                            $config->{host} eq 'ens-livemirror'
-                            || $config->{host} eq 'ensembldb.ensembl.org'
-                            || $config->{host} eq 'useastdb.ensembl.org'
-                        )
-                    ) {
-                        $ok = 0;
-                    }
-                    
-                    unless(defined($config->{skip_db_check})) {
-                        # but we still need to reconnect
-                        debug("INFO: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}, " - reconnecting to host") unless defined($config->{quiet});
-                        
-                        &get_adaptors($config);
-                    }
-                }
-                
-                if(!$ok) {
-                    if(defined($config->{skip_db_check})) {
-                        debug("INFO: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}) unless defined($config->{quiet});
-                    }
-                    else {
-                        die "ERROR: Defined host ", $config->{host}, " is different from cached ", $dbc->{_host}, ". If you are sure this is OK, rerun with -skip_db_check flag set";
-                    }
-                }
-            }
-        }
-        else {
-            &get_adaptors($config);
-            &dump_adaptor_cache($config) if defined($config->{write_cache}) && !defined($config->{no_adaptor_cache});
-        }
+        &get_adaptors($config);
         
         # reg adaptors (only fetches if not retrieved from cache already)
         &get_reg_adaptors($config) if defined($config->{regulatory});
