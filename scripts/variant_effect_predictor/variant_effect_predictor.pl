@@ -63,6 +63,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
     %COL_DESCS
     @REG_FEAT_TYPES
     %FILTER_SHORTCUTS
+    @PICK_ORDER
 );
 
 # global vars
@@ -423,6 +424,7 @@ sub configure {
         'pick',                    # used defined criteria to return most severe line
         'flag_pick',               # like --pick but just adds a flag to picked line
         'pick_allele',             # like --pick but chooses one con per allele
+        'pick_order=s',            # define the order of categories used by the --pick* flags
         'buffer_size=i',           # number of variations to read in before analysis
         'chunk_size=s',            # size in bases of "chunks" used in internal hash structure
         'failed=i',                # include failed variations when finding existing
@@ -468,6 +470,7 @@ sub configure {
         'terms|t=s',               # consequence terms to use e.g. NCBI, SO
         'coding_only',             # only return results for consequences in coding regions
         'canonical',               # indicates if transcript is canonical
+        'tsl',                     # output transcript support level
         'ccds',                    # output CCDS identifer
         'xref_refseq',             # output refseq mrna xref
         'uniprot',                 # output Uniprot identifiers (includes UniParc)
@@ -1258,7 +1261,7 @@ sub check_flags() {
     ['quiet', 'verbose'],
     ['refseq', 'gencode_basic'],
     ['refseq', 'merged'],
-    ['merged', 'database']
+    ['merged', 'database'],
   );
 
   foreach my $combo(@invalid) {
@@ -1343,20 +1346,32 @@ Cache: http://www.ensembl.org/info/docs/tools/vep/script/index.html#cache
   
   # can't use more than one of most_severe, pick, per_gene, summary
   my $total_sev_opts = 0;
-  map {$total_sev_opts++ if defined($config->{$_})} qw(most_severe pick pick_allele per_gene summary);
+  map {$total_sev_opts++ if defined($config->{$_})} qw(most_severe pick pick_allele flag_pick per_gene summary);
   die "ERROR: Can't use more than one of --most_severe, --pick, --per_gene, --summary\n" if $total_sev_opts > 1;
   
   # can't use a whole bunch of options with most_severe
   if(defined($config->{most_severe})) {
-    foreach my $flag(qw(no_intergenic protein symbol sift polyphen coding_only ccds canonical xref_refseq numbers domains summary)) {
+    foreach my $flag(qw(no_intergenic protein symbol sift polyphen coding_only ccds canonical xref_refseq numbers domains summary pick_order)) {
       die "ERROR: --most_severe is not compatible with --$flag\n" if defined($config->{$flag});
     }
   }
   
   # can't use a whole bunch of options with summary
   if(defined($config->{summary})) {
-    foreach my $flag(qw(no_intergenic protein symbol sift polyphen coding_only ccds canonical xref_refseq numbers domains most_severe)) {
+    foreach my $flag(qw(no_intergenic protein symbol sift polyphen coding_only ccds canonical xref_refseq numbers domains most_severe pick_order)) {
       die "ERROR: --summary is not compatible with --$flag\n" if defined($config->{$flag});
+    }
+  }
+  
+  # check pick order
+  if(defined($config->{pick_order})) {
+    $config->{pick_order} = [split ',', $config->{pick_order}];
+    
+    my %valid = map {$_ => 1} @PICK_ORDER;
+    my $valid_str = join(", ", @PICK_ORDER);
+    
+    foreach my $cat(@{$config->{pick_order}}) {
+      die("ERROR: $cat is not a valid category for --pick_order, valid categories are:\n$valid_str\n") unless defined($valid{$cat});
     }
   }
 }
