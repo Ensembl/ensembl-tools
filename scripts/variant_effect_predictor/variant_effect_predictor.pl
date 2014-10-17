@@ -184,7 +184,7 @@ sub main {
             
             # line with sample labels in VCF
             if(defined($config->{individual}) && /^#CHROM/) {
-                my @split = split /\s+/;
+                my @split = split /\t/;
                 
                 # no individuals
                 die("ERROR: No individual data found in VCF\n") if scalar @split <= 9;
@@ -353,7 +353,7 @@ sub main {
       while(<SORT>) {
         if(!/^\#/) {
           $is_sorted = 1;
-          my @data = split /\s+/, $_;
+          my @data = split /\t/, $_;
           if(
             ($data[0] eq $prev_chr && $data[1] < $prev_pos) ||
             ($data[0] ne $prev_chr && defined($seen_chrs{$data[0]}))
@@ -1892,7 +1892,7 @@ sub get_out_file_handle {
             }
             
             for my $i(0..$#{$config->{headers}}) {
-                if($config->{headers}->[$i] =~ /^\#CHROM\s+POS\s+ID/) {
+                if($config->{headers}->[$i] =~ /^\#CHROM\tPOS\tID/) {
                     splice(@{$config->{headers}}, $i, 0, @vcf_info_strings);
                 }
             }
@@ -1902,7 +1902,7 @@ sub get_out_file_handle {
             
             if(defined($config->{html})) {
                 my @tmp = @{$config->{headers}};
-                my @cols = split /\s+/, pop @tmp;
+                my @cols = split /\t/, pop @tmp;
                 print $html_file_handle join "\n", @tmp;
                 print $html_file_handle "\n";
                 print $html_file_handle html_table_headers($config, \@cols);
