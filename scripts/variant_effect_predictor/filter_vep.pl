@@ -577,7 +577,7 @@ sub filter_is_child {
     # connect to DBs here
     if(!defined($config->{ontology_adaptor})) {
       eval {
-        use Bio::EnsEMBL::Registry;
+        require Bio::EnsEMBL::Registry;
       };
       
       if($@) {
