@@ -256,12 +256,12 @@ sub main {
           }
           
           # bgzip
-          my $bgzipout = `$bgzip $outfilepath`;
+          my $bgzipout = `$bgzip $outfilepath 2>&1`;
           die("ERROR: bgzip failed\n$bgzipout") if $bgzipout;
           
           # tabix
           my ($b, $e) = $type eq '_var' ? ($config->{pos_col} + 2, $config->{pos_col} + 2) : (2, 3);
-          my $tabixout = `$tabix -s 1 -b $b -e $e $outfilepath\.gz`;
+          my $tabixout = `$tabix -s 1 -b $b -e $e $outfilepath\.gz 2>&1`;
           die("ERROR: tabix failed\n$tabixout") if $tabixout;
         }
         
