@@ -456,8 +456,9 @@ if(!scalar(@files)) {
   
   @files = (
     "bos_taurus_vep_$API_VERSION.tar.gz",
-    "danio_rerio_vep_$API_VERSION.tar.gz",
-    "homo_sapiens_vep_$API_VERSION.tar.gz",
+    "danio_rerio_vep_$API_VERSION.tar.gz", 
+    "homo_sapiens_vep_$API_VERSION\_GRCh38.tar.gz",
+    "homo_sapiens_vep_$API_VERSION\_GRCh37.tar.gz",
     "mus_musculus_vep_$API_VERSION.tar.gz",
     "rattus_norvegicus_vep_$API_VERSION.tar.gz",
   );
