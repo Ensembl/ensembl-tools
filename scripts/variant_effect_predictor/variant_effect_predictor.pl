@@ -67,7 +67,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 );
 
 # global vars
-my $VERSION = '77';
+my $VERSION = '78';
 
 my %ts_tv = (
   'A/G' => 'Ts',
@@ -424,7 +424,8 @@ sub configure {
         'pick',                    # used defined criteria to return most severe line
         'flag_pick',               # like --pick but just adds a flag to picked line
         'pick_allele',             # like --pick but chooses one con per allele
-        'pick_order=s',            # define the order of categories used by the --pick* flags
+        'flag_pick_allele',        # like --flag_pick but flags one con per allele
+        'pick_order=s',            # define the order of categories used by the --*pick* flags
         'buffer_size=i',           # number of variations to read in before analysis
         'chunk_size=s',            # size in bases of "chunks" used in internal hash structure
         'failed=i',                # include failed variations when finding existing
