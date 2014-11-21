@@ -590,7 +590,7 @@ sub configure {
     
     # connection settings for Ensembl Genomes
     if($config->{genomes}) {
-        $config->{host} ||= 'mysql.ebi.ac.uk';
+        $config->{host} ||= 'mysql-eg-publicsql.ebi.ac.uk';
         $config->{port} ||= 4157;
     }
     
