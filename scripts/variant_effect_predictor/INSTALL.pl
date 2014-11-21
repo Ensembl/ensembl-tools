@@ -9,7 +9,7 @@ use Net::FTP;
 use Cwd;
 
 $| = 1;
-our $VERSION = 77;
+our $VERSION = 78;
 our $have_LWP;
 our $use_curl = 0;
 have_LWP();

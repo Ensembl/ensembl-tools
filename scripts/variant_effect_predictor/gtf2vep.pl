@@ -30,7 +30,7 @@ use Bio::EnsEMBL::Translation;
 use Bio::EnsEMBL::Utils::Sequence qw(reverse_comp);
 use Bio::DB::Fasta;
 
-our $VERSION = 75;
+our $VERSION = 78;
 
 my $config = {};
 
