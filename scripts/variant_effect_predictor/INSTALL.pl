@@ -453,13 +453,15 @@ else {
 # if we don't have a species list, we'll have to guess
 if(!scalar(@files)) {
   print "Could not get current species list - using predefined list instead\n";
+  print "For more species, see http://www.ensembl.org/info/docs/tools/vep/script/vep_cache.html#pre\n";
   
   @files = (
-    "bos_taurus_vep_$API_VERSION.tar.gz",
-    "danio_rerio_vep_$API_VERSION.tar.gz",
-    "homo_sapiens_vep_$API_VERSION.tar.gz",
-    "mus_musculus_vep_$API_VERSION.tar.gz",
-    "rattus_norvegicus_vep_$API_VERSION.tar.gz",
+    "bos_taurus_vep_$API_VERSION_UMD3.1.tar.gz",
+    "danio_rerio_vep_$API_VERSION_Zv9.tar.gz",
+    "homo_sapiens_vep_$API_VERSION_GRCh37.tar.gz",
+    "homo_sapiens_vep_$API_VERSION_GRCh38.tar.gz",
+    "mus_musculus_vep_$API_VERSION_GRCm38.tar.gz",
+    "rattus_norvegicus_vep_$API_VERSION_Rnor_5.0.tar.gz",
   );
 }
 
