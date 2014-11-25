@@ -1448,6 +1448,8 @@ sub setup_cache() {
             )
           );
         }
+        
+        $config->{assembly} ||= $matched_assembly;
       }
     }
     
@@ -1467,6 +1469,11 @@ sub setup_cache() {
   # read cache info
   if(read_cache_info($config)) {
     debug("Read existing cache info") unless defined $config->{quiet};
+  }
+  
+  # check assembly matches
+  if(defined($config->{assembly}) && defined($config->{cache_assembly}) && $config->{assembly} ne $config->{cache_assembly}) {
+    die("ERROR: Mismatch in assembly versions from config (".$config->{assembly}.") and cache info.txt file (".$config->{cache_assembly}.")\n");
   }
   
   # check if there's a FASTA file in there
