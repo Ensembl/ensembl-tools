@@ -581,6 +581,7 @@ sub configure {
             maf_esp    => 1,
             pubmed     => 1,
             uniprot    => 1,
+            tsl        => 1,
         );
         
         $config->{$_} = $everything{$_} for keys %everything;
@@ -1270,7 +1271,7 @@ sub check_flags() {
   }
   
   # required
-  die "ERROR: --all_refseq requires using either --refseq or --merged\n" if defined($config->{all_refseq}) && !defined($config->{refseq}) && !defined($config->{merged});
+  # die "ERROR: --all_refseq requires using either --refseq or --merged\n" if defined($config->{all_refseq}) && !defined($config->{refseq}) && !defined($config->{merged});
   
   # check for deprecated flags
   die "ERROR: --hgnc has been replaced by --symbol\n" if defined($config->{hgnc});
