@@ -834,7 +834,7 @@ INTRO
     }
     
     # check regulatory available
-    if(defined($config->{regulatory}) && defined($config->{cache}) && !defined($config->{write_cache}) && !defined($config->{cache_regulatory})) {
+    if(defined($config->{regulatory}) && defined($config->{cache}) && !defined($config->{write_cache}) && !(defined($config->{cache_regulatory}) || defined($config->{cache_cell_types}))) {
         
         # --everything this option is implicit so don't die
         if(defined($config->{everything})) {
