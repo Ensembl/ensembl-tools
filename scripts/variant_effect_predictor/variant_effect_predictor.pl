@@ -1968,8 +1968,8 @@ sub get_out_file_handle {
     
     # make header
     my $time = &get_time;
-    my $db_string = $config->{mca}->dbc->dbname." on ".$config->{mca}->dbc->host if defined $config->{mca};
-    $db_string .= "\n## Using cache in ".$config->{dir} if defined($config->{cache});
+    my $db_string = "## Connected to ".$config->{mca}->dbc->dbname." on ".$config->{mca}->dbc->host if defined $config->{mca};
+    $db_string .= ($db_string ? "\n" : "")."## Using cache in ".$config->{dir} if defined($config->{cache});
     my $version_string =
         "Using API version ".$config->{reg}->software_version.
         ", DB version ".(defined $config->{mca} && $config->{mca}->get_schema_version ? $config->{mca}->get_schema_version : '?');
@@ -1992,7 +1992,7 @@ sub get_out_file_handle {
     my $header =<<HEAD;
 ## ENSEMBL VARIANT EFFECT PREDICTOR v$VERSION
 ## Output produced at $time
-## Connected to $db_string
+$db_string
 ## $version_string
 ## Extra column keys:
 $extra_column_keys
