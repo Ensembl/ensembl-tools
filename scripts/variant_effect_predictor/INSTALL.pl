@@ -456,12 +456,12 @@ if(!scalar(@files)) {
   print "For more species, see http://www.ensembl.org/info/docs/tools/vep/script/vep_cache.html#pre\n";
   
   @files = (
-    "bos_taurus_vep_$API_VERSION_UMD3.1.tar.gz",
-    "danio_rerio_vep_$API_VERSION_Zv9.tar.gz",
-    "homo_sapiens_vep_$API_VERSION_GRCh37.tar.gz",
-    "homo_sapiens_vep_$API_VERSION_GRCh38.tar.gz",
-    "mus_musculus_vep_$API_VERSION_GRCm38.tar.gz",
-    "rattus_norvegicus_vep_$API_VERSION_Rnor_5.0.tar.gz",
+    "bos_taurus_vep_".$API_VERSION."_UMD3.1.tar.gz",
+    "danio_rerio_vep_".$API_VERSION."_Zv9.tar.gz",
+    "homo_sapiens_vep_".$API_VERSION."_GRCh37.tar.gz",
+    "homo_sapiens_vep_".$API_VERSION."_GRCh38.tar.gz",
+    "mus_musculus_vep_".$API_VERSION."_GRCm38.tar.gz",
+    "rattus_norvegicus_vep_".$API_VERSION."_Rnor_5.0.tar.gz",
   );
 }
 
