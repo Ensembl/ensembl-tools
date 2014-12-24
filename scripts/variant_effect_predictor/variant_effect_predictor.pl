@@ -531,6 +531,7 @@ sub configure {
         'safe',                    # die if plugins don't compile or spit warnings
         'fasta=s',                 # file or dir containing FASTA files with reference sequence
         'freq_file=s',             # file containing freqs to add to cache build
+        'freq_vcf=s' => ($config->{freq_vcf} ||= []), # VCF file containing freqs
         
         # debug
         'cluck',                   # these two need some mods to Bio::EnsEMBL::DBSQL::StatementHandle to work. Clucks callback trace and SQL
@@ -916,7 +917,24 @@ INTRO
             die("ERROR: Cannot build cache using public database server ", $config->{host}, "\n");
         }
         
-        # get 1KG freqs
+        # get VCF freqs
+        if(defined($config->{freq_vcf})) {
+          my @new;
+          
+          foreach my $vcf_conf(@{$config->{freq_vcf}}) {
+            my ($freq_file, @file_pops) = split /\,/, $vcf_conf;
+            
+            push @new, {
+              file => $freq_file,
+              pops => \@file_pops,
+            };
+            
+            push @{$config->{'freq_file_pops'}}, @file_pops;
+          }
+          
+          $config->{freq_vcf} = \@new;
+        }
+        
         if(defined($config->{'freq_file'})) {
             my ($freq_file, @file_pops) = split /\,/, $config->{'freq_file'};
             debug("Loading extra frequencies from $freq_file") unless defined($config->{quiet});
@@ -935,7 +953,9 @@ INTRO
             close IN;
             
             # add pops to $config
-            $config->{'freq_file_pops'} = \@file_pops;
+            push @{$config->{'freq_file_pops'}}, @file_pops;
+
+            push @{$config->{'just_file_pops'}}, @file_pops;
         }
         
         # build the cache
