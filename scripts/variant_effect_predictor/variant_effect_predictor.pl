@@ -221,7 +221,7 @@ sub main {
         # some lines (pileup) may actually parse out into more than one variant
         foreach my $vf(@{&parse_line($config, $_)}) {
             
-            $vf->{_line} = $_ ;#if defined($config->{vcf}) || defined($config->{original});
+            $vf->{_line} = $_ ;
             $vf->{_line_number} = $config->{line_number};
             
             # now get the slice
@@ -312,7 +312,7 @@ sub main {
         debug("Processed $total_vf_count total variants ($rate, $total_rate total)") unless defined($config->{quiet});
     }
     
-    debug($config->{stats}->{filter_count}, "/$total_vf_count variants remain after filtering") if (defined($config->{filter}) || defined($config->{check_frequency})) && !defined($config->{quiet});
+    debug($config->{stats}->{filter_count}, "/$total_vf_count variants remain after filtering") if (defined($config->{check_frequency})) && !defined($config->{quiet});
     
     debug("Executed ", defined($Bio::EnsEMBL::DBSQL::StatementHandle::count_queries) ? $Bio::EnsEMBL::DBSQL::StatementHandle::count_queries : 'unknown number of', " SQL statements") if defined($config->{count_queries}) && !defined($config->{quiet});
     
@@ -488,14 +488,12 @@ sub configure {
         'regulatory',              # enable regulatory stuff
         'cell_type=s' => ($config->{cell_type} ||= []),             # filter cell types for regfeats
         'convert=s',               # convert input to another format (doesn't run VEP)
-        'filter=s',                # run in filtering mode
         'no_intergenic',           # don't print out INTERGENIC consequences
         'gvf',                     # produce gvf output
         'vcf',                     # produce vcf output
         'solr',                    # produce XML output for Solr
         'json',                    # produce JSON document output
         'keep_csq',                # don't nuke existing CSQ fields in VCF
-        'original',                # produce output in input format
         'no_consequences',         # don't calculate consequences
         'lrg',                     # enable LRG-based features
         'fields=s',                # define your own output fields
@@ -777,9 +775,6 @@ INTRO
     
     # setup forking
     setup_forking($config) if defined($config->{fork});
-    
-    # setup filter
-    setup_filter($config) if defined($config->{filter});
     
     # offline needs cache, can't use HGVS
     if(defined($config->{offline})) {
@@ -1342,7 +1337,7 @@ Cache: http://www.ensembl.org/info/docs/tools/vep/script/index.html#cache
   
   # check file format
   if(defined $config->{format}) {
-    die "ERROR: Unrecognised input format specified \"".$config->{format}."\"\n" unless $config->{format} =~ /^(pileup|vcf|guess|hgvs|ensembl|id|vep)$/i;
+    die "ERROR: Unrecognised input format specified \"".$config->{format}."\"\n" unless $config->{format} =~ /^(pileup|vcf|guess|hgvs|ensembl|id)$/i;
   }
   
   # check convert format
@@ -1362,9 +1357,6 @@ Cache: http://www.ensembl.org/info/docs/tools/vep/script/index.html#cache
   
   # output format has to be VCF for tabix
   die "ERROR: Output must be vcf (--vcf) to use --tabix\n" if defined($config->{tabix}) && !defined($config->{vcf});
-  
-  # check if using filter and original
-  die "ERROR: You must also provide output filters using --filter to use --original\n" if defined($config->{original}) && !defined($config->{filter});
   
   # can't use more than one of most_severe, pick, per_gene, summary
   my $total_sev_opts = 0;
@@ -1692,32 +1684,6 @@ sub setup_forking {
   }
 }
 
-sub setup_filter {
-  my $config = shift;
-  
-  my %filters = map {$_ => 1} split /\,/, $config->{filter};
-  
-  # add in shortcuts
-  foreach my $filter(keys %filters) {
-    my $value = 1;
-    if($filter =~ /^no_/) {
-      delete $filters{$filter};
-      $filter =~ s/^no_//g;
-      $value = 0;
-      $filters{$filter} = $value;
-    }
-    
-    if(defined($FILTER_SHORTCUTS{$filter})) {
-      delete $filters{$filter};
-      $filters{$_} = $value for keys %{$FILTER_SHORTCUTS{$filter}};
-    }
-  }
-  
-  $config->{filter} = \%filters;
-  
-  $config->{stats}->{filter_count} = 0;
-}
-
 # gets regulatory adaptors
 sub get_reg_adaptors {
     my $config = shift;
@@ -1840,11 +1806,7 @@ sub get_out_file_handle {
     }
     
     # GVF output, no header
-    elsif(defined($config->{gvf}) || defined($config->{original})) {
-        if(defined($config->{headers}) && defined($config->{original})) {
-            print $out_file_handle join "\n", @{$config->{headers}};
-            print $html_file_handle join("\n", @{$config->{headers}})."\n</pre>" if defined($config->{html});
-        }
+    elsif(defined($config->{gvf})) {
         return $out_file_handle;
     }
     
