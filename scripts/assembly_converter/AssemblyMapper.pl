@@ -24,11 +24,12 @@ use Getopt::Long;
 
 use Bio::EnsEMBL::Registry;
 
-my ( $filename, $species );
+my ( $filename, $species, $ensembl_genomes );
 my $help = '';
 
 if ( !GetOptions( 'file|f=s'    => \$filename,
                   'species|s=s' => \$species,
+                  'genomes|g' => \$ensembl_genomes,
                   'help|h!'     => \$help )
      || !( defined($filename) && defined($species) )
      || $help )
@@ -41,8 +42,9 @@ Usage:
   $0 --help
 
 
-    --species / -s  Name of species.  Mappings are currently only
-                    available for mouse and human.
+    --species / -s  Name of species.
+
+    --genomes / -g  Automatically sets DB params for e!Genomes
 
     --file / -f     Name of file containing a list of slices to map to
                     the most recent assembly.  The format of the data
@@ -80,8 +82,18 @@ END_USAGE
 
 my $registry = 'Bio::EnsEMBL::Registry';
 
-$registry->load_registry_from_db( '-host' => 'ensembldb.ensembl.org',
-                                  '-user' => 'anonymous' );
+my $host = 'ensembldb.ensembl.org';
+my $port = 3306;
+my $user = 'anonymous';
+
+if ($ensembl_genomes) {
+  $host = 'mysql-eg-publicsql.ebi.ac.uk';
+  $port = 4157;
+}
+
+$registry->load_registry_from_db( '-host' => $host,
+                                  '-port' => $port,
+                                  '-user' => $user );
 
 my $slice_adaptor = $registry->get_adaptor( $species, 'Core', 'Slice' );
 

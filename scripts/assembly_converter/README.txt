@@ -35,8 +35,9 @@ Usage:
 
   AssemblyMapper.pl --species=species --file=filename
 
-    --species / -s  Name of species.  Mappings are currently only
-                    available for mouse and human.
+    --species / -s  Name of species.
+
+    --genomes / -g  Automatically sets DB params for e!Genomes
 
     --file / -f     Name of file containing a list of slices to map to
                     the most recent assembly.  The format of the data
