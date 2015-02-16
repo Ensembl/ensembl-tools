@@ -327,6 +327,11 @@ sub main {
       debug("Wrote stats summary to ".$config->{stats_file}) unless defined($config->{quiet});
     }
     
+    # tell user about any warnings
+    if($config->{warning_count}) {
+      debug("See ".$config->{warning_file}." for details of ".$config->{warning_count}." warnings") unless defined($config->{quiet});
+    }
+    
     # close HTML output
     if(defined($config->{html}) && defined($config->{html_file_handle})) {
       my $fh = $config->{html_file_handle};
@@ -466,6 +471,7 @@ sub configure {
         'html',                    # generate an HTML version of output
         'stats_file|sf=s',         # stats file name
         'stats_text',              # write stats as text
+        'warning_file=s',          # file to write warnings to
         'no_stats',                # don't write stats file
         'force_overwrite',         # force overwrite of output file if already exists
         'terms|t=s',               # consequence terms to use e.g. NCBI, SO
