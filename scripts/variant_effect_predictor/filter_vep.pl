@@ -183,7 +183,7 @@ sub main {
       die("ERROR: Could not detect input file format - perhaps you need to specify it with --format?\n") unless defined($config->{format});
       die("ERROR: --only_matched is compatible only with VCF files\n") if $config->{format} ne 'vcf' && defined($config->{only_matched});
       
-      my (@data, @chunks);
+      my (@data, @chunks, $vcf_info_field);
       
       if($config->{format} eq 'vep') {
         push @data, parse_line($line, \@headers, "\t");
@@ -201,8 +201,9 @@ sub main {
         }
         
         # get CSQ stuff
-        if($line =~ m/CSQ\=(.+?)(\;|$|\s)/) {
-          @chunks = split('\,', $1);
+        if($line =~ m/(CSQ|ANN)\=(.+?)(\;|$|\s)/) {
+          $vcf_info_field = $1;
+          @chunks = split('\,', $2);
           push @data,
             map {merge_hashes($_, $main_data)}
             map {parse_line($_, \@headers, '\|')}
@@ -230,7 +231,7 @@ sub main {
       # update CSQ if using only_matched
       if(defined($config->{only_matched}) && scalar @new_chunks != scalar @chunks) {
         my $new_csq = join(",", @new_chunks);
-        $line =~ s/CSQ\=(.+?)(\;|\s|$)/CSQ\=$new_csq$2/;
+        $line =~ s/$vcf_info_field\=(.+?)(\;|\s|$)/$vcf_info_field\=$new_csq$2/;
       }
       
       $count++ if $line_pass;
@@ -257,7 +258,7 @@ sub parse_headers {
     
     # field definition (VCF)
     if($hash_count == 2) {
-      if($raw_header =~ /INFO\=\<ID\=CSQ/) {
+      if($raw_header =~ /INFO\=\<ID\=(CSQ|ANN)/) {
         $raw_header =~ m/Format\: (.+?)\"/;
         $config->{headers} = [split '\|', $1];
       }
