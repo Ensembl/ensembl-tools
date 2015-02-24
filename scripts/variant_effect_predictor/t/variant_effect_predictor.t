@@ -180,7 +180,7 @@ ok($output =~ /$expected/, "consequence type - missense") or diag("Expected\n$ex
 $output = (grep {/upstream/} (split "\n", $full_output))[0];
 $expected =
   "ENSG00000260583\tENST00000567517\tTranscript\tupstream_gene_variant\t".
-  "-\t-\t-\t-\t-\t-\tDISTANCE=4432";
+  "-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=4432";
 
 ok($output =~ /$expected/, "consequence type - upstream") or diag("Expected\n$expected\n\nGot\n$output");
 
@@ -292,7 +292,8 @@ $expected = {
   MOTIF_NAME => 'Name/Accession_association_EBF1:MA0154.2',
   HIGH_INF_POS => 'N',
   MOTIF_SCORE_CHANGE => -0.022,
-  STRAND => 1
+  STRAND => 1,
+  IMPACT => 'MODIFIER',
 };
 is_deeply(\%tmp_hash, $expected, "motif");
 
