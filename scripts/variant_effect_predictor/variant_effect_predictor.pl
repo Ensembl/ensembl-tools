@@ -59,6 +59,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
     get_time
     debug
     @OUTPUT_COLS
+    @VCF_COLS
     @EXTRA_HEADERS
     %COL_DESCS
     @REG_FEAT_TYPES
@@ -499,7 +500,9 @@ sub configure {
         'vcf',                     # produce vcf output
         'solr',                    # produce XML output for Solr
         'json',                    # produce JSON document output
+        'vcf_info_field=s',        # allow user to change VCF info field name
         'keep_csq',                # don't nuke existing CSQ fields in VCF
+        'keep_ann',                # synonym for keep_csq
         'no_consequences',         # don't calculate consequences
         'lrg',                     # enable LRG-based features
         'fields=s',                # define your own output fields
@@ -627,6 +630,11 @@ sub configure {
       }
     }
     
+    if(defined($config->{vcf})) {
+      $config->{keep_csq} = 1 if defined($config->{keep_ann});
+      $config->{$_} = 1 for qw(symbol biotype numbers);
+    }
+    
     # force quiet if outputting to STDOUT
     if(defined($config->{output_file}) && $config->{output_file} =~ /stdout/i) {
         delete $config->{verbose} if defined($config->{verbose});
@@ -688,6 +696,7 @@ INTRO
     $config->{cache_region_size} ||= 1000000;
     $config->{compress}          ||= 'gzip -dc';
     $config->{polyphen_analysis}   = defined($config->{humdiv}) ? 'humdiv' : 'humvar';
+    $config->{vcf_info_field}    ||= 'CSQ';
     
     # shift HGVS?
     if(defined($config->{shift_hgvs})) {
@@ -1836,7 +1845,15 @@ sub get_out_file_handle {
             @new_headers = @{$config->{fields}};
         }
         else {
-            @new_headers = (
+            
+            # now we have to reconfigure headers to comply with the snpEff ANN standard
+            my %vcf_cols = map {$_ => 1} @VCF_COLS;
+            
+            @new_headers = @VCF_COLS;
+            
+            push @new_headers, (
+                
+                grep {!$vcf_cols{$_}}
                 
                 # get default headers, minus variation name and location (already encoded in VCF)
                 grep {
@@ -1869,7 +1886,7 @@ sub get_out_file_handle {
         
         # add the newly defined headers as a header to the VCF
         my $string = join '|', @{$config->{fields}};
-        push @vcf_info_strings, '##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence type as predicted by VEP. Format: '.$string.'">';
+        push @vcf_info_strings, '##INFO=<ID='.$config->{vcf_info_field}.',Number=.,Type=String,Description="Consequence annotations from Ensembl VEP. Format: '.$string.'">';
         
         # add custom headers
         foreach my $custom(@{$config->{custom}}) {
@@ -1885,7 +1902,8 @@ sub get_out_file_handle {
             
             # nuke existing CSQ header unless we are keeping it
             unless(defined($config->{keep_csq})) {
-              @{$config->{headers}} = grep {!/CSQ/} @{$config->{headers}};
+              my $vcf_field = $config->{vcf_info_field};
+              @{$config->{headers}} = grep {!/$vcf_field/} @{$config->{headers}};
             }
             
             for my $i(0..$#{$config->{headers}}) {
