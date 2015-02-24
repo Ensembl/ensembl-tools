@@ -68,7 +68,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 );
 
 # global vars
-my $VERSION = '78';
+my $VERSION = '79';
 
 my %ts_tv = (
   'A/G' => 'Ts',

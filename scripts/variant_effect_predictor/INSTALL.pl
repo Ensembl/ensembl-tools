@@ -10,7 +10,7 @@ use Cwd;
 use strict;
 
 $| = 1;
-our $VERSION = 78;
+our $VERSION = 79;
 our $have_LWP;
 our $use_curl = 0;
 have_LWP();
