@@ -578,11 +578,22 @@ sub cache() {
     }
   
     my $target_file = "$CACHE_DIR/tmp/$file_name";
-  
     if($CACHE_URL =~ /^ftp/) {
       print " - downloading $CACHE_URL/$file_path\n" unless $QUIET;
       if(!$TEST) {
         $ftp->get($file_name, $target_file) or download_to_file("$CACHE_URL/$file_path", $target_file);
+
+        my $checksums = "CHECKSUMS";
+        my $checksums_target_file = "$CACHE_DIR/tmp/$checksums"; 
+        $ftp->get($checksums, $checksums_target_file) or download_to_file("$CACHE_URL/$checksums", $checksums_target_file);
+        if (-e $checksums_target_file) {
+          my $sum_download = `sum $target_file`;
+          $sum_download =~ m/([0-9]+)(\s+)([0-9]+)(\s+)(.+)/;
+          my $sum_ftp = `grep $file_name $checksums_target_file`;
+          if ($sum_download && $sum_ftp) {
+            die("ERROR: checksum for $target_file doesn't match checksum in CHECKSUMS file on FTP site\n") if ($sum_ftp !~ m/^$1\s+/);
+          }
+        }
       }
     }
     else {
