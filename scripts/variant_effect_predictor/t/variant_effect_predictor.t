@@ -478,6 +478,11 @@ $output = `$cmd --most_severe`;
 $expected = '\smissense_variant\s';
 ok($output =~ /$expected/, "most severe") or diag("Expected\n$expected\n\nGot\n$output");
 
+input(qq{21 25487468 25487468 A/T +});
+$output = `$cmd --regulatory --most_severe`;
+$expected = '\sTF_binding_site_variant\s';
+ok($output =~ /$expected/, "most severe regulatory") or diag("Expected\n$expected\n\nGot\n$output");
+
 # pick order
 input('21 25716535 25716535 A/G +');
 
