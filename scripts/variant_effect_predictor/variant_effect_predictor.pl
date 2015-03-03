@@ -261,7 +261,7 @@ sub main {
             next unless validate_vf($config, $vf);
             
             # make a name if one doesn't exist
-            $vf->{variation_name} ||= $vf->{chr}.'_'.$vf->{start}.'_'.($vf->{allele_string} || $vf->{class_SO_term});
+            $vf->{variation_name} ||= ($vf->{original_chr} || $vf->{chr}).'_'.$vf->{start}.'_'.($vf->{allele_string} || $vf->{class_SO_term});
             
             # jump out to convert here
             if(defined($config->{convert})) {
