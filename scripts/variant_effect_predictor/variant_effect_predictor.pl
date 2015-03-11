@@ -1642,12 +1642,12 @@ sub setup_custom {
     
     # remote files?
     if($filepath =~ /tp\:\/\//) {
-        my $remote_test = `tabix $filepath 1:1-1 2>&1`;
-        if($remote_test =~ /fail/) {
-          die "$remote_test\nERROR: Could not find file or index file for remote annotation file $filepath\n";
-        }
-        elsif($remote_test =~ /get_local_version/) {
+        my $remote_test = `tabix -f $filepath 1:1-1 2>&1`;
+        if($remote_test =~ /get_local_version/) {
           debug("Downloaded tabix index file for remote annotation file $filepath") unless defined($config->{quiet});
+        }
+        else {
+          die "$remote_test\nERROR: Could not find file or index file for remote annotation file $filepath\n";
         }
       }
   
