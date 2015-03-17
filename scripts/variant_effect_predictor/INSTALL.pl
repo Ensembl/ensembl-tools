@@ -588,10 +588,13 @@ sub cache() {
         $ftp->get($checksums, $checksums_target_file) or download_to_file("$CACHE_URL/$checksums", $checksums_target_file);
         if (-e $checksums_target_file) {
           my $sum_download = `sum $target_file`;
-          $sum_download =~ m/([0-9]+)(\s+)([0-9]+)(\s+)(.+)/;
+          $sum_download =~ m/([0-9]+)(\s+)([0-9]+)/;
+          my $checksum_download = $1;
+          $checksum_download =~ s/^0*//;
           my $sum_ftp = `grep $file_name $checksums_target_file`;
+          $sum_ftp =~ s/^0*//;
           if ($sum_download && $sum_ftp) {
-            die("ERROR: checksum for $target_file doesn't match checksum in CHECKSUMS file on FTP site\n") if ($sum_ftp !~ m/^$1\s+/);
+            die("ERROR: checksum for $target_file doesn't match checksum in CHECKSUMS file on FTP site\n") if ($sum_ftp !~ m/^$checksum_download\s+/);
           }
         }
       }
