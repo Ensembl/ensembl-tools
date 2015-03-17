@@ -1637,17 +1637,22 @@ sub setup_custom {
     }
     
     else {
-    # check for tabix
-    die "ERROR: tabix does not seem to be in your path - this is required to use custom annotations\n" unless `which tabix 2>&1` =~ /tabix$/;
+      # check for tabix
+      die "ERROR: tabix does not seem to be in your path - this is required to use custom annotations\n" unless `which tabix 2>&1` =~ /tabix$/;
     
-    # remote files?
-    if($filepath =~ /tp\:\/\//) {
-        my $remote_test = `tabix -f $filepath 1:1-1 2>&1`;
-        if($remote_test =~ /get_local_version/) {
-          debug("Downloaded tabix index file for remote annotation file $filepath") unless defined($config->{quiet});
-        }
-        else {
-          die "$remote_test\nERROR: Could not find file or index file for remote annotation file $filepath\n";
+      # remote files?
+      my $filename = (split /\//, $filepath)[-1];
+    
+      if($filepath =~ /tp\:\/\//) {
+        if(!-e $filename.'.tbi') {
+          my $remote_test = `tabix -f $filepath 1:1-1 2>&1`;
+          
+          if($remote_test =~ /get_local_version/) {
+            debug("Downloaded tabix index file for remote annotation file $filepath") unless defined($config->{quiet});
+          }
+          else {
+            die "$remote_test\nERROR: Could not find file or index file for remote annotation file $filepath\n";
+          }
         }
       }
   
