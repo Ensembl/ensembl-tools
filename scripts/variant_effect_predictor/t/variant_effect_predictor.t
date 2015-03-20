@@ -36,16 +36,17 @@ my $data_path = $var_path.'/t/testdata/';
 die("ERROR: Could not find test data path $data_path\n") unless -d $data_path;
 
 my $ver    = $config->{version};
+my $cver   = $config->{cache_version};
 my $ass    = $config->{assembly};
 my $sp     = $config->{species};
 my $script = $Bin.'/../variant_effect_predictor.pl';
 my $perl   = '/usr/bin/env perl';
 my $inc    = '-I ~/Variation/modules/ -I $Bin\../';
 my $bascmd = "$perl $inc $script";
-my $cmd    = "$bascmd -force -offline -dir_cache $data_path/vep-cache/ -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp";
+my $cmd    = "$bascmd -force -offline -dir_cache $data_path/vep-cache/ -i $tmpfile -o stdout -cache_version $cver -assembly $ass -species $sp";
 
 # unzip fasta
-`gzip -dc $data_path/vep-cache/$sp/$ver\_$ass/test.fa.gz > $data_path/vep-cache/$sp/$ver\_$ass/test.fa` if(-e "$data_path/vep-cache/$sp/$ver\_$ass/test.fa.gz");
+`gzip -dc $data_path/vep-cache/$sp/$cver\_$ass/test.fa.gz > $data_path/vep-cache/$sp/$cver\_$ass/test.fa` if(-e "$data_path/vep-cache/$sp/$cver\_$ass/test.fa.gz");
 
 
 ## BASIC TEST
@@ -551,7 +552,7 @@ ok($ens =~ /ENST00000419219/, "merged cache Ensembl") or diag("Got\n$ens");
 ok($ref =~ /NM_080794/, "merged cache RefSeq") or diag("Got\n$ref");
 
 # stats file
-$output = `$bascmd -force -offline -dir_cache $data_path/vep-cache -i $tmpfile -o $tmpfile\.out -db $ver -assembly $ass -species $sp`;
+$output = `$bascmd -force -offline -dir_cache $data_path/vep-cache -i $tmpfile -o $tmpfile\.out -cache_version $cver -assembly $ass -species $sp`;
 ok(-e $tmpfile.'.out_summary.html', "stats file");
 open STATS, $tmpfile.'.out_summary.html';
 @lines = <STATS>;
@@ -560,7 +561,7 @@ ok((grep {/\<title\>VEP summary\<\/title\>/} @lines), "stats file header");
 ok((grep {/\'missense_variant\'\,3/} @lines), "stats missense");
 
 # text stats file
-$output = `$bascmd -force -offline -dir_cache $data_path/vep-cache -i $tmpfile -o $tmpfile\.out -db $ver -assembly $ass -species $sp -stats_text`;
+$output = `$bascmd -force -offline -dir_cache $data_path/vep-cache -i $tmpfile -o $tmpfile\.out -cache_version $cver -assembly $ass -species $sp -stats_text`;
 ok(-e $tmpfile.'.out_summary.txt', "stats txt file");
 open STATS, $tmpfile.'.out_summary.txt';
 @lines = <STATS>;
@@ -612,7 +613,7 @@ if(`ping -c 1 ensembldb.ensembl.org` =~ /bytes from/) {
   
   # use cache and database
   input('rs2282471');
-  $output = `$dbcmd -force -cache -dir_cache $data_path/vep-cache/ -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp -maf_1kg`;
+  $output = `$dbcmd -force -cache -dir_cache $data_path/vep-cache/ -cache_version $cver -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp -maf_1kg`;
   ok($output =~ /AFR_MAF=T:0.04/, "DB - with cache") or diag("Got\n$output");
   
   # HGVS as input
