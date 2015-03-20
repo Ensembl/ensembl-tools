@@ -827,7 +827,7 @@ sub update() {
   die("ERROR: Updating requires HTTP::Tiny Perl module\n$@") if $@;
   my $http = HTTP::Tiny->new();
 
-  my $server = 'http://beta.rest.ensembl.org';
+  my $server = 'http://rest.ensembl.org';
   my $ext = '/info/software?';
   my $response = $http->get($server.$ext, {
     headers => { 'Content-type' => 'application/json' }
