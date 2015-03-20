@@ -29,7 +29,7 @@ while(<CONF>) {
 }
 close CONF;
 
-my $ver = $config->{version};
+my $ver = $config->{cache_version};
 my $ass = $config->{assembly};
 my $sp  = $config->{species};
 
