@@ -56,6 +56,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
     get_slice
     build_full_cache
     read_cache_info
+    get_version_data
     get_time
     debug
     @OUTPUT_COLS
@@ -875,24 +876,18 @@ INTRO
     
     # check SIFT/PolyPhen available?
     foreach my $tool(grep {defined($config->{$_})} qw(sift polyphen)) {
-        my $string = 'cache_'.$tool.'_version';
+      my $vd = get_version_data($config);
         
-        if(!defined($config->{$string}) && !defined($config->{offline})) {
-            my $var_mca = $config->{reg}->get_adaptor($config->{species}, 'variation', 'metacontainer');
-            my $values = $var_mca->list_value_by_key($tool.'_version') if defined($var_mca);
-            $config->{$string} = $values->[0] if $values && scalar @$values;
-        }
-        
-        if(!defined($config->{$string})) {
+      unless(defined($vd->{$tool}) || defined($config->{'cache_'.$tool.'_version'})) {
             
-            # --everything this option is implicit so don't die
-            if(defined($config->{everything})) {
-                delete $config->{$tool};
-            }
-            else {
-                die("ERROR: --$tool is not available for this species");
-            }
+        # --everything this option is implicit so don't die
+        if(defined($config->{everything})) {
+          delete $config->{$tool};
         }
+        else {
+          die("ERROR: --$tool is not available for this species or cache");
+        }
+      }
     }
     
     # get terminal width for progress bars
@@ -1836,7 +1831,7 @@ sub get_out_file_handle {
         # create an info string for the VCF header        
         my (@new_headers, @vcf_info_strings);
         
-        push @vcf_info_strings, sprintf(
+        my $vcf_version_string = sprintf(
           "##VEP=v%i cache=%s db=%s",
           $VERSION,
           $config->{cache} ? $config->{dir} : '.',
@@ -1844,6 +1839,11 @@ sub get_out_file_handle {
             $config->{mca} ? $config->{mca}->dbc->dbname.'@'.$config->{mca}->dbc->host : '.'
           )
         );
+        
+        my $version_data = get_version_data($config);
+        $vcf_version_string .= ' '.$_.'='.$version_data->{$_} for keys %$version_data;
+        
+        push @vcf_info_strings, $vcf_version_string;
         
         # if the user has defined the fields themselves, we don't need to worry
         if(defined $config->{fields_redefined}) {
@@ -1984,14 +1984,10 @@ sub get_out_file_handle {
     my $version_string =
         "Using API version ".$config->{reg}->software_version.
         ", DB version ".(defined $config->{mca} && $config->{mca}->get_schema_version ? $config->{mca}->get_schema_version : '?');
-        
-    # sift/polyphen versions
-    foreach my $tool(qw(sift polyphen)) {
-        if(defined($config->{$tool})) {
-            my $string = 'cache_'.$tool.'_version';
-            $version_string .= "\n## $tool version ".$config->{$string};
-        }
-    }
+    
+    # other version data
+    my $version_data = get_version_data($config);
+    $version_string .= "\n## $_ version ".$version_data->{$_} for keys %$version_data;
     
     # add key for extra column headers based on config
     my $extra_column_keys = join "\n",
