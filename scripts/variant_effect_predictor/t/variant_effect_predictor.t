@@ -383,7 +383,7 @@ ok($output =~ /test1/ && $output !~ /test2/, "check frequency 3");
 
 ## external IDs etc
 input('21 25587758 rs116645811 G A . . .');
-$full_output = `$cmd --ccds --canonical --protein --uniprot --symbol --biotype --tsl --xref_refseq --numbers --domains`;
+$full_output = `$cmd --ccds --canonical --protein --uniprot --symbol --biotype --tsl --xref_refseq --numbers --domains --variant_class`;
 $output = (grep {/ENST00000352957/} (split "\n", $full_output))[0];
 
 # gene symbol
@@ -431,6 +431,10 @@ ok($output =~ /$expected/, "exon number") or diag("Expected\n$expected\n\nGot\n$
 $expected = 'DOMAINS=Low_complexity_\(Seg\):Seg';
 ok($output =~ /$expected/, "protein domains") or diag("Expected\n$expected\n\nGot\n$output");
 
+
+$expected = 'VARIANT_CLASS=SNV';
+ok($output =~ /$expected/, "variant class") or diag("Expected\n$expected\n\nGot\n$output");
+
 # everything
 $output = `$cmd --everything | grep -v '#'`;
 ok(
@@ -451,7 +455,8 @@ ok(
   $output =~ /CCDS/ &&
   $output =~ /SIFT/ &&
   $output =~ /PolyPhen/ &&
-  $output =~ /DOMAINS/,
+  $output =~ /DOMAINS/ &&
+  $output =~ /VARIANT_CLASS/,
   "everything"
 ) or diag("Got\n$output");
 

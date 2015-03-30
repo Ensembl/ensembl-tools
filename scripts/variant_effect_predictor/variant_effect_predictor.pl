@@ -493,6 +493,7 @@ sub configure {
         'polyphen=s',              # PolyPhen predictions
         'humdiv',                  # use humDiv instead of humVar for PolyPhen
         'condel=s',                # Condel predictions
+        'variant_class',           # get SO variant type
         'regulatory',              # enable regulatory stuff
         'cell_type=s' => ($config->{cell_type} ||= []),             # filter cell types for regfeats
         'convert=s',               # convert input to another format (doesn't run VEP)
@@ -574,23 +575,24 @@ sub configure {
     # everything?
     if(defined($config->{everything})) {
         my %everything = (
-            sift       => 'b',
-            polyphen   => 'b',
-            ccds       => 1,
-            hgvs       => 1,
-            symbol     => 1,
-            numbers    => 1,
-            domains    => 1,
-            regulatory => 1,
-            canonical  => 1,
-            protein    => 1,
-            biotype    => 1,
-            gmaf       => 1,
-            maf_1kg    => 1,
-            maf_esp    => 1,
-            pubmed     => 1,
-            uniprot    => 1,
-            tsl        => 1,
+            sift          => 'b',
+            polyphen      => 'b',
+            ccds          => 1,
+            hgvs          => 1,
+            symbol        => 1,
+            numbers       => 1,
+            domains       => 1,
+            regulatory    => 1,
+            canonical     => 1,
+            protein       => 1,
+            biotype       => 1,
+            gmaf          => 1,
+            maf_1kg       => 1,
+            maf_esp       => 1,
+            pubmed        => 1,
+            uniprot       => 1,
+            tsl           => 1,
+            variant_class => 1,
         );
         
         $config->{$_} = $everything{$_} for keys %everything;
