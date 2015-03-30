@@ -115,16 +115,28 @@ while ( my $line = $in->getline() ) {
   #Strip off spaces at the start and end of the line
   $line =~ s/^\s+|\s+$//;
 
-  # We're assuming that the line will be in the same format as what's
-  # outputted by the name() method for a Slice object.
-  if ( $line !~ /^(\w+)?:([^:]+)?:(\w+):(\d+)?:(\d+)?:(-?\d+)?$/ ) {
+  # Check location string is correctly formatted
+  my $number_seps_regex = qr/\s+|,/;
+  my $separator_regex = qr/(?:-|[.]{2}|\:|_)?/;
+  my $number_regex = qr/[0-9, E]+/xms;
+  my $strand_regex = qr/[+-1]|-1/xms;
+
+  # Location string should look like chromosome:GRCh37:X:1000000:1000100:1
+  # Strand, start and end can be left out
+  my $regex = qr/^(\w+) $separator_regex (\w+) $separator_regex ((?:\w|\.|_|-)+) \s* :? \s* ($number_regex)? $separator_regex ($number_regex)? $separator_regex ($strand_regex)? $/xms;
+
+  my ( $old_cs_name, $old_version, $old_sr_name, $old_start, $old_end, $old_strand );
+
+  if ( ($old_cs_name, $old_version, $old_sr_name, $old_start, $old_end, $old_strand) = $line =~ $regex) {
+  } else {
     printf( "Malformed line:\n%s\n", $line );
     next;
   }
 
-  my ( $old_cs_name, $old_version, $old_sr_name,
-       $old_start,   $old_end,     $old_strand
-  ) = ( $1, $2, $3, $4, $5, $6 );
+  # We're assuming that the line will be in the same format as what's
+  # outputted by the name() method for a Slice object.
+  #if ( $line !~ /^(\w+)?:([^:]+)?:(\w+):(\d+)?:(\d+)?:(-?\d+)?$/ ) {
+  #}
 
   # Get a slice for the old region (the region in the input file).
   my $old_slice =
