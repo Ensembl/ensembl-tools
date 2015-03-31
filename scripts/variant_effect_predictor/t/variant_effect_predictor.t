@@ -550,11 +550,12 @@ ok($output =~ $expected, "fork order") or diag("Expected\n$expected\n\nGot\n$out
 
 # merged cache
 input(qq{21 25606454 25606454 G/C +});
-@lines = grep {!/^\#/} split("\n", `$cmd --merged`);
+@lines = grep {!/^\#/} split("\n", `$cmd --merged --symbol`);
 my $ens = join("\n", grep {/SOURCE=Ensembl/} @lines);
 my $ref = join("\n", grep {/SOURCE=RefSeq/} @lines);
 ok($ens =~ /ENST00000419219/, "merged cache Ensembl") or diag("Got\n$ens");
 ok($ref =~ /NM_080794/, "merged cache RefSeq") or diag("Got\n$ref");
+ok($ref =~ /NM_080794.+MRPL39/, "merged cache RefSeq gene symbol") or diag("Got\n$ref");
 
 # stats file
 $output = `$bascmd -force -offline -dir_cache $data_path/vep-cache -i $tmpfile -o $tmpfile\.out -cache_version $cver -assembly $ass -species $sp`;
