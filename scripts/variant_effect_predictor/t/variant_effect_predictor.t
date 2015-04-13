@@ -506,6 +506,23 @@ ok(scalar @lines == 2, "pick allele");
 
 ## other
 
+# show_cache_info
+$output = {map {$_ => 1} split("\n", `$cmd --show_cache_info`)};
+$expected = {
+  'ClinVar	201410' => 1,
+  'sift	sift5.2.2' => 1,
+  'regbuild	13.0' => 1,
+  'genebuild	2014-07' => 1,
+  'assembly	GRCh38.p2' => 1,
+  'COSMIC	71' => 1,
+  'ESP	20140509' => 1,
+  'polyphen	2.2.2' => 1,
+  'dbSNP	138' => 1,
+  'gencode	GENCODE' => 1,
+  'HGMD-PUBLIC	20142' => 1
+};
+is_deeply($output, $expected, "show cache info");
+
 # check ref
 $input = qq{21 25587758 test1 G A . . .
 21 25587758 test2 C A . . .};

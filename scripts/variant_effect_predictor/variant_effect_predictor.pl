@@ -526,6 +526,7 @@ sub configure {
         'cache',                   # use cache
         'cache_version=i',         # specify a different cache version
         'write_cache',             # enables writing to the cache
+        'show_cache_info',         # print cache info and quit
         'build=s',                 # builds cache from DB from scratch; arg is either all (all top-level seqs) or a list of chrs
         'build_test',              # disable some slow start-up stuff for speed when testing
         'build_parts=s',           # choose which bits of the cache to build (t=transcript, v=variants, r=regfeats)
@@ -763,6 +764,7 @@ INTRO
     # write_cache needs cache
     $config->{cache} = 1 if defined $config->{write_cache};
     $config->{cache} = 1 if defined $config->{offline};
+    $config->{cache} = 1 if defined $config->{show_cache_info};
     
     # no_slice_cache and whole_genome have to be on to use cache
     if(defined($config->{cache})) {
@@ -791,6 +793,12 @@ INTRO
     
     # setup cache dir etc
     setup_cache($config) if defined($config->{cache});
+    
+    if(defined($config->{show_cache_info})) {
+      my $v = get_version_data($config);
+      print "$_\t".$v->{$_}."\n" for keys %$v;
+      exit(0);
+    }
     
     # setup FASTA file using Bio::DB
     setup_fasta($config) if defined($config->{fasta});
@@ -1312,7 +1320,7 @@ sub check_flags() {
   die "ERROR: --standalone replaced by --offline\n" if(defined $config->{standalone});
   
   # check one of database/cache/offline/build
-  if(!grep {defined($config->{$_})} qw(database cache offline build convert)) {
+  if(!grep {defined($config->{$_})} qw(database cache offline build convert show_cache_info)) {
     die qq{
 IMPORTANT INFORMATION:
 
