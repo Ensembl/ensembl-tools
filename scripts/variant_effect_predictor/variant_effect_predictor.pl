@@ -145,249 +145,256 @@ my $config = &configure(scalar @ARGV);
 
 # this is the main sub-routine - it needs the configured $config hash
 sub main {
-    my $config = shift;
+  my $config = shift;
     
-    debug("Starting...") unless defined $config->{quiet};
+  debug("Starting...") unless defined $config->{quiet};
     
-    # this is for counting seconds
-    $config->{start_time} = time();
-    $config->{last_time} = time();
+  # this is for counting seconds
+  $config->{start_time} = time();
+  $config->{last_time} = time();
     
-    # this is for stats
-    $config->{stats}->{start_time} = get_time();
+  # this is for stats
+  $config->{stats}->{start_time} = get_time();
     
-    my $tr_cache = {};
-    my $rf_cache = {};
+  my $tr_cache = {};
+  my $rf_cache = {};
     
-    # create a hash to hold slices so we don't get the same one twice
-    my %slice_cache = ();
+  # create a hash to hold slices so we don't get the same one twice
+  my %slice_cache = ();
     
-    my @vfs;    
-    my ($vf_count, $total_vf_count);
-    my $in_file_handle = $config->{in_file_handle};
+  my @vfs;    
+  my ($vf_count, $total_vf_count);
+  my $in_file_handle = $config->{in_file_handle};
     
-    # initialize line number in config
-    $config->{line_number} = 0;
+  # initialize line number in config
+  $config->{line_number} = 0;
     
-    # read the file
-    while(<$in_file_handle>) {
-        chomp;
-        
-        $config->{line_number}++;
-        
-        # header line?
-        if(/^\#/) {
-            
-            # retain header lines if we are outputting VCF
-            if(defined($config->{vcf})) {
-                push @{$config->{headers}}, $_;
-            }
-            
-            # line with sample labels in VCF
-            if(defined($config->{individual}) && /^#CHROM/) {
-                my @split = split /\s+/;
-                
-                # no individuals
-                die("ERROR: No individual data found in VCF\n") if scalar @split <= 9;
-                
-                # get individual column indices
-                my %ind_cols = map {$split[$_] => $_} (9..$#split);
-                
-                # all?
-                if(scalar @{$config->{individual}} == 1 && $config->{individual}->[0] =~ /^all$/i) {
-                    $config->{ind_cols} = \%ind_cols;
-                }
-                else {
-                    my %new_ind_cols;
-                    
-                    # check we have specified individual(s)
-                    foreach my $ind(@{$config->{individual}}) {
-                        die("ERROR: Individual named \"$ind\" not found in VCF\n") unless defined $ind_cols{$ind};
-                        $new_ind_cols{$ind} = $ind_cols{$ind};
-                    }
-                    
-                    $config->{ind_cols} = \%new_ind_cols;
-                }
-            }
-            
-            next;
-        }
-        
-        # strip off nasty characters
-        s/\s+$//g;
-        
-        # configure output file
-        $config->{out_file_handle} ||= &get_out_file_handle($config);
-        
-        # some lines (pileup) may actually parse out into more than one variant
-        foreach my $vf(@{&parse_line($config, $_)}) {
-            
-            $vf->{_line} = $_ ;
-            $vf->{_line_number} = $config->{line_number};
-            
-            # now get the slice
-            if(!defined($vf->{slice})) {
-                my $slice;
-                
-                # don't get slices if we're using cache
-                # we can steal them from transcript objects later
-                if((!defined($config->{cache}) && !defined($config->{whole_genome})) || defined($config->{check_ref}) || defined($config->{convert})) {
-                    
-                    # check if we have fetched this slice already
-                    if(defined $slice_cache{$vf->{chr}}) {
-                        $slice = $slice_cache{$vf->{chr}};
-                    }
-                    
-                    # if not create a new one
-                    else {
-                        
-                        $slice = &get_slice($config, $vf->{chr});
-                        
-                        # if failed, warn and skip this line
-                        if(!defined($slice)) {
-                            warn("WARNING: Could not fetch slice named ".$vf->{chr}." on line ".$config->{line_number}."\n") unless defined $config->{quiet};
-                            next;
-                        }    
-                        
-                        # store the hash
-                        $slice_cache{$vf->{chr}} = $slice;
-                    }
-                }
-                
-                $vf->{slice} = $slice;
-            }
-            
-            # validate the VF
-            next unless validate_vf($config, $vf);
-            
-            # make a name if one doesn't exist
-            $vf->{variation_name} ||= ($vf->{original_chr} || $vf->{chr}).'_'.$vf->{start}.'_'.($vf->{allele_string} || $vf->{class_SO_term});
-            
-            # jump out to convert here
-            if(defined($config->{convert})) {
-                &convert_vf($config, $vf);
-                next;
-            }
-            
-            if(defined $config->{whole_genome}) {
-                push @vfs, $vf;
-                $vf_count++;
-                $total_vf_count++;
-                
-                if($vf_count == $config->{buffer_size}) {
-                    debug("Read $vf_count variants into buffer") unless defined($config->{quiet});
-                    
-                    $config->{stats}->{out_count} += print_line($config, $_) foreach @{get_all_consequences($config, \@vfs)};
-                    
-                    # calculate stats
-                    my $total_rate = sprintf("%.0f vars/sec", $total_vf_count / ((time() - $config->{start_time}) || 1));
-                    my $rate = sprintf("%.0f vars/sec", $vf_count / ((time() - $config->{last_time}) || 1));
-                    $config->{last_time} = time();
-                    
-                    debug("Processed $total_vf_count total variants ($rate, $total_rate total)") unless defined($config->{quiet});
-                    
-                    @vfs = ();
-                    $vf_count = 0;
-                }
-            }
-            else {
-                $config->{stats}->{out_count} += print_line($config, $_) foreach @{vf_to_consequences($config, $vf)};
-                $vf_count++;
-                $total_vf_count++;
-                debug("Processed $vf_count variants") if $vf_count =~ /0$/ && defined($config->{verbose});
-            }
-        }
-    }
+  # read the file
+  while(<$in_file_handle>) {
     
-    # if in whole-genome mode, finish off the rest of the buffer
-    if(defined $config->{whole_genome} && scalar @vfs) {
-        debug("Read $vf_count variants into buffer") unless defined($config->{quiet});
-        
-        $config->{stats}->{out_count} += print_line($config, $_) foreach @{get_all_consequences($config, \@vfs)};
-        
-        # calculate stats
-        my $total_rate = sprintf("%.0f vars/sec", $total_vf_count / ((time() - $config->{start_time}) || 1));
-        my $rate = sprintf("%.0f vars/sec", $vf_count / ((time() - $config->{last_time}) || 1));
-        $config->{last_time} = time();
-        
-        debug("Processed $total_vf_count total variants ($rate, $total_rate total)") unless defined($config->{quiet});
-    }
-    
-    debug($config->{stats}->{filter_count}, "/$total_vf_count variants remain after filtering") if (defined($config->{check_frequency})) && !defined($config->{quiet});
-    
-    debug("Executed ", defined($Bio::EnsEMBL::DBSQL::StatementHandle::count_queries) ? $Bio::EnsEMBL::DBSQL::StatementHandle::count_queries : 'unknown number of', " SQL statements") if defined($config->{count_queries}) && !defined($config->{quiet});
-    
-    # finalise run-time stats
-    $config->{stats}->{var_count} = $total_vf_count;
-    $config->{stats}->{end_time} = get_time();
-    $config->{stats}->{run_time} = time() - $config->{start_time};
-    
-    # write stats
-    unless(defined($config->{no_stats})) {
-      summarise_stats($config);
-      debug("Wrote stats summary to ".$config->{stats_file}) unless defined($config->{quiet});
-    }
-    
-    # tell user about any warnings
-    if($config->{warning_count}) {
-      debug("See ".$config->{warning_file}." for details of ".$config->{warning_count}." warnings") unless defined($config->{quiet});
-    }
-    
-    # close HTML output
-    if(defined($config->{html}) && defined($config->{html_file_handle})) {
-      my $fh = $config->{html_file_handle};
-      print $fh "</tbody><tfoot><tr>".$config->{_th}."</tr></tfoot></table><p>&nbsp;</p></div></html></body>\n</html>\n";
-      $fh->close;
-    }
-    
-    if(defined($config->{solr})) {
-        my $fh = $config->{out_file_handle};
-        print $fh "</add>\n";
-    }
-    
-    # tabix?
-    if(defined($config->{tabix})) {
-      debug("Compressing and indexing output") unless defined($config->{quiet});
+    # split again to avoid Windows character nonsense
+    foreach my $line(split /\r|\R/) {
       
-      # check sorting
-      open SORT, $config->{output_file};
-      my $prev_pos = 0;
-      my $prev_chr = 0;
-      my $is_sorted = 0;
-      my %seen_chrs;
+      chomp($line);
       
-      while(<SORT>) {
-        if(!/^\#/) {
-          $is_sorted = 1;
-          my @data = split /\s+/, $_;
-          if(
-            ($data[0] eq $prev_chr && $data[1] < $prev_pos) ||
-            ($data[0] ne $prev_chr && defined($seen_chrs{$data[0]}))
-          ) {
-            $is_sorted = 0;
-            last;
+      next unless $line =~ /\w+/;
+        
+      $config->{line_number}++;
+        
+      # header line?
+      if($line =~ /^\#/) {
+            
+        # retain header lines if we are outputting VCF
+        if(defined($config->{vcf})) {
+          push @{$config->{headers}}, $line;
+        }
+            
+        # line with sample labels in VCF
+        if(defined($config->{individual}) && /^#CHROM/) {
+          my @split = split(/\s+/, $line);
+                
+          # no individuals
+          die("ERROR: No individual data found in VCF\n") if scalar @split <= 9;
+                
+          # get individual column indices
+          my %ind_cols = map {$split[$_] => $_} (9..$#split);
+                
+          # all?
+          if(scalar @{$config->{individual}} == 1 && $config->{individual}->[0] =~ /^all$/i) {
+            $config->{ind_cols} = \%ind_cols;
           }
-          
-          $prev_pos = $data[1];
-          $prev_chr = $data[0];
-          $seen_chrs{$data[0]} = 1;
+          else {
+            my %new_ind_cols;
+                    
+            # check we have specified individual(s)
+            foreach my $ind(@{$config->{individual}}) {
+              die("ERROR: Individual named \"$ind\" not found in VCF\n") unless defined $ind_cols{$ind};
+              $new_ind_cols{$ind} = $ind_cols{$ind};
+            }
+                    
+            $config->{ind_cols} = \%new_ind_cols;
+          }
+        }
+            
+        next;
+      }
+        
+      # strip off nasty characters
+      $line =~ s/\s+$//g;
+        
+      # configure output file
+      $config->{out_file_handle} ||= &get_out_file_handle($config);
+        
+      # some lines (pileup) may actually parse out into more than one variant
+      foreach my $vf(@{&parse_line($config, $line)}) {
+            
+        $vf->{_line} = $line;
+        $vf->{_line_number} = $config->{line_number};
+            
+        # now get the slice
+        if(!defined($vf->{slice})) {
+          my $slice;
+                
+          # don't get slices if we're using cache
+          # we can steal them from transcript objects later
+          if((!defined($config->{cache}) && !defined($config->{whole_genome})) || defined($config->{check_ref}) || defined($config->{convert})) {
+                    
+            # check if we have fetched this slice already
+            if(defined $slice_cache{$vf->{chr}}) {
+              $slice = $slice_cache{$vf->{chr}};
+            }
+                    
+            # if not create a new one
+            else {
+                        
+              $slice = &get_slice($config, $vf->{chr});
+                        
+              # if failed, warn and skip this line
+              if(!defined($slice)) {
+                warn("WARNING: Could not fetch slice named ".$vf->{chr}." on line ".$config->{line_number}."\n") unless defined $config->{quiet};
+                next;
+              }    
+                        
+              # store the hash
+              $slice_cache{$vf->{chr}} = $slice;
+            }
+          }
+                
+          $vf->{slice} = $slice;
+        }
+            
+        # validate the VF
+        next unless validate_vf($config, $vf);
+            
+        # make a name if one doesn't exist
+        $vf->{variation_name} ||= ($vf->{original_chr} || $vf->{chr}).'_'.$vf->{start}.'_'.($vf->{allele_string} || $vf->{class_SO_term});
+            
+        # jump out to convert here
+        if(defined($config->{convert})) {
+          &convert_vf($config, $vf);
+          next;
+        }
+            
+        if(defined $config->{whole_genome}) {
+          push @vfs, $vf;
+          $vf_count++;
+          $total_vf_count++;
+                
+          if($vf_count == $config->{buffer_size}) {
+            debug("Read $vf_count variants into buffer") unless defined($config->{quiet});
+                    
+            $config->{stats}->{out_count} += print_line($config, $_) foreach @{get_all_consequences($config, \@vfs)};
+                    
+            # calculate stats
+            my $total_rate = sprintf("%.0f vars/sec", $total_vf_count / ((time() - $config->{start_time}) || 1));
+            my $rate = sprintf("%.0f vars/sec", $vf_count / ((time() - $config->{last_time}) || 1));
+            $config->{last_time} = time();
+                    
+            debug("Processed $total_vf_count total variants ($rate, $total_rate total)") unless defined($config->{quiet});
+                    
+            @vfs = ();
+            $vf_count = 0;
+          }
+        }
+        else {
+          $config->{stats}->{out_count} += print_line($config, $_) foreach @{vf_to_consequences($config, $vf)};
+          $vf_count++;
+          $total_vf_count++;
+          debug("Processed $vf_count variants") if $vf_count =~ /0$/ && defined($config->{verbose});
         }
       }
-      
-      close SORT;
-      
-      unless($is_sorted) {
-        system('grep "^#" '.$config->{output_file}.' > '.$config->{output_file}.'.sorted');
-        system('grep -v "^#" '.$config->{output_file}.' | sort -k1,1 -k2,2n >> '.$config->{output_file}.'.sorted');
-        system('mv '.$config->{output_file}.'.sorted '.$config->{output_file});
-      }
-      
-      system("bgzip -f ".$config->{output_file}) == 0 or warn "WARNING: failed to generated bgzipped file for tabix\n$?\n";
-      rename($config->{output_file}.".gz", $config->{output_file});
-      system("tabix -p vcf -f ".$config->{output_file}) == 0 or warn "WARNING: failed to generated tabix index\n$?\n";
     }
+  }
     
-    debug("Finished!") unless defined $config->{quiet};
+  # if in whole-genome mode, finish off the rest of the buffer
+  if(defined $config->{whole_genome} && scalar @vfs) {
+    debug("Read $vf_count variants into buffer") unless defined($config->{quiet});
+        
+    $config->{stats}->{out_count} += print_line($config, $_) foreach @{get_all_consequences($config, \@vfs)};
+        
+    # calculate stats
+    my $total_rate = sprintf("%.0f vars/sec", $total_vf_count / ((time() - $config->{start_time}) || 1));
+    my $rate = sprintf("%.0f vars/sec", $vf_count / ((time() - $config->{last_time}) || 1));
+    $config->{last_time} = time();
+        
+    debug("Processed $total_vf_count total variants ($rate, $total_rate total)") unless defined($config->{quiet});
+  }
+    
+  debug($config->{stats}->{filter_count}, "/$total_vf_count variants remain after filtering") if (defined($config->{check_frequency})) && !defined($config->{quiet});
+    
+  debug("Executed ", defined($Bio::EnsEMBL::DBSQL::StatementHandle::count_queries) ? $Bio::EnsEMBL::DBSQL::StatementHandle::count_queries : 'unknown number of', " SQL statements") if defined($config->{count_queries}) && !defined($config->{quiet});
+    
+  # finalise run-time stats
+  $config->{stats}->{var_count} = $total_vf_count;
+  $config->{stats}->{end_time} = get_time();
+  $config->{stats}->{run_time} = time() - $config->{start_time};
+    
+  # write stats
+  unless(defined($config->{no_stats})) {
+    summarise_stats($config);
+    debug("Wrote stats summary to ".$config->{stats_file}) unless defined($config->{quiet});
+  }
+    
+  # tell user about any warnings
+  if($config->{warning_count}) {
+    debug("See ".$config->{warning_file}." for details of ".$config->{warning_count}." warnings") unless defined($config->{quiet});
+  }
+    
+  # close HTML output
+  if(defined($config->{html}) && defined($config->{html_file_handle})) {
+    my $fh = $config->{html_file_handle};
+    print $fh "</tbody><tfoot><tr>".$config->{_th}."</tr></tfoot></table><p>&nbsp;</p></div></html></body>\n</html>\n";
+    $fh->close;
+  }
+    
+  if(defined($config->{solr})) {
+    my $fh = $config->{out_file_handle};
+    print $fh "</add>\n";
+  }
+    
+  # tabix?
+  if(defined($config->{tabix})) {
+    debug("Compressing and indexing output") unless defined($config->{quiet});
+      
+    # check sorting
+    open SORT, $config->{output_file};
+    my $prev_pos = 0;
+    my $prev_chr = 0;
+    my $is_sorted = 0;
+    my %seen_chrs;
+      
+    while(<SORT>) {
+      if(!/^\#/) {
+        $is_sorted = 1;
+        my @data = split /\s+/, $_;
+        if(
+          ($data[0] eq $prev_chr && $data[1] < $prev_pos) ||
+          ($data[0] ne $prev_chr && defined($seen_chrs{$data[0]}))
+        ) {
+          $is_sorted = 0;
+          last;
+        }
+          
+        $prev_pos = $data[1];
+        $prev_chr = $data[0];
+        $seen_chrs{$data[0]} = 1;
+      }
+    }
+      
+    close SORT;
+      
+    unless($is_sorted) {
+      system('grep "^#" '.$config->{output_file}.' > '.$config->{output_file}.'.sorted');
+      system('grep -v "^#" '.$config->{output_file}.' | sort -k1,1 -k2,2n >> '.$config->{output_file}.'.sorted');
+      system('mv '.$config->{output_file}.'.sorted '.$config->{output_file});
+    }
+      
+    system("bgzip -f ".$config->{output_file}) == 0 or warn "WARNING: failed to generated bgzipped file for tabix\n$?\n";
+    rename($config->{output_file}.".gz", $config->{output_file});
+    system("tabix -p vcf -f ".$config->{output_file}) == 0 or warn "WARNING: failed to generated tabix index\n$?\n";
+  }
+    
+  debug("Finished!") unless defined $config->{quiet};
 }
 
 # sets up configuration hash that is used throughout the script
