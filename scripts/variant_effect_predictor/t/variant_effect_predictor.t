@@ -290,7 +290,7 @@ $output = (grep {/MotifFeature/} (split "\n", $full_output))[0];
 my %tmp_hash = split /\;|\=/, (split /\t/, $output)[-1];
 $expected = {
   MOTIF_POS => 11,
-  MOTIF_NAME => 'Name/Accession_association_EBF1:MA0154.2',
+  MOTIF_NAME => 'EBF1:MA0154.2',
   HIGH_INF_POS => 'N',
   MOTIF_SCORE_CHANGE => -0.022,
   STRAND => 1,
