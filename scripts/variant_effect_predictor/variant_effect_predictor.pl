@@ -432,6 +432,7 @@ sub configure {
         'gencode_basic',           # limit to using just GenCode basic transcript set
         
         # runtime options
+        'minimal',                 # convert input alleles to minimal representation
         'most_severe',             # only return most severe consequence
         'summary',                 # only return one line per variation with all consquence types
         'per_gene',                # only return most severe per gene
@@ -530,6 +531,7 @@ sub configure {
         'build=s',                 # builds cache from DB from scratch; arg is either all (all top-level seqs) or a list of chrs
         'build_test',              # disable some slow start-up stuff for speed when testing
         'build_parts=s',           # choose which bits of the cache to build (t=transcript, v=variants, r=regfeats)
+        'build_range=s',           # for testing, give a coord range. Probably best when using one chrom only e.g. --build 21
         'no_adaptor_cache',        # don't write adaptor cache
         'strip',                   # strips adaptors etc from objects before caching them
         'rebuild=s',               # rebuilds cache by reading in existing then redumping - probably don't need to use this any more
