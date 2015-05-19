@@ -37,7 +37,7 @@ by Will McLaren (wm2@ebi.ac.uk)
 use strict;
 use Getopt::Long;
 use FileHandle;
-use Bio::EnsEMBL::Variation::Utils::VEP qw(read_cache_info);
+use Bio::EnsEMBL::Variation::Utils::VEP qw(read_cache_info get_version_data);
 use Bio::EnsEMBL::Variation::Utils::VariationEffect qw(MAX_DISTANCE_FROM_TRANSCRIPT);
 use Storable qw(nstore_fd fd_retrieve freeze thaw);
 use MIME::Base64;
@@ -283,6 +283,10 @@ sub main {
         $param =~ s/^cache\_//;
         print OUT "$param\t$val\n";
       }
+      
+      my $version_data = get_version_data($config);
+      print OUT "source\_$_\t".$version_data->{$_}."\n" for keys %$version_data;
+      
       close OUT;
     }
   }
