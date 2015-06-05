@@ -173,7 +173,7 @@ sub main {
   while(<$in_file_handle>) {
     
     # split again to avoid Windows character nonsense
-    foreach my $line(split /\r|\R/) {
+    foreach my $line(split /\r|(?>\v|\x0D\x0A)/) {
       
       chomp($line);
       
