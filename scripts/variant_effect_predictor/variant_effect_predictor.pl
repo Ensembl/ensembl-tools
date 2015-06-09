@@ -2368,8 +2368,11 @@ sub summarise_stats {
     };
     
     foreach my $chr(sort {($a !~ /^\d+$/ || $b !~ /^\d+/) ? $a cmp $b : $a <=> $b} keys %{$config->{stats}->{chr}}) {
+      my $chr_id = $chr;
+      $chr_id =~ s/\./\_/g;
+      
       push @charts, {
-        id => 'chr_'.$chr,
+        id => 'chr_'.$chr_id,
         title => 'Distribution of variants on chromosome '.$chr,
         header => ['Position (mb)', 'Count'],
         data => $config->{stats}->{chr}->{$chr},
