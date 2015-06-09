@@ -1623,7 +1623,28 @@ sub setup_fasta() {
   );
   
   debug("Checking/creating FASTA index") unless defined($config->{quiet});
+  
+  # check lock file
+  my $lock_file = $config->{fasta};
+  $lock_file .= -d $config->{fasta} ? '/.vep.lock' : '.vep.lock';
+  
+  # lock file exists, indexing failed
+  if(-e $lock_file) {
+    for(qw(.fai .index .vep.lock)) {
+      unlink($config->{fasta}.$_) if -e $config->{fasta}.$_;
+    }
+  }
+  
+  # create lock file
+  open LOCK, ">$lock_file" or die("ERROR: Could not write to FASTA lock file $lock_file\n");
+  print LOCK "1\n";
+  close LOCK;
+  
+  # run indexing
   $config->{fasta_db} = Bio::DB::Fasta->new($config->{fasta});
+  
+  # remove lock file
+  unlink($lock_file);
 }
 
 sub setup_custom {

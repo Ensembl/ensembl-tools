@@ -799,7 +799,30 @@ sub fasta() {
       print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
     }
     else {
-      Bio::DB::Fasta->new($ex) unless $TEST;
+      unless($TEST) {
+        # check lock file
+        my $lock_file = $ex;
+        $lock_file .= -d $ex ? '/.vep.lock' : '.vep.lock';
+  
+        # lock file exists, indexing failed
+        if(-e $lock_file) {
+          for(qw(.fai .index .vep.lock)) {
+            unlink($ex.$_) if -e $ex.$_;
+          }
+        }
+  
+        # create lock file
+        open LOCK, ">$lock_file" or die("ERROR: Could not write to FASTA lock file $lock_file\n");
+        print LOCK "1\n";
+        close LOCK;
+  
+        # run indexing
+        Bio::DB::Fasta->new($ex);
+  
+        # remove lock file
+        unlink($lock_file);
+      }
+      
       print " - indexing OK\n" unless $QUIET;
     }
   
