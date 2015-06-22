@@ -551,6 +551,7 @@ sub filter_in {
       open IN, $list or die("ERROR: Could not read from file $list\n");
       while(<IN>) {
         chomp;
+        s/\r|(?>\v|\x0D\x0A)//g;
         $compare{$_} = 1;
       }
       close IN;
