@@ -18,7 +18,7 @@ have_LWP();
 # CONFIGURE
 ###########
 
-our ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $ASSEMBLY, $ENS_GIT_ROOT, $BIOPERL_URL, $CACHE_URL, $CACHE_DIR, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST);
+our ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $ASSEMBLY, $ENS_GIT_ROOT, $BIOPERL_URL, $CACHE_URL, $CACHE_DIR, $PLUGINS, $PLUGIN_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST);
 
 GetOptions(
   'DESTDIR|d=s'  => \$DEST_DIR,
@@ -31,6 +31,8 @@ GetOptions(
   'HELP|h'       => \$help,
   'UPDATE|n'     => \$UPDATE,
   'SPECIES|s=s'  => \$SPECIES,
+  'PLUGINS|g=s'  => \$PLUGINS,
+  'PLUGINURL=s'  => \$PLUGIN_URL,
   'AUTO|a=s'     => \$AUTO,
   'QUIET|q'      => \$QUIET,
   'PREFER_BIN|p' => \$PREFER_BIN,
@@ -63,6 +65,7 @@ $BIOPERL_URL  ||= 'https://github.com/bioperl/bioperl-live/archive/release-1-6-9
 $API_VERSION  ||= $VERSION;
 $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP";
 $CACHE_DIR    ||= $ENV{HOME} ? $ENV{HOME}.'/.vep' : 'cache';
+$PLUGIN_URL   ||= 'https://raw.githubusercontent.com/ensembl-variation/VEP_plugins/master/plugin_config.txt';
 $FTP_USER     ||= 'anonymous';
 $FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
 $PREFER_BIN     = 0 unless defined($PREFER_BIN);
@@ -89,18 +92,25 @@ if($UPDATE) {
 elsif($AUTO) {
   
   # check
-  die("ERROR: Failed to parse AUTO string - must contain any of a (API), c (cache), f (FASTA)\n") unless $AUTO =~ /^[acf]+$/i;
+  die("ERROR: Failed to parse AUTO string - must contain any of a (API), c (cache), f (FASTA), p (plugins)\n") unless $AUTO =~ /^[acfp]+$/i;
   
   # require species
   if($AUTO =~ /[cf]/i) {
-    die("ERROR: No species specified") unless $SPECIES;
+    die("ERROR: No species specified\n") unless $SPECIES;
     $SPECIES = [split /\,/, $SPECIES];
+  }
+
+  # require plugin list
+  if($AUTO =~ /p/i) {
+    die("ERROR: No plugins specified\n") unless $PLUGINS;
+    $PLUGINS = [split /\,/, $PLUGINS];
   }
   
   # run subs
   api()   if $AUTO =~ /a/;
   cache() if $AUTO =~ /c/;
   fasta() if $AUTO =~ /f/;
+  plugins() if $AUTO =~ /p/;
 }
 
 else {
@@ -110,6 +120,7 @@ else {
   api() if check_api();
   cache();
   fasta();
+  plugins();
 }
 
 
@@ -914,6 +925,209 @@ sub update() {
   }
 }
 
+
+# PLUGINS
+#########
+
+sub plugins() {
+  my $ok;
+
+  if($AUTO) {
+    $ok = $AUTO =~ /p/i ? 'y' : 'n';
+  }
+  else {
+    print "\nThe VEP can use plugins to add functionality and data.\n" unless $QUIET;
+    print "Plugins will be installed in $CACHE_DIR\/Plugins\n" unless $QUIET;
+  
+    print "Do you want to install any plugins (y/n)? ";
+  
+    $ok = <>;
+  }
+
+  if($ok !~ /^y/i) {
+    print "Skipping plugin installation\n" unless $QUIET;
+    return;
+  }
+
+  # check plugin installation dir exists
+  if(!(-e $CACHE_DIR)) {
+    if(!$AUTO) {
+      print "Cache directory $CACHE_DIR does not exists - do you want to create it (y/n)? ";
+  
+      my $ok = <>;
+  
+      if($ok !~ /^y/i) {
+        print "Exiting\n";
+        exit(0);
+      }
+    }
+  
+    mkdir($CACHE_DIR) or die "ERROR: Could not create directory $CACHE_DIR\n";
+  }
+  mkdir($CACHE_DIR.'/Plugins') unless -e $CACHE_DIR.'/Plugins';
+
+  # download and eval plugin config file
+  my $plugin_config_file = $CACHE_DIR.'/Plugins/plugin_config.txt';
+  download_to_file($PLUGIN_URL, $plugin_config_file);
+
+  die("ERROR: Could not access plugin config file $plugin_config_file\n") unless($plugin_config_file && -e $plugin_config_file);
+
+  open IN, $plugin_config_file;
+  my @content = <IN>;
+  close IN;
+  
+  my $VEP_PLUGIN_CONFIG = eval join('', @content);
+  die("ERROR: Could not eval VEP plugin config file: $@\n") if $@;
+  my @plugins = @{$VEP_PLUGIN_CONFIG->{plugins}};
+
+  # get sections
+  my @sections = grep {defined($_)} map {defined($_->{section}) ? $_->{section} : undef} @plugins;
+
+  # unique sort in same order
+  my ($prev, @new);
+  for(@sections) {
+    if(!defined($prev) || $prev ne $_) {
+      push @new, $_;
+    }
+    $prev = $_;
+  }
+  @sections = @new;
+  push @sections, '';
+
+  # generate list to present to user
+  my (%by_number, %by_key);
+  my $i = 1;
+  my $plugin_list = '';
+
+  # get length of longest label/key
+  my $length = length((sort {length($a->{key}) <=> length($b->{key})} @plugins)[-1]->{key});
+
+  foreach my $section(@sections) {
+    my $section_name = $section || (scalar @sections > 1 ? 'Other plugins' : 'Plugins');
+
+    my @section_plugins;
+
+    # check that plugins have plugin_url defined
+    # otherwise we can't download it
+    if($section eq '') {
+      @section_plugins = grep {$_->{plugin_url} && !defined($_->{section})} @plugins;
+    }
+    else {
+      @section_plugins = grep {$_->{plugin_url} && defined($_->{section}) && $_->{section} eq $section} @plugins;
+    }
+
+    next unless scalar @section_plugins;
+    $plugin_list .= "# $section_name\n";
+
+    $_->{plugin_number} = $i++ for @section_plugins;
+    $by_number{$_->{plugin_number}} = $_ for @section_plugins;
+    $by_key{lc($_->{key})} = $_ for @section_plugins;
+
+    $plugin_list .= sprintf(
+      "%4i: %*s - %s\n",
+      $_->{plugin_number},
+      0 - $length,
+      $_->{key},
+      $_->{helptip} || ''
+    ) for @section_plugins;
+  }
+
+  # now establish which we are installing
+  my (@indexes, @selected_plugins);
+
+  # either from user input
+  if(!$AUTO) {
+    print "\nThe following plugins are available; which do you want (can specify multiple separated by spaces or 0 for all): \n$plugin_list\n? ";
+    @indexes = split /\s+/, <>;
+
+    # user wants all species found
+    if(scalar @indexes == 1 && $indexes[0] == 0) {
+      @indexes = 1..(scalar keys %by_number);
+    }
+
+    @selected_plugins = map {$by_number{$_}} grep {$by_number{$_}} @indexes;
+  }
+
+  # or from list passed on command line
+  else {
+    if(lc($PLUGINS->[0]) eq 'all' || $PLUGINS->[0] eq '0') {
+      @selected_plugins = sort {$a->{key} cmp $b->{key}} values %by_key;
+    }
+    else {
+      @selected_plugins = map {$by_key{lc($_)}} grep {$by_key{lc($_)}} @$PLUGINS;
+    }
+
+    my @not_found = grep {!$by_key{lc($_)}} @$PLUGINS;
+    if(@not_found) {
+      printf(
+        "\nWARNING: The following plugins have not been found: %s\nAvailable plugins: %s\n",
+        join(",", @not_found),
+        join(",", sort map {$_->{key}} values %by_key)
+      );
+    }
+
+    if(!@selected_plugins) {
+      printf("\nERROR: No valid plugins given\n");
+      return;
+    }
+  }
+
+  # store a flag to warn user at end if any plugins require additional setup
+  my $requires_install_or_data = 0;
+
+  foreach my $pl(@selected_plugins) {
+    printf("\n - installing \"%s\"\n", $pl->{key});
+
+    my $local_file = $CACHE_DIR.'/Plugins/'.$pl->{key}.'.pm';
+
+    # overwrite?
+    if(-e $local_file) {
+      printf(
+        "%s already installed; %s",
+        $pl->{key},
+        $AUTO ? "overwriting\n" : "do you want to overwrite (probably OK if updating) (y/n)? "
+      );
+
+      my $ok = $AUTO ? 'y' : <>;
+
+      if($ok !~ /^y/i) {
+        print " - Skipping\n";
+        next;
+      }
+    }
+
+    # download
+    download_to_file($pl->{plugin_url}, $local_file);
+
+    # warn if failed
+    unless(-e $local_file) {
+      print " - WARNING: Failed to download/install ".$pl->{key}."\n";
+      next;
+    }
+
+    # additional setup required?
+    if($pl->{requires_install} || $pl->{requires_data}) {
+      print " - This plugin requires installation\n" if $pl->{requires_install};
+      print " - This plugin requires data\n" if $pl->{requires_data};
+      print " - See $local_file for details\n";
+
+      $requires_install_or_data = 1;
+    }
+
+    else {
+      printf(
+        " - add \"--%s%s\" to your VEP command to use this plugin\n",
+        $pl->{key},
+        $pl->{params} ? ',[options]' : ''
+      );
+    }
+
+    print " - OK\n";
+  }
+
+  print "\nNB: One or more plugins that you have installed will not work without installation or downloading data; see logs above\n";
+}
+
 # OTHER SUBS
 ############
 
@@ -1041,10 +1255,11 @@ Options
 -n | --UPDATE      EXPERIMENTAL! Check for and download new VEP versions
 
 -a | --AUTO        Run installer without user prompts. Use a (API), c (cache),
-                   f (FASTA) to specify parts to install e.g. -a ac for API and
-                   cache
+                   f (FASTA), p (plugins) to specify parts to install
+                   e.g. -a ac for API and cache
 -s | --SPECIES     Comma-separated list of species to install when using --AUTO
 -y | --ASSEMBLY    Assembly name to use if more than one during --AUTO
+-g | --PLUGINS     Comma-separated list of plugins to install when using --AUTO
 -q | --QUIET       Don't write any status output when using --AUTO
 -p | --PREFER_BIN  Use this if the installer fails with out of memory errors
 
