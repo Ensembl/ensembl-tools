@@ -427,6 +427,9 @@ sub parse_cds {
   # update the coding_region_start/end
   my $tr = fetch_transcript($config, $data);
   return unless $tr;
+
+  # check transcript has exons
+  return unless defined($tr->{_trans_exon_array});
   
   # update/create the translation
   if(!exists($tr->{translation})) {
