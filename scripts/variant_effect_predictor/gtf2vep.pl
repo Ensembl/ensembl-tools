@@ -250,21 +250,70 @@ sub fix_data {
   $data->{strand} = $data->{strand} =~ /\-/ ? -1 : 1;
 }
 
-sub parse_transcript {
-  my ($config, $data, $biotype) = @_;
-  $config->{transcripts}->{$data->{attributes}->{transcript_id}} ||= create_transcript($config, $data, $biotype);
+sub parse_gene {
+  my ($config, $data) = @_;
+
+  my $id = $data->{attributes}->{id} || $data->{attributes}->{gene_id};
+  $config->{genes}->{$id} = $data;
 }
 
+sub parse_transcript {
+  my ($config, $data, $biotype) = @_;
+
+  if(!exists($config->{transcripts}->{$data->{attributes}->{transcript_id}})) {
+    my $tr = create_transcript($config, $data, $biotype);
+    $config->{transcripts}->{$data->{attributes}->{transcript_id}} = $tr if $tr;
+  }
+}
+
+# in NCBI RefSeq GFFs, different feature types correspond to different biotypes
 sub parse_mrna  { return parse_transcript(@_, 'protein_coding'); }
-# sub parse_ncRNA { return parse_transcript(@_, ''); }
+sub parse_rrna  { return parse_transcript(@_, 'rRNA'); }
+sub parse_trna  { return parse_transcript(@_, 'tRNA'); }
+sub parse_ncrna { return parse_transcript(@_, $_[1]->{attributes}->{ncrna_class}); }
+sub parse_primary_transcript { return parse_transcript(@); }
 
 # creates a new transcript object
 sub create_transcript {
   my ($config, $data, $biotype) = @_;
+
+  # Ensembl GTF has transcript_biotype field, thanks!
+  if(!$biotype) {
+    $biotype = $data->{attributes}->{transcript_biotype};
+  }
+
+  # NCBI RefSeq GFF
+  if(!$biotype) {
+    $DB::single = 1;
+
+    if(my $gene = $config->{genes}->{$data->{attributes}->{parent_id} || ''}) {
+
+      # pseudogene annotation is on gene object
+      if(($gene->{attributes}->{pseudo} || '') eq 'true') {
+        $biotype = 'pseudogene';
+      }
+
+      # miRNA biotype also connected to gene
+      if(($gene->{attributes}->{description} || '') =~ /^microRNA/) {
+        $biotype = 'miRNA';
+      }
+
+      # otherwise get biotype from gbkey
+      else {
+        $biotype = $data->{attributes}->{gbkey};
+      }
+    }
+  }
   
+  # don't bother creating a transcript unless we know the biotype
+  # will only create issues later
+  return unless $biotype;
+
+  print "TRANSCRIPT ".$data->{attributes}->{transcript_id}." $biotype \n";
+
   my $transcript = new Bio::EnsEMBL::Transcript(
     -STABLE_ID => $data->{attributes}->{transcript_id},
-    -BIOTYPE   => $biotype || $data->{attributes}->{transcript_biotype} || $data->{source},
+    -BIOTYPE   => $biotype,
     -SLICE     => get_slice($config, $data->{seqname}),
     -STRAND    => $data->{strand},
     -VERSION   => 1,
@@ -523,7 +572,7 @@ sub export_data {
         grep {defined($_)}
         @{$hash->{$region}}
       }};
-      
+
     dump_transcript_cache($config, {$chr => \@array}, $chr, $region);
     
     # remove all the dumped transcripts
