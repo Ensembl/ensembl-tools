@@ -267,7 +267,7 @@ sub parse_transcript {
 
   if(!exists($config->{transcripts}->{$data->{attributes}->{transcript_id}})) {
     my $tr = create_transcript($config, $data, $biotype);
-    $config->{transcripts}->{$data->{attributes}->{transcript_id}} = $tr if $tr;
+    $config->{transcripts}->{$tr->stable_id} = $tr if $tr;
   }
 }
 
@@ -407,7 +407,15 @@ sub parse_exon {
   }
   
   # add it to the transcript
-  $tr->add_Exon($exon);
+  # sometimes this can fail if the coordinates overlap
+  eval {$tr->add_Exon($exon);};
+  if($@) {
+    warn("WARNING: Failed to add exon to transcript ".$tr->stable_id."\n$@");
+
+    # delete the transcript so we don't try to process it further
+    delete $config->{transcripts}->{$tr->stable_id};
+    return;
+  }
   
   return $exon;
 }
@@ -568,7 +576,7 @@ sub export_data {
     next unless $tr->seq_region_name eq $chr;
     
     fix_transcript($tr);
-    check_transcript($config, $tr);
+    next unless check_transcript($config, $tr);
     
     foreach my $region(@{get_regions($config, $tr)}) {
       push @{$hash->{$region}}, $tr;
@@ -611,8 +619,12 @@ sub check_transcript {
   my @errors;
   
   push @errors, "Object is not a transcript" unless $tr->isa('Bio::EnsEMBL::Transcript');
-  push @errors, "No exons found" unless scalar @{$tr->get_all_Exons};
-  push @errors, "Exon missing phase" if grep {not defined $_->phase} @{$tr->get_all_Exons};
+  if(!(defined($tr->{_trans_exon_array}) && scalar @{$tr->get_all_Exons})) {
+    push @errors, "No exons found";
+  }
+  else {
+    push @errors, "Exon missing phase" if grep {not defined $_->phase} @{$tr->get_all_Exons};
+  }
   
   if($tr->biotype eq 'protein_coding') {
     push @errors, "No start_exon defined on translation" unless defined $tr->{translation}->{start_exon};
@@ -620,19 +632,11 @@ sub check_transcript {
   }
   
   if(scalar @errors) {
-    print join "\n", @errors;
-    print "\n";
-    
-    use Data::Dumper;
-    $Data::Dumper::Maxdepth = 3;
-    warn Dumper $tr;
-    
-    delete $tr->{slice};
-    
-    print $tr->translate."\n";
-    
-    die "ERROR!\n";
+    warn "WARNING: Transcript ".$tr->stable_id." fails checks:\n".(join "\n", @errors)."\n";
+    return 0;
   }
+
+  return 1;
 }
 
 # dumps out transcript cache to file
@@ -771,6 +775,11 @@ Options
 -s | --species [species]  Species name
 -d | --db_version [n]     Database version - must match version of API in use
 --dir [dir]               Root directory for cache (default = '\$HOME/.vep/')
+
+--host [host]             Database connection settings; used to look up synonyms
+--port [port]             for chromosome names. Connects by default to
+--user [user]             anonymous\@ensembldb.ensembl.org:3306
+--password [pass]
 
 END
 
