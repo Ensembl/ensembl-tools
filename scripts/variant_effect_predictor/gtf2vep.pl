@@ -54,7 +54,7 @@ my $count_args = scalar @ARGV;
 
 GetOptions(
   $config,
-  'input|i|gtf|g=s',
+  'input|i|gtf|gff|g=s',
   'fasta|f=s',
   'species|s=s',
   'db_version|d=i',
@@ -255,6 +255,11 @@ sub parse_gene {
 
   my $id = $data->{attributes}->{id} || $data->{attributes}->{gene_id};
   $config->{genes}->{$id} = $data;
+
+  # pseudogenes in NCBI RefSeq GFFs dont have transcript entries, so create one here
+  if(($data->{attributes}->{pseudo} || '') eq 'true') {
+    return parse_transcript($config, $data, 'pseudogene');
+  }
 }
 
 sub parse_transcript {
@@ -267,11 +272,15 @@ sub parse_transcript {
 }
 
 # in NCBI RefSeq GFFs, different feature types correspond to different biotypes
-sub parse_mrna  { return parse_transcript(@_, 'protein_coding'); }
-sub parse_rrna  { return parse_transcript(@_, 'rRNA'); }
-sub parse_trna  { return parse_transcript(@_, 'tRNA'); }
-sub parse_ncrna { return parse_transcript(@_, $_[1]->{attributes}->{ncrna_class}); }
-sub parse_primary_transcript { return parse_transcript(@); }
+sub parse_mrna               { return parse_transcript(@_, 'protein_coding'); }
+sub parse_rrna               { return parse_transcript(@_, 'rRNA'); }
+sub parse_trna               { return parse_transcript(@_, 'tRNA'); }
+sub parse_ncrna              { return parse_transcript(@_, $_[1]->{attributes}->{ncrna_class}); }
+sub parse_primary_transcript { return parse_transcript(@_); }
+sub parse_c_gene_segment     { return parse_transcript(@_, 'IG_C_gene'); }
+sub parse_d_gene_segment     { return parse_transcript(@_, 'IG_D_gene'); }
+sub parse_j_gene_segment     { return parse_transcript(@_, 'IG_J_gene'); }
+sub parse_v_gene_segment     { return parse_transcript(@_, 'IG_V_gene'); }
 
 # creates a new transcript object
 sub create_transcript {
@@ -284,24 +293,17 @@ sub create_transcript {
 
   # NCBI RefSeq GFF
   if(!$biotype) {
-    $DB::single = 1;
+    if(my $gene = $config->{genes}->{$data->{attributes}->{parent} || ''}) {
 
-    if(my $gene = $config->{genes}->{$data->{attributes}->{parent_id} || ''}) {
-
-      # pseudogene annotation is on gene object
-      if(($gene->{attributes}->{pseudo} || '') eq 'true') {
-        $biotype = 'pseudogene';
-      }
-
-      # miRNA biotype also connected to gene
+      # miRNA biotype connected to gene
       if(($gene->{attributes}->{description} || '') =~ /^microRNA/) {
         $biotype = 'miRNA';
       }
+    }
 
-      # otherwise get biotype from gbkey
-      else {
-        $biotype = $data->{attributes}->{gbkey};
-      }
+    # otherwise get biotype from gbkey
+    else {
+      $biotype = $data->{attributes}->{gbkey};
     }
   }
   
@@ -309,10 +311,21 @@ sub create_transcript {
   # will only create issues later
   return unless $biotype;
 
-  print "TRANSCRIPT ".$data->{attributes}->{transcript_id}." $biotype \n";
+  # usually transcript_id is an attribute
+  # pseudogenes have no transcript entry so we use the name attribute
+  my $transcript_id = $data->{attributes}->{transcript_id} || $data->{attributes}->{name};
+
+  # IG_*_genes use GeneID from dbxref
+  if($biotype =~ /^IG_/ && ($data->{attributes}->{dbxref} || '') =~ /GeneID:(\d+)/) {
+    $transcript_id = $1;
+  }
+
+  return unless $transcript_id;
+
+  # print "TRANSCRIPT $transcript_id $biotype \n";
 
   my $transcript = new Bio::EnsEMBL::Transcript(
-    -STABLE_ID => $data->{attributes}->{transcript_id},
+    -STABLE_ID => $transcript_id,
     -BIOTYPE   => $biotype,
     -SLICE     => get_slice($config, $data->{seqname}),
     -STRAND    => $data->{strand},
@@ -735,15 +748,15 @@ sub debug {
 
 sub usage {
     my $usage =<<END;
-#----------------------------#
-# GTF to VEP cache converter #
-#----------------------------#
+#--------------------------------#
+# GTF/GFF to VEP cache converter #
+#--------------------------------#
 
 version $VERSION
 
 By Will McLaren (wm2\@ebi.ac.uk)
 
-This script creates a VEP cache from a GTF file containing transcript/exon
+This script creates a VEP cache from a GTF or GFF file containing transcript/exon
 definitions and a FASTA file containing the reference sequence for the same
 species.
 
@@ -753,7 +766,7 @@ Options
 =======
 
 -h | --help               Display this message and quit
--i | --input [file]       GTF files (may be gzipped)
+-i | --input [file]       GTF/GFF file (may be gzipped)
 -f | --fasta [file]       FASTA file or directory containing FASTA files
 -s | --species [species]  Species name
 -d | --db_version [n]     Database version - must match version of API in use
