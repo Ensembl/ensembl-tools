@@ -600,9 +600,10 @@ sub export_data {
     dump_transcript_cache($config, {$chr => \@array}, $chr, $region);
     
     # remove all the dumped transcripts
-    delete $config->{transcripts}->{$_->stable_id} for @array;
     delete $hash->{$region};
   }
+
+  delete $config->{transcripts};
 }
 
 sub fix_transcript {
