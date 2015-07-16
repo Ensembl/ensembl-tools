@@ -168,7 +168,11 @@ while(<$in_file_handle>) {
     my $synonyms = get_seq_region_synonyms($config);
     $data->{seqname} = $synonyms->{$data->{seqname}} if $synonyms->{$data->{seqname}};
   }
-  die("ERROR: Could not find chromosome named ".$data->{seqname}." in FASTA file\n") unless $config->{fasta_db}->length($data->{seqname});
+
+  unless($config->{fasta_db}->length($data->{seqname})) {
+    warn("WARNING: Could not find chromosome named ".$data->{seqname}." in FASTA file\n");
+    next;
+  }
   
   debug("Processing chromosome ".$data->{seqname}) if !defined($prev_chr) || $data->{seqname} ne $prev_chr;
   
