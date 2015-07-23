@@ -625,7 +625,7 @@ ok($output =~ /TestPlugin=ENST00000567517/, "plugin data") or diag("Got\n$output
 
 
 ## DATABASE
-if(`ping -c 1 ensembldb.ensembl.org` =~ /bytes from/) {
+if(can_connect('ensembldb.ensembl.org')) {
   
   my $dbcmd = "$bascmd -force -database -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp";
   $dbcmd =~ s/\-+cache//;
@@ -710,4 +710,29 @@ sub input {
   open OUT, ">$tmpfile" or die "ERROR: Could not write to temporary file $tmpfile\n";
   print OUT $data;
   close OUT;
+}
+
+sub can_connect {
+  my $host = shift;
+
+  eval { use Net::Ping; };
+
+  if($@) {
+    if(`ping -c 1 $host` =~ /bytes from/) {
+      return 1;
+    }
+    else {
+      return 0;
+    }
+  }
+
+  else {
+    my $p = Net::Ping->new();
+    if($p->ping($host)) {
+      return 1;
+    }
+    else {
+      return 0;
+    }
+  }
 }

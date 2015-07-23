@@ -109,7 +109,7 @@ $output = `$cmd -i $Bin\/testdata/filter.vcf -f "SIFT is deleterious" -c`;
 ok($output eq "24\n", "count lines");
 
 # ontology
-if(`ping -c 1 ensembldb.ensembl.org` =~ /bytes from/) {
+if(can_connect('ensembldb.ensembl.org')) {
   @lines = grep {!/^\#/} split("\n", `$opcmd -ontology -f "Consequence is coding_sequence_variant"`);
   ok(
     (grep {/missense_variant/} @lines) &&
@@ -122,3 +122,28 @@ else {
 }
 
 done_testing();
+
+sub can_connect {
+  my $host = shift;
+
+  eval { use Net::Ping; };
+
+  if($@) {
+    if(`ping -c 1 $host` =~ /bytes from/) {
+      return 1;
+    }
+    else {
+      return 0;
+    }
+  }
+
+  else {
+    my $p = Net::Ping->new();
+    if($p->ping($host)) {
+      return 1;
+    }
+    else {
+      return 0;
+    }
+  }
+}

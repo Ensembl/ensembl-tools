@@ -12,7 +12,6 @@ addons:
     apt:
         packages:
         - unzip
-        - ping
 
 before_install:
     - git clone --branch master --depth 1 https://github.com/Ensembl/ensembl-test.git
@@ -41,6 +40,7 @@ install:
     - cpanm -v --installdeps --with-recommends --notest --cpanfile ensembl/cpanfile .
     - cpanm -v --installdeps --notest --cpanfile ensembl-variation/cpanfile .
     - cpanm -n Devel::Cover::Report::Coveralls
+    - cpanm -n Net::Ping
 
 script: "./travisci/harness.sh"
 
