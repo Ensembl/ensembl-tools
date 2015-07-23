@@ -170,11 +170,10 @@ while(<$in_file_handle>) {
   }
 
   unless($config->{fasta_db}->length($data->{seqname})) {
-    warn("WARNING: Could not find chromosome named ".$data->{seqname}." in FASTA file\n");
+    warn("WARNING: Could not find chromosome named ".$data->{seqname}." in FASTA file\n") unless $config->{missing_chromosomes}->{$data->{seqname}};
+    $config->{missing_chromosomes}->{$data->{seqname}} = 1;
     next;
   }
-  
-  debug("Processing chromosome ".$data->{seqname}) if !defined($prev_chr) || $data->{seqname} ne $prev_chr;
   
   # parse attributes
   if(defined($data->{attributes})) {
@@ -203,20 +202,22 @@ while(<$in_file_handle>) {
     $data->{attributes} = \%attribs;
   }
   
-  my $tr_id = $data->{attributes}->{transcript_id};
-  
-  my $ref = parse_data($config, $data);
-  
   # dump if into new region or new chrom
   # this of course assumes input file is in chrom order!!!
   if(defined($prev_chr) && $prev_chr ne $data->{seqname}) {
+    debug("Dumping data for chromosome ".$prev_chr);
     export_data($config, $prev_chr);
   }
+  
+  debug("Processing chromosome ".$data->{seqname}) if !defined($prev_chr) || $data->{seqname} ne $prev_chr;
+  
+  my $ref = parse_data($config, $data);
   
   $prev_chr = $data->{seqname};
 }
 
 # dump remaining transcripts
+debug("Dumping data for chromosome ".$prev_chr);
 export_data($config, $prev_chr);
 
 debug("All done!");
@@ -272,6 +273,9 @@ sub parse_transcript {
   if(!exists($config->{transcripts}->{$data->{attributes}->{transcript_id}})) {
     my $tr = create_transcript($config, $data, $biotype);
     $config->{transcripts}->{$tr->stable_id} = $tr if $tr;
+
+    # store by _gff_id if exists
+    $config->{transcripts_by_gff_id}->{$tr->{_gff_id}} = $tr if defined($tr->{_gff_id});
   }
 }
 
@@ -377,8 +381,7 @@ sub fetch_transcript {
 
   # otherwise look up by _gff_id
   elsif(my $gff_id = $attribs->{parent}) {
-    my ($tr) = grep {$_->{_gff_id} && $_->{_gff_id} eq $gff_id} values %{$config->{transcripts} || {}};
-    return $tr;
+    return $config->{transcripts_by_gff_id}->{$gff_id};
   }
 
   return undef;
@@ -451,6 +454,8 @@ sub parse_cds {
   
   # get overlapping exon
   my ($matched_exon) = grep {overlap($_->start, $_->end, $data->{start}, $data->{end})} @{$tr->get_all_Exons};
+
+  return unless $matched_exon;
   
   $translation->start_Exon($matched_exon) unless defined($translation->start_Exon);
   $translation->end_Exon($matched_exon);
@@ -608,6 +613,8 @@ sub export_data {
   }
 
   delete $config->{transcripts};
+  delete $config->{transcripts_by_gff_id};
+  delete $config->{genes};
 }
 
 sub fix_transcript {
@@ -640,7 +647,7 @@ sub check_transcript {
   }
   
   if(scalar @errors) {
-    warn "WARNING: Transcript ".$tr->stable_id." fails checks:\n".(join "\n", @errors)."\n";
+    warn "WARNING: Transcript ".$tr->stable_id." fails checks: ".(join ", ", @errors)."\n";
     return 0;
   }
 
