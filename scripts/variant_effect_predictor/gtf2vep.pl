@@ -294,14 +294,29 @@ sub parse_v_gene_segment     { return parse_transcript(@_, 'IG_V_gene'); }
 sub create_transcript {
   my ($config, $data, $biotype) = @_;
 
+  # get gene
+  my $parent = $data->{attributes}->{parent};
+  my $gene;
+
+  if($parent) {
+    $gene = $config->{genes}->{$parent};
+
+    # Ensembl GFF has parent ID with gene version attached
+    # but gene line's ID doesn't have version on it
+    if(!$gene) {
+      $parent =~ s/\.\d+$//;
+      $gene = $config->{genes}->{$parent};
+    }
+  }
+
   # Ensembl GTF has transcript_biotype field, thanks!
   if(!$biotype) {
-    $biotype = $data->{attributes}->{transcript_biotype};
+    $biotype = $data->{attributes}->{transcript_biotype} || $data->{attributes}->{biotype};
   }
 
   # NCBI RefSeq GFF
   if(!$biotype) {
-    if(my $gene = $config->{genes}->{$data->{attributes}->{parent} || ''}) {
+    if($gene) {
 
       # miRNA biotype connected to gene
       if(($gene->{attributes}->{description} || '') =~ /^microRNA/) {
@@ -347,6 +362,7 @@ sub create_transcript {
   
   # gene ID
   $transcript->{_gene_stable_id} = $data->{attributes}->{gene_id};
+
   if(!$transcript->{_gene_stable_id}) {
     foreach my $pair(split(',', $data->{attributes}->{dbxref} || '')) {
       my ($k, $v) = split(':', $pair);
@@ -357,13 +373,21 @@ sub create_transcript {
     }
   }
 
+  if(!$transcript->{_gene_stable_id} && $gene) {
+    $transcript->{_gene_stable_id} = $gene->{attributes}->{gene_id} if $gene->{attributes}->{gene_id};
+  }
+
   # try and get the gene symbol
   for my $key(qw(gene_name gene)) {
     if($data->{attributes}->{$key}) {
       $transcript->{_gene_symbol} = $data->{attributes}->{$key};
       last;
     }
-  }  
+  }
+
+  if(!$transcript->{_gene_symbol} && $gene) {
+    $transcript->{_gene_symbol} = $gene->{attributes}->{name} if $gene->{attributes}->{name};
+  }
   
   return $transcript;
 }
