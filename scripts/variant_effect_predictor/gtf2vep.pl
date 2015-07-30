@@ -61,6 +61,7 @@ GetOptions(
   'cache_region_size=i',
   'dir=s',
   'help',
+  'verbose',
   'synonyms=s',
 
   'host=s',
@@ -170,7 +171,7 @@ while(<$in_file_handle>) {
   }
 
   unless($config->{fasta_db}->length($data->{seqname})) {
-    warn("WARNING: Could not find chromosome named ".$data->{seqname}." in FASTA file\n") unless $config->{missing_chromosomes}->{$data->{seqname}};
+    warn("WARNING: Could not find chromosome named ".$data->{seqname}." in FASTA file\n") unless $config->{missing_chromosomes}->{$data->{seqname}} || $config->{verbose};
     $config->{missing_chromosomes}->{$data->{seqname}} = 1;
     next;
   }
@@ -205,19 +206,19 @@ while(<$in_file_handle>) {
   # dump if into new region or new chrom
   # this of course assumes input file is in chrom order!!!
   if(defined($prev_chr) && $prev_chr ne $data->{seqname}) {
-    debug("Dumping data for chromosome ".$prev_chr);
+    debug("Dumping data for chromosome ".$prev_chr) if $config->{verbose};
     export_data($config, $prev_chr);
   }
   
   debug("Processing chromosome ".$data->{seqname}) if !defined($prev_chr) || $data->{seqname} ne $prev_chr;
-  
+
   my $ref = parse_data($config, $data);
   
   $prev_chr = $data->{seqname};
 }
 
 # dump remaining transcripts
-debug("Dumping data for chromosome ".$prev_chr);
+debug("Dumping data for chromosome ".$prev_chr) if $config->{verbose};
 export_data($config, $prev_chr);
 
 debug("All done!");
@@ -228,8 +229,17 @@ sub parse_data {
   return unless defined($data);
   
   # check defined feature type
-  return unless defined($data->{feature});
-  return unless my $method_ref = function_exists('parse_'.lc($data->{feature})); #$data->{feature} =~ /transcript|exon|cds/i;#|(start|stop)_codon/i;
+  if(!defined($data->{feature})) {
+    debug("Feature type not described on line $.\n") if $config->{verbose};
+    return;
+  }
+
+  my $method_ref;
+  unless($method_ref = function_exists('parse_'.lc($data->{feature}))) {
+    debug("Cannot parse feature type ".$data->{feature}."\n") if $config->{verbose};
+    return;
+  }
+  
 
   # run data fix
   fix_data($config, $data);
@@ -279,16 +289,58 @@ sub parse_transcript {
   }
 }
 
-# in NCBI RefSeq GFFs, different feature types correspond to different biotypes
+## NCBI RefSeq GFFs, different feature types correspond to different biotypes
 sub parse_mrna               { return parse_transcript(@_, 'protein_coding'); }
 sub parse_rrna               { return parse_transcript(@_, 'rRNA'); }
 sub parse_trna               { return parse_transcript(@_, 'tRNA'); }
 sub parse_ncrna              { return parse_transcript(@_, $_[1]->{attributes}->{ncrna_class}); }
 sub parse_primary_transcript { return parse_transcript(@_); }
-sub parse_c_gene_segment     { return parse_transcript(@_, 'IG_C_gene'); }
-sub parse_d_gene_segment     { return parse_transcript(@_, 'IG_D_gene'); }
-sub parse_j_gene_segment     { return parse_transcript(@_, 'IG_J_gene'); }
-sub parse_v_gene_segment     { return parse_transcript(@_, 'IG_V_gene'); }
+sub parse_c_gene_segment     { return parse_gene_segment(@_, 'c'); }
+sub parse_d_gene_segment     { return parse_gene_segment(@_, 'd'); }
+sub parse_vd_gene_segment    { return parse_gene_segment(@_, 'd'); }
+sub parse_j_gene_segment     { return parse_gene_segment(@_, 'j'); }
+sub parse_v_gene_segment     { return parse_gene_segment(@_, 'v'); }
+
+## Ensembl special types
+# genes
+sub parse_lincrna_gene { return parse_gene(@_); }
+sub parse_mirna_gene   { return parse_gene(@_); }
+sub parse_rrna_gene    { return parse_gene(@_); }
+sub parse_snorna_gene  { return parse_gene(@_); }
+sub parse_snrna_gene   { return parse_gene(@_); }
+
+# transcripts
+# the type field corresponds to the biotype in the attributes
+# so don't technically need to pass as an argument, but can't hurt to save time
+sub parse_lincrna { return parse_transcript(@_, 'lincRNA'); }
+sub parse_mirna   { return parse_transcript(@_, 'miRNA'); }
+sub parse_snorna  { return parse_transcript(@_, 'snoRNA'); }
+sub parse_snrna   { return parse_transcript(@_, 'snRNA'); }
+sub parse_nmd_transcript_variant { return parse_transcript(@_, 'nonsense_mediated_decay'); }
+
+# these ones might vary on biotype; just trust we can find biotype in attribs
+sub parse_pseudogene { return parse_transcript(@_); }
+sub parse_processed_pseudogene { return parse_transcript(@_); }
+sub parse_pseudogenic_transcript { return parse_transcript(@_); }
+sub parse_aberrant_processed_transcript { return parse_transcript(@_); }
+sub parse_nc_primary_transcript { return parse_transcript(@_); }
+
+# this can be either a gene or a transcript
+sub parse_processed_transcript { return is_gene($_[1]) ? parse_gene(@_) : parse_transcript(@_); }
+
+# Ensembl GFF has *_gene_segment entries that are both "genes" and "transcripts"
+sub is_gene {
+  return ($_[0]->{attributes}->{id} || '') =~ /^gene:/i;
+}
+
+sub parse_gene_segment {
+  my $type = pop @_;
+
+  my %gene_segment_types = map {$_ => 1} qw(c d j v);
+  die("ERROR: No valid type given\n") unless $type && $gene_segment_types{lc($type)};
+
+  return is_gene($_[1]) ? parse_gene(@_) : parse_transcript(@_, 'IG_'.uc($type).'_gene');
+}
 
 # creates a new transcript object
 sub create_transcript {
@@ -316,12 +368,8 @@ sub create_transcript {
 
   # NCBI RefSeq GFF
   if(!$biotype) {
-    if($gene) {
-
-      # miRNA biotype connected to gene
-      if(($gene->{attributes}->{description} || '') =~ /^microRNA/) {
-        $biotype = 'miRNA';
-      }
+    if($gene && ($gene->{attributes}->{description} || '') =~ /^microRNA/) {
+      $biotype = 'miRNA';
     }
 
     # otherwise get biotype from gbkey
@@ -332,7 +380,10 @@ sub create_transcript {
   
   # don't bother creating a transcript unless we know the biotype
   # will only create issues later
-  return unless $biotype;
+  if(!$biotype) {
+    debug("No biotype identified on line $.\n") if $config->{verbose};
+    return;
+  }
 
   # usually transcript_id is an attribute
   # pseudogenes have no transcript entry so we use the name attribute
@@ -343,7 +394,10 @@ sub create_transcript {
     $transcript_id = $1;
   }
 
-  return unless $transcript_id;
+  if(!$transcript_id) {
+    debug("No transcript ID found on line $.\n") if $config->{verbose};
+    return;
+  }
 
   # print "TRANSCRIPT $transcript_id $biotype \n";
 
@@ -417,7 +471,11 @@ sub parse_exon {
   my ($config, $data) = @_;
   
   my $tr = fetch_transcript($config, $data);
-  return unless $tr;
+
+  unless($tr) {
+    debug("Could not fetch transcript for exon on line $.\n") if $config->{verbose};
+    return;
+  }
   
   my $exon = new Bio::EnsEMBL::Exon(
     -START  => $data->{start},
@@ -457,7 +515,11 @@ sub parse_cds {
   
   # update the coding_region_start/end
   my $tr = fetch_transcript($config, $data);
-  return unless $tr;
+
+  unless($tr) {
+    debug("Could not fetch transcript for CDS on line $.\n") if $config->{verbose};
+    return;
+  }
 
   # check transcript has exons
   return unless defined($tr->{_trans_exon_array});
@@ -479,7 +541,10 @@ sub parse_cds {
   # get overlapping exon
   my ($matched_exon) = grep {overlap($_->start, $_->end, $data->{start}, $data->{end})} @{$tr->get_all_Exons};
 
-  return unless $matched_exon;
+  unless($matched_exon) {
+    debug("Could not fetch exon matching CDS on line $.\n") if $config->{verbose};
+    return;
+  }
   
   $translation->start_Exon($matched_exon) unless defined($translation->start_Exon);
   $translation->end_Exon($matched_exon);
@@ -647,7 +712,7 @@ sub fix_transcript {
   # no CDS processed, can't be protein coding
   if(!defined($tr->{translation}->{start_exon})) {
     delete $tr->{translation};
-    $tr->{biotype} = 'pseudogene';
+    $tr->{biotype} ||= 'pseudogene';
   }
 }
 
