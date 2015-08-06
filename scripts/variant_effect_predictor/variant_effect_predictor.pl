@@ -2074,7 +2074,7 @@ sub get_plugin_headers {
 
   for my $plugin (@{ $config->{plugins} }) {
     if (my $hdr = $plugin->get_header_info) {
-      for my $key (keys %$hdr) {
+      for my $key (sort keys %$hdr) {
         my $val = $hdr->{$key};
 
         push @headers, [$key, $val];
