@@ -1914,15 +1914,10 @@ sub get_out_file_handle {
             );
             
             # plugin headers
-            foreach my $plugin_header(split /\n/, get_plugin_headers($config)) {
-                my $h = $plugin_header;
-                $h =~ s/\s+/ /g;
-                $h =~ s/ \: /\=/;
-                $h =~ s/\#\# /\#\#/;
-                push @vcf_info_strings, $h;
-              
-                $plugin_header =~ /\#\# (.+?)\t\:.+/;
-                push @new_headers, $1;
+            foreach my $plugin_header(@{get_plugin_headers($config)}) {
+                my ($key, $value) = @$plugin_header;
+                push @vcf_info_strings, sprintf('##%s=%s', $key, $value);
+                push @new_headers, $key;
             }
             
             # redefine the main headers list in config
@@ -2004,10 +1999,7 @@ sub get_out_file_handle {
             );
             
             # plugin headers
-            foreach my $plugin_header(split /\n/, get_plugin_headers($config)) {
-                $plugin_header =~ /\#\# (.+?)\t\:.+/;
-                push @new_headers, $1;
-            }
+            push @new_headers, map {$_->[0]} @{get_plugin_headers($config)};
             
             # redefine the main headers list in config
             $config->{fields} = \@new_headers;
@@ -2045,7 +2037,7 @@ $db_string
 $extra_column_keys
 HEAD
    
-    $header .= get_plugin_headers($config);
+    $header .= join("\n", map {sprintf('## %s : %s', @{$_})} @{get_plugin_headers($config)});
     
     # add headers
     print $out_file_handle $header;
@@ -2076,22 +2068,21 @@ HEAD
 }
 
 sub get_plugin_headers {
+  my $config = shift;
 
-    my $config = shift;
+  my @headers = ();
 
-    my $header = "";
+  for my $plugin (@{ $config->{plugins} }) {
+    if (my $hdr = $plugin->get_header_info) {
+      for my $key (keys %$hdr) {
+        my $val = $hdr->{$key};
 
-    for my $plugin (@{ $config->{plugins} }) {
-        if (my $hdr = $plugin->get_header_info) {
-            for my $key (keys %$hdr) {
-                my $val = $hdr->{$key};
-                
-                $header .= "## $key\t: $val\n";
-            }
-        }
+        push @headers, [$key, $val];
+      }
     }
+  }
 
-    return $header;
+  return \@headers;
 }
 
 # convert a variation feature to a line of output
