@@ -63,6 +63,7 @@ GetOptions(
   'help',
   'verbose',
   'synonyms=s',
+  'source_biotype',
 
   'host=s',
   'port=s',
@@ -376,6 +377,10 @@ sub create_transcript {
     else {
       $biotype = $data->{attributes}->{gbkey};
     }
+  }
+
+  if(!$biotype && $config->{source_biotype}) {
+    $biotype = $data->{source};
   }
   
   # don't bother creating a transcript unless we know the biotype
