@@ -1308,6 +1308,8 @@ sub check_flags() {
     ['refseq', 'gencode_basic'],
     ['refseq', 'merged'],
     ['merged', 'database'],
+    ['database', 'offline'],
+    ['database', 'cache'],
   );
 
   foreach my $combo(@invalid) {
