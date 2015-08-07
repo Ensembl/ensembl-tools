@@ -628,6 +628,7 @@ ok($output =~ /TestPlugin=ENST00000567517/, "plugin data") or diag("Got\n$output
 if(`ping -c 1 ensembldb.ensembl.org` =~ /bytes from/) {
   
   my $dbcmd = "$bascmd -force -database -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp";
+  $dbcmd =~ s/\-+cache//;
   
   # ID as input
   input('rs116645811');
@@ -636,7 +637,9 @@ if(`ping -c 1 ensembldb.ensembl.org` =~ /bytes from/) {
   
   # use cache and database
   input('rs2282471');
-  $output = `$dbcmd -force -cache -dir_cache $data_path/vep-cache/ -cache_version $cver -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp -maf_1kg`;
+  my $tmp_dbcmd = $dbcmd;
+  $tmp_dbcmd =~ s/\-+database//;
+  $output = `$tmp_dbcmd -force -cache -dir_cache $data_path/vep-cache/ -cache_version $cver -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp -maf_1kg`;
   ok($output =~ /AFR_MAF=T:0.04/, "DB - with cache") or diag("Got\n$output");
   
   # HGVS as input
