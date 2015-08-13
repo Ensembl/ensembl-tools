@@ -2037,7 +2037,7 @@ $db_string
 $extra_column_keys
 HEAD
    
-    $header .= join("\n", map {sprintf('## %s : %s', @{$_})} @{get_plugin_headers($config)});
+    $header .= join("\n", map {sprintf('## %s : %s', @{$_})} @{get_plugin_headers($config)})."\n";
     
     # add headers
     print $out_file_handle $header;
