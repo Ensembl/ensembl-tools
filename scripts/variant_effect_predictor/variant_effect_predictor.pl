@@ -1945,7 +1945,7 @@ sub get_out_file_handle {
             # nuke existing CSQ header unless we are keeping it
             unless(defined($config->{keep_csq})) {
               my $vcf_field = $config->{vcf_info_field};
-              @{$config->{headers}} = grep {!/$vcf_field/} @{$config->{headers}};
+              @{$config->{headers}} = grep {!/^##INFO=<ID=$vcf_field,/} @{$config->{headers}};
             }
             
             for my $i(0..$#{$config->{headers}}) {
