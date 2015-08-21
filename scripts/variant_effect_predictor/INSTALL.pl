@@ -18,7 +18,7 @@ have_LWP();
 # CONFIGURE
 ###########
 
-our ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $ASSEMBLY, $ENS_GIT_ROOT, $BIOPERL_URL, $CACHE_URL, $CACHE_DIR, $PLUGINS, $PLUGIN_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST);
+our ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $ASSEMBLY, $ENS_GIT_ROOT, $BIOPERL_URL, $CACHE_URL, $CACHE_DIR, $PLUGINS, $PLUGIN_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST, $LIB_DIR, $HTSLIB_DIR, $FAIDX_DIR);
 
 GetOptions(
   'DESTDIR|d=s'  => \$DEST_DIR,
@@ -46,18 +46,59 @@ if(defined($help)) {
 }
 
 my $default_dir_used;
+my $this_os =  $^O ;
+print "Installing on $this_os\n" ;
 
 # check if $DEST_DIR is default
-if(defined($DEST_DIR)) {
-  print "Using non-default installation directory $DEST_DIR - you will probably need to add $DEST_DIR to your PERL5LIB\n";
+if(defined($DEST_DIR)) 
+{
+  print "Using non-default installation directory $DEST_DIR. Have you \n";
+  print "1. added $DEST_DIR to your PERL5LIB environment variable?\n" ;
+  print "2. added $DEST_DIR/htslib to your PATH environment variable?\n" ;
+  if( $this_os eq 'darwin' )
+  {
+    print "3. added $DEST_DIR/htslib to your DYLD_LIBRARY_PATH environment variable?\n" ;
+  }
+  print "(y/n)" ;
+  my $ok = <>;
+  if($ok !~ /^y/i) {
+    print "Exiting. Please \n";
+    print "1. add $DEST_DIR to your PERL5LIB environment variable\n" ;
+    print "2. add $DEST_DIR/htslib to your PATH environment variable\n" ;
+    if( $this_os eq 'darwin' )
+    {
+      print "3. add $DEST_DIR/htslib to your DYLD_LIBRARY_PATH environment variable\n" ;
+    }
+    exit(0);
+  }
+  if( ! -d $DEST_DIR )
+  {
+      mkdir $DEST_DIR || die "Could not make destination directory $DEST_DIR"
+  }
   $default_dir_used = 0;
 }
-else {
+else
+{
   $DEST_DIR ||= '.';
   $default_dir_used = 1;
+  my $current_dir = cwd();
+  if( $this_os eq 'darwin' )
+  {
+    print "Have you \n";
+    print "1. added $current_dir/htslib to your DYLD_LIBRARY_PATH environment variable?\n" ;
+    print "(y/n)" ;
+    my $ok = <>;
+    if($ok !~ /^y/i) 
+    {
+      print "Exiting. Please \n";
+      print "1. add $current_dir/htslib to your DYLD_LIBRARY_PATH environment variable\n" ;
+      exit(0);
+    }
+  }
+
 }
 
-my $lib_dir = $DEST_DIR;
+$LIB_DIR = $DEST_DIR;
 
 $DEST_DIR       .= '/Bio';
 $ENS_GIT_ROOT ||= 'https://github.com/Ensembl/';
@@ -69,8 +110,13 @@ $PLUGIN_URL   ||= 'https://raw.githubusercontent.com/ensembl-variation/VEP_plugi
 $FTP_USER     ||= 'anonymous';
 $FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
 $PREFER_BIN     = 0 unless defined($PREFER_BIN);
+$HTSLIB_DIR   = $LIB_DIR.'/htslib' ;
+$FAIDX_DIR    = $LIB_DIR.'/FAIDX' ;
 
 my $dirname = dirname(__FILE__) || '.';
+
+#dev
+
 
 # using PREFER_BIN can save memory when extracting archives
 $Archive::Extract::PREFER_BIN = $PREFER_BIN == 0 ? 0 : 1;
@@ -141,8 +187,12 @@ print "\nAll done\n" unless $QUIET;
 #####
 sub api() {
   setup_dirs();
-  install_api();
+  my $curdir = getcwd ;
   bioperl();
+  chdir $curdir ;
+  install_faidx() ;
+  chdir $curdir ;
+  install_api();
   test();
 }
 
@@ -286,15 +336,19 @@ sub setup_dirs() {
 #############
 sub install_api() {
 
-  print "\nDownloading required files\n" unless $QUIET;
+  print "\nDownloading required Ensembl API files\n" unless $QUIET;
 
   foreach my $module(qw(ensembl ensembl-variation ensembl-funcgen)) {
     my $url = $ENS_GIT_ROOT.$module.$ensembl_url_tail.$API_VERSION.$archive_type;
   
     print " - fetching $module\n" unless $QUIET;
-  
     my $target_file = $DEST_DIR.'/tmp/'.$module.$archive_type;
   
+    if(!-e $DEST_DIR.'/tmp/')
+    {
+        mkdir( $DEST_DIR.'/tmp/' ) ;
+    }
+
     if(!-e $target_file) {
       download_to_file($url, $target_file);
     }
@@ -335,6 +389,166 @@ sub install_api() {
     rmtree("$DEST_DIR/tmp/$module\-release-$API_VERSION") or die "ERROR: Failed to remove directory $DEST_DIR/tmp/$module\-release-$API_VERSION\n";
   }
 }
+
+# HTSLIB download/make
+######################
+sub install_hts()
+{
+    #actually decided to follow Bio::DB::Sam template
+    # STEP 0: various dependencies
+    my $git = 'which git';
+    $git or die <<END;
+    'git' command not in path. Please install git and try again. 
+        On Debian/Ubuntu systems you can do this with the command:
+        
+        apt-get install git
+END
+
+
+    'which cc' or die <<END;
+    'cc' command not in path. Please install it and try again. 
+        On Debian/Ubuntu systems you can do this with the command:
+
+        apt-get install build-essential
+END
+
+    `which make` or die <<END;
+    'make' command not in path. Please install it and try again. 
+        On Debian/Ubuntu systems you can do this with the command:
+
+        apt-get install build-essential
+END
+
+     my $this_os =  $^O ;
+     if( $this_os ne 'darwin' )
+     {
+       -e '/usr/include/zlib.h' or die <<END;
+           zlib.h library header not found in /usr/include. Please install it and try again. 
+           On Debian/Ubuntu systems you can do this with the command:
+
+           apt-get install zlib1g-dev
+END
+    ;
+     }
+
+
+    # STEP 1: Create a clean directory for building
+    my $htslib_install_dir = $LIB_DIR ;    
+    my $curdir = getcwd ;
+    chdir $htslib_install_dir;
+    my $actualdir = getcwd ;
+
+    # STEP 2: Check out HTSLIB / or make this a download?
+    print("Checking out HTSLib\n");
+    system "git clone -b master https://github.com/samtools/htslib.git";
+    -d './htslib' or die "git clone seems to have failed. Could not find $htslib_install_dir/htslib directory";
+    chdir './htslib';
+
+    # Step 3: Build libhts.a
+    print("Building HTSLIB in $htslib_install_dir/htslib\n");
+    print( "In ".getcwd."\n" ) ;
+    # patch makefile
+    rename 'Makefile','Makefile.orig' or die "Couldn't rename Makefile to Makefile.orig: $!";
+    open my $in, '<','Makefile.orig'     or die "Couldn't open Makefile for reading: $!";
+    open my $out,'>','Makefile.new' or die "Couldn't open Makefile.new for writing: $!";
+    while (<$in>) 
+    {
+        chomp;
+        if (/^CFLAGS/ && !/-fPIC/) 
+        {
+            s/#.+//;  # get rid of comments
+            $_ .= " -fPIC -Wno-unused -Wno-unused-result";
+        }
+    } 
+    continue 
+    {
+        print $out $_,"\n";
+    }
+
+    close $in;
+    close $out;
+    rename 'Makefile.new','Makefile' or die "Couldn't rename Makefile.new to Makefile: $!";
+    system "make";
+    -e 'libhts.a' or die "Compile didn't complete. No libhts.a library file found";
+ 
+    chdir $curdir ;
+}
+
+
+# INSTALL FAIDX MODULE
+######################
+sub install_faidx()
+{
+    install_hts() ;
+    rmtree( $DEST_DIR.'/tmp' ) ;
+    #Now install FAIDX proper
+    my $faidx_github_url = "https://github.com/Ensembl/faidx_xs" ;
+    my $faidx_zip_github_url = "$faidx_github_url/archive/master.zip" ;
+    my $faidx_zip_download_file = $DEST_DIR.'/tmp/faidx_xs.zip' ;
+    
+    mkdir $DEST_DIR.'/tmp' ;
+    download_to_file($faidx_zip_github_url, $faidx_zip_download_file) ;
+    print " - unpacking $faidx_zip_download_file to $DEST_DIR/tmp/\n" unless $QUIET;
+    unpack_arch($faidx_zip_download_file, "$DEST_DIR/tmp/");
+
+    print "$DEST_DIR/tmp/faidx_xs-master - moving files to $FAIDX_DIR\n" unless $QUIET;
+    rmtree($FAIDX_DIR) ;
+    move("$DEST_DIR/tmp/faidx_xs-master", $FAIDX_DIR) or die "ERROR: Could not move directory\n".$!;
+
+    print( "Making FAIDX\n" ) ;
+    # patch makefile
+    chdir $FAIDX_DIR ;
+    rename 'Makefile.PL','Makefile.PL.orig' or die "Couldn't rename Makefile to Makefile.orig: $!";
+    open my $in, '<','Makefile.PL.orig'     or die "Couldn't open Makefile.PL.orig for reading: $!";
+    open my $out,'>','Makefile.PL.new' or die "Couldn't open Makefile.PL.new for writing: $!";
+    while (<$in>) 
+    {
+        chomp;
+        if (/LIBS/) 
+        {
+            s/#.+// ;  # get rid of comments
+            $_ = "LIBS              => ['-L../htslib/ -lhts  -lz'],";
+        }
+        if (/INC/) 
+        {
+            s/#.+// ;  # get rid of comments
+            $_ = "INC               => '-I. -I../htslib', " ;
+        }
+    } 
+    continue 
+    {
+        print $out $_,"\n";
+    }
+
+    close $in;
+    close $out;
+    rename 'Makefile.PL.new','Makefile.PL' or die "Couldn't rename Makefile.new to Makefile: $!";
+    system "perl Makefile.PL";
+    system "make";
+    chdir "." ;
+
+    #move the library to the current directory
+    my $pdir = getcwd;
+    printf( "Copying Faidx modules\n" ) ;
+    copy( "lib/Faidx.pm", "..") or die "ERROR: Could not copy Faidx module:$!\n" ;    
+    if( -e "blib/arch/auto/Faidx/Faidx.so" )
+    {
+        copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n" ;    
+    }
+    elsif( -e "blib/arch/auto/Faidx/Faidx.bundle" )
+    {
+        copy( "blib/arch/auto/Faidx/Faidx.bundle", "..") or die "ERROR: Could not copy shared bundle library:$!\n" ;
+    }
+    else
+    {
+        die "ERROR: Shared Faidx library not found\n" ;
+    }
+    chdir $pdir ;
+}
+
+
+
+
 
 # INSTALL BIOPERL
 #################
@@ -799,45 +1013,36 @@ sub fasta() {
       copy("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file") unless $TEST;
     }
   
-    print " - extracting data\n" unless $QUIET;
-    unpack_arch("$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file", "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/") unless $TEST;
-  
-    print " - attempting to index\n" unless $QUIET;
+    print " - converting sequence data to bgzip format\n" unless $QUIET;
+    my $curdir = getcwd ;
+    my $bgzip_convert = "$FAIDX_DIR/scripts/convert_gz_2_bgz.sh "."$ex.gz $HTSLIB_DIR/bgzip" ;
+    print " Going to run:\n$bgzip_convert\nThis may take some time and will be removed when files are provided in bgzip format\n" ;
+    my $bgzip_result = `/bin/bash $bgzip_convert` unless $TEST ;
+    if( $? != 0 )
+    {
+        die "FASTA gzip to bgzip conversion failed: $bgzip_result\n" unless $TEST ;
+    }
+    else
+    {
+        print "Converted FASTA gzip file to bgzip successfully\n" ;
+    }
+
+    #Indexing needs Faidx, but this will not be present when the script is started up.
     eval q{
-      use Bio::DB::Fasta;
-    };
-    if($@) {
-      print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
-    }
-    else {
-      unless($TEST) {
-        # check lock file
-        my $lock_file = $ex;
-        $lock_file .= -d $ex ? '/.vep.lock' : '.vep.lock';
-  
-        # lock file exists, indexing failed
-        if(-e $lock_file) {
-          for(qw(.fai .index .vep.lock)) {
-            unlink($ex.$_) if -e $ex.$_;
-          }
-        }
-  
-        # create lock file
-        open LOCK, ">$lock_file" or die("ERROR: Could not write to FASTA lock file $lock_file\n");
-        print LOCK "1\n";
-        close LOCK;
-  
-        # run indexing
-        Bio::DB::Fasta->new($ex);
-  
-        # remove lock file
-        unlink($lock_file);
-      }
-      
-      print " - indexing OK\n" unless $QUIET;
-    }
-  
-    print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex\"\n\n" unless $QUIET;
+	      use Faidx ;
+	    };
+	    if($@) {
+	      print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
+	    }
+	    else 
+      {
+        Faidx->new("$ex.gz") unless $TEST ;	      
+	      print " - indexing OK\n" unless $QUIET;
+	    }
+    
+    
+
+    print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex.gz\"\n\n" unless $QUIET;
   
     if($ftp) {
       $ftp->cwd('../');

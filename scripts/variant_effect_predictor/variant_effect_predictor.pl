@@ -42,6 +42,7 @@ by Will McLaren (wm2@ebi.ac.uk)
 use strict;
 use Getopt::Long;
 use FileHandle;
+use Faidx ;
 use CGI qw/:standard/;
 use FindBin qw($Bin);
 use lib $Bin;
@@ -1558,10 +1559,10 @@ sub setup_fasta() {
   
   die "ERROR: Specified FASTA file/directory not found" unless -e $config->{fasta};
   
-  eval q{ use Bio::DB::Fasta; };
+  eval q{ use Faidx; };
   
   if($@) {
-    die("ERROR: Could not load required BioPerl module\n");
+    die("ERROR: Could not load required Faidx module\n");
   }
   
   # try to overwrite sequence method in Slice
@@ -1582,10 +1583,11 @@ sub setup_fasta() {
         # special case for in-between (insert) coordinates
         return '' if($self->start() == $self->end() + 1);
         
-        my $seq;
-        
-        if(defined($config->{fasta_db})) {
-          $seq = $config->{fasta_db}->seq($self->seq_region_name, $self->start => $self->end);
+        my $seq ;
+        my $length = 0 ;
+        if(defined($config->{fasta_db})) { 
+          my $location_string = $self->seq_region_name.":".$self->start."-".$self->end ;
+          ($seq, $length) = $config->{fasta_db}->get_sequence($location_string) ;
           reverse_comp(\$seq) if $self->strand < 0;
         }
         
@@ -1609,6 +1611,7 @@ sub setup_fasta() {
   };
   
   if($@) {
+    debug($@) unless defined($config->{quiet});
     die("ERROR: Could not redefine sequence method\n");
   }
   
@@ -1624,29 +1627,8 @@ sub setup_fasta() {
     -RANK => 1,
   );
   
-  debug("Checking/creating FASTA index") unless defined($config->{quiet});
-  
-  # check lock file
-  my $lock_file = $config->{fasta};
-  $lock_file .= -d $config->{fasta} ? '/.vep.lock' : '.vep.lock';
-  
-  # lock file exists, indexing failed
-  if(-e $lock_file) {
-    for(qw(.fai .index .vep.lock)) {
-      unlink($config->{fasta}.$_) if -e $config->{fasta}.$_;
-    }
-  }
-  
-  # create lock file
-  open LOCK, ">$lock_file" or die("ERROR: Could not write to FASTA lock file $lock_file\n");
-  print LOCK "1\n";
-  close LOCK;
-  
-  # run indexing
-  $config->{fasta_db} = Bio::DB::Fasta->new($config->{fasta});
-  
-  # remove lock file
-  unlink($lock_file);
+  debug("Checking/creating FASTA index for $config->{fasta}") unless defined($config->{quiet});
+  $config->{fasta_db} = Faidx->new($config->{fasta});
 }
 
 sub setup_custom {
