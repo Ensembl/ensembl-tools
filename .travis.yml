@@ -29,7 +29,7 @@ before_install:
     - perl Makefile.PL
     - make
     - cp lib/Faidx.pm ..
-    - cp lib/Faidx.so ..
+    - cp blib/arch/auto/Faidx/Faidx.so ..
     - cd ../
 
 install:
