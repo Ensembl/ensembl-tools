@@ -20,6 +20,16 @@ before_install:
     - cd tabix
     - make
     - cd ../
+    - git clone --branch master --depth 1 https://github.com/samtools/htslib.git
+    - cd htslib
+    - make
+    - cd ../
+    - git clone --branch master --depth 1 https://github.com/Ensembl/faidx_xs.git
+    - cd faidx_xs
+    - make
+    - cp lib/Faidx.pm ..
+    - cp lib/Faidx.so ..
+    - cd ../
 
 install:
     - cpanm -v --installdeps --with-recommends --notest --cpanfile ensembl/cpanfile .
