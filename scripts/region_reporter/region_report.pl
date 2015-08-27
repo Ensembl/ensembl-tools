@@ -242,7 +242,8 @@ foreach my $region (@regions) {
     
 }
 print STDERR "[Region report] Found ".scalar(@slices)." slices\n" if ($config{'verbose'});
-$serializer->print_main_header(\@slices);
+my $dba = $slice_adaptor->db();
+$serializer->print_main_header(\@slices, $dba);
 
 # Explore all slices for features, check for validity etc.
 
