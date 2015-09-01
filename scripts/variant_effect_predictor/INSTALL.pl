@@ -18,7 +18,7 @@ have_LWP();
 # CONFIGURE
 ###########
 
-our ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $ASSEMBLY, $ENS_GIT_ROOT, $BIOPERL_URL, $CACHE_URL, $CACHE_DIR, $PLUGINS, $PLUGIN_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST, $LIB_DIR, $HTSLIB_DIR, $FAIDX_DIR);
+our ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $ASSEMBLY, $ENS_GIT_ROOT, $BIOPERL_URL, $CACHE_URL, $CACHE_DIR, $PLUGINS, $PLUGIN_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST, $NO_HTSLIB, $LIB_DIR, $HTSLIB_DIR, $FAIDX_DIR);
 
 GetOptions(
   'DESTDIR|d=s'  => \$DEST_DIR,
@@ -38,6 +38,7 @@ GetOptions(
   'PREFER_BIN|p' => \$PREFER_BIN,
   'CONVERT|t'    => \$CONVERT,
   'TEST'         => \$TEST,
+  'NO_HTSLIB|l'  => \$NO_HTSLIB,
 ) or die("ERROR: Failed to parse arguments");
 
 if(defined($help)) {
@@ -187,11 +188,15 @@ print "\nAll done\n" unless $QUIET;
 #####
 sub api() {
   setup_dirs();
-  my $curdir = getcwd ;
+  my $curdir = getcwd;
   bioperl();
-  chdir $curdir ;
-  install_faidx() ;
-  chdir $curdir ;
+  
+  unless($NO_HTSLIB) {
+    chdir $curdir;
+    install_faidx();
+  }
+  
+  chdir $curdir;
   install_api();
   test();
 }
@@ -1012,37 +1017,55 @@ sub fasta() {
       print " - copying $file\n" unless $QUIET;
       copy("$FASTA_URL/$species/dna/$file", "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file") unless $TEST;
     }
-  
-    print " - converting sequence data to bgzip format\n" unless $QUIET;
-    my $curdir = getcwd ;
-    my $bgzip_convert = "$FAIDX_DIR/scripts/convert_gz_2_bgz.sh "."$ex.gz $HTSLIB_DIR/bgzip" ;
-    print " Going to run:\n$bgzip_convert\nThis may take some time and will be removed when files are provided in bgzip format\n" ;
-    my $bgzip_result = `/bin/bash $bgzip_convert` unless $TEST ;
-    if( $? != 0 )
-    {
-        die "FASTA gzip to bgzip conversion failed: $bgzip_result\n" unless $TEST ;
-    }
-    else
-    {
-        print "Converted FASTA gzip file to bgzip successfully\n" ;
+
+    if($NO_HTSLIB) {
+      print " - extracting data\n" unless $QUIET;
+      unpack_arch("$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file", "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/") unless $TEST;
+    
+      print " - attempting to index\n" unless $QUIET;
+      eval q{
+        use Bio::DB::Fasta;
+      };
+      if($@) {
+        print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
+      }
+      else {
+        Bio::DB::Fasta->new($ex) unless $TEST;
+        print " - indexing OK\n" unless $QUIET;
+      }
+    
+      print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex\"\n\n" unless $QUIET;
     }
 
-    #Indexing needs Faidx, but this will not be present when the script is started up.
-    eval q{
-	      use Faidx ;
-	    };
-	    if($@) {
-	      print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
-	    }
-	    else 
-      {
-        Faidx->new("$ex.gz") unless $TEST ;	      
-	      print " - indexing OK\n" unless $QUIET;
-	    }
-    
-    
+    else {
+      print " - converting sequence data to bgzip format\n" unless $QUIET;
+      my $curdir = getcwd;
+      my $bgzip_convert = "$FAIDX_DIR/scripts/convert_gz_2_bgz.sh "."$ex.gz $HTSLIB_DIR/bgzip";
+      print " Going to run:\n$bgzip_convert\nThis may take some time and will be removed when files are provided in bgzip format\n";
+      my $bgzip_result = `/bin/bash $bgzip_convert` unless $TEST;
 
-    print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex.gz\"\n\n" unless $QUIET;
+      if( $? != 0 ) {
+        die "FASTA gzip to bgzip conversion failed: $bgzip_result\n" unless $TEST;
+      }
+      else {
+        print "Converted FASTA gzip file to bgzip successfully\n";
+      }
+
+      #Indexing needs Faidx, but this will not be present when the script is started up.
+      eval q{
+        use Faidx;
+      };
+
+      if($@) {
+        print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
+      }
+      else {
+        Faidx->new("$ex.gz") unless $TEST;        
+        print " - indexing OK\n" unless $QUIET;
+      }
+
+      print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex.gz\"\n\n" unless $QUIET;
+    }
   
     if($ftp) {
       $ftp->cwd('../');

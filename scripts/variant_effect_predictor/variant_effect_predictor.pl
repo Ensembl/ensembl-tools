@@ -42,7 +42,6 @@ by Will McLaren (wm2@ebi.ac.uk)
 use strict;
 use Getopt::Long;
 use FileHandle;
-use Faidx ;
 use CGI qw/:standard/;
 use FindBin qw($Bin);
 use lib $Bin;
@@ -1523,7 +1522,7 @@ sub setup_cache() {
   # check if there's a FASTA file in there
   if(!defined($config->{fasta})) {
     opendir CACHE, $config->{dir};
-    my ($fa) = grep {/\.fa$/} readdir CACHE;
+    my ($fa) = grep {/\.fa(\.gz)?$/} readdir CACHE;
     
     if(defined $fa) {
       $config->{fasta} = $config->{dir}.'/'.$fa;
@@ -1558,57 +1557,118 @@ sub setup_fasta() {
   my $config = shift;
   
   die "ERROR: Specified FASTA file/directory not found" unless -e $config->{fasta};
+
+  my $index_type = 'faidx';
   
   eval q{ use Faidx; };
   
   if($@) {
-    die("ERROR: Could not load required Faidx module\n");
+
+    # if FASTA file is gzipped, we can't index it without Faidx
+    die("ERROR: Cannot index gzipped FASTA file without Faidx\n") if $config->{fasta} =~ /\.gz$/;
+
+    debug("Unable to use Faidx, falling back to Bio::DB::Fasta\n");
+    $index_type = 'bioperl';
+
+    # try and fall back to 
+    eval q{ use Bio::DB::Fasta; };
+    
+    if($@) {
+      die("ERROR: Could not load required Faidx or BioPerl module\n");
+    }
   }
   
-  # try to overwrite sequence method in Slice
-  eval q{
-    package Bio::EnsEMBL::Slice;
-    
-    # define a global variable so that we can pull in config hash
-    our $config;
-    
-    {
-      # don't want a redefine warning spat out, thanks
-      no warnings 'redefine';
+  if($index_type eq 'faidx') {
+
+    # try to overwrite sequence method in Slice
+    eval q{
+      package Bio::EnsEMBL::Slice;
       
-      # overwrite seq method to read from FASTA DB
-      sub seq {
-        my $self = shift;
+      # define a global variable so that we can pull in config hash
+      our $config;
+      
+      {
+        # don't want a redefine warning spat out, thanks
+        no warnings 'redefine';
         
-        # special case for in-between (insert) coordinates
-        return '' if($self->start() == $self->end() + 1);
-        
-        my $seq ;
-        my $length = 0 ;
-        if(defined($config->{fasta_db})) { 
-          my $location_string = $self->seq_region_name.":".$self->start."-".$self->end ;
-          ($seq, $length) = $config->{fasta_db}->get_sequence($location_string) ;
-          reverse_comp(\$seq) if $self->strand < 0;
-        }
-        
-        else {
-          return $self->{'seq'} if($self->{'seq'});
-        
-          if($self->adaptor()) {
-            my $seqAdaptor = $self->adaptor()->db()->get_SequenceAdaptor();
-            return ${$seqAdaptor->fetch_by_Slice_start_end_strand($self,1,undef,1)};
+        # overwrite seq method to read from FASTA DB
+        sub seq {
+          my $self = shift;
+          
+          # special case for in-between (insert) coordinates
+          return '' if($self->start() == $self->end() + 1);
+          
+          my $seq ;
+          my $length = 0 ;
+          if(defined($config->{fasta_db})) { 
+            my $location_string = $self->seq_region_name.":".$self->start."-".$self->end ;
+            ($seq, $length) = $config->{fasta_db}->get_sequence($location_string) ;
+            reverse_comp(\$seq) if $self->strand < 0;
           }
+          
+          else {
+            return $self->{'seq'} if($self->{'seq'});
+          
+            if($self->adaptor()) {
+              my $seqAdaptor = $self->adaptor()->db()->get_SequenceAdaptor();
+              return ${$seqAdaptor->fetch_by_Slice_start_end_strand($self,1,undef,1)};
+            }
+          }
+          
+          # default to a string of Ns if we couldn't get sequence
+          $seq ||= 'N' x $self->length();
+          
+          return $seq;
         }
-        
-        # default to a string of Ns if we couldn't get sequence
-        $seq ||= 'N' x $self->length();
-        
-        return $seq;
       }
-    }
-    
-    1;
-  };
+      
+      1;
+    };
+  }
+  else {
+    eval q{
+      package Bio::EnsEMBL::Slice;
+      
+      # define a global variable so that we can pull in config hash
+      our $config;
+      
+      {
+        # don't want a redefine warning spat out, thanks
+        no warnings 'redefine';
+        
+        # overwrite seq method to read from FASTA DB
+        sub seq {
+          my $self = shift;
+          
+          # special case for in-between (insert) coordinates
+          return '' if($self->start() == $self->end() + 1);
+          
+          my $seq;
+          
+          if(defined($config->{fasta_db})) {
+            $seq = $config->{fasta_db}->seq($self->seq_region_name, $self->start => $self->end);
+            reverse_comp(\$seq) if $self->strand < 0;
+          }
+          
+          else {
+            return $self->{'seq'} if($self->{'seq'});
+          
+            if($self->adaptor()) {
+              my $seqAdaptor = $self->adaptor()->db()->get_SequenceAdaptor();
+              return ${$seqAdaptor->fetch_by_Slice_start_end_strand($self,1,undef,1)};
+            }
+          }
+          
+          # default to a string of Ns if we couldn't get sequence
+          $seq ||= 'N' x $self->length();
+          
+          return $seq;
+        }
+      }
+      
+      1;
+    };
+  }
   
   if($@) {
     debug($@) unless defined($config->{quiet});
@@ -1627,8 +1687,40 @@ sub setup_fasta() {
     -RANK => 1,
   );
   
-  debug("Checking/creating FASTA index for $config->{fasta}") unless defined($config->{quiet});
-  $config->{fasta_db} = Faidx->new($config->{fasta});
+  # check lock file
+  my $lock_file = $config->{fasta};
+  $lock_file .= -d $config->{fasta} ? '/.vep.lock' : '.vep.lock';
+  
+  # lock file exists, indexing failed
+  if(-e $lock_file) {
+    for(qw(.fai .index .gzi /directory.index /directory.fai .vep.lock)) {
+      unlink($config->{fasta}.$_) if -e $config->{fasta}.$_;
+    }
+  }
+  
+  my $index_exists = 0;
+
+  for my $fn(map {$config->{fasta}.$_} qw(.fai .index .gzi /directory.index /directory.fai)) {
+    if(-e $fn) {
+      $index_exists = 1;
+      last;
+    }
+  }
+
+  # create lock file
+  unless($index_exists) {
+    debug("Creating FASTA index") unless defined($config->{quiet});
+
+    open LOCK, ">$lock_file" or die("ERROR: Could not write to FASTA lock file $lock_file\n");
+    print LOCK "1\n";
+    close LOCK;
+  }
+  
+  # run indexing
+  $config->{fasta_db} = $index_type eq 'faidx' ? Faidx->new($config->{fasta}) : Bio::DB::Fasta->new($config->{fasta});
+  
+  # remove lock file
+  unlink($lock_file) unless $index_exists;
 }
 
 sub setup_custom {
