@@ -50,8 +50,7 @@ my $default_dir_used;
 my $this_os =  $^O;
 
 # check if $DEST_DIR is default
-if(defined($DEST_DIR)) 
-{
+if(defined($DEST_DIR)) {
   print "Using non-default installation directory $DEST_DIR. Have you \n";
   print "1. added $DEST_DIR to your PERL5LIB environment variable?\n";
   print "2. added $DEST_DIR/htslib to your PATH environment variable?\n";
@@ -77,12 +76,12 @@ if(defined($DEST_DIR))
   $default_dir_used = 0;
 }
 
-elsif(!$NO_HTSLIB) {
+else {
   $DEST_DIR ||= '.';
   $default_dir_used = 1;
   my $current_dir = cwd();
 
-  if( $this_os eq 'darwin' ) {
+  if( !$NO_HTSLIB && $this_os eq 'darwin' ) {
     print "Have you \n";
     print "1. added $current_dir/htslib to your DYLD_LIBRARY_PATH environment variable?\n";
     print "(y/n)";
