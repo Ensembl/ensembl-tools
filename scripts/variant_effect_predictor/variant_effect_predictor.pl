@@ -1565,9 +1565,23 @@ sub setup_fasta() {
   if($@) {
 
     # if FASTA file is gzipped, we can't index it without Faidx
-    die("ERROR: Cannot index gzipped FASTA file without Faidx\n") if $config->{fasta} =~ /\.gz$/;
+    if($config->{fasta} =~ /\.gz$/) {
 
-    debug("Unable to use Faidx, falling back to Bio::DB::Fasta\n");
+      # but first check that the unpacked file doesn't exist
+      my $unpacked_fa = $config->{fasta};
+      $unpacked_fa =~ s/\.gz$//;
+
+      # if it does, we can use it instead
+      if(-e $unpacked_fa) {
+        $config->{fasta} = $unpacked_fa;
+      }
+      else {
+        die("ERROR: Cannot index gzipped FASTA file without Faidx\n");
+      }
+    }
+    
+
+    debug("Unable to use Faidx, falling back to Bio::DB::Fasta\n") unless defined($config->{quiet});
     $index_type = 'bioperl';
 
     # try and fall back to 
