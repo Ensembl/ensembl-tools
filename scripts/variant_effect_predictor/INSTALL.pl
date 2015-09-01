@@ -47,56 +47,52 @@ if(defined($help)) {
 }
 
 my $default_dir_used;
-my $this_os =  $^O ;
-print "Installing on $this_os\n" ;
+my $this_os =  $^O;
 
 # check if $DEST_DIR is default
 if(defined($DEST_DIR)) 
 {
   print "Using non-default installation directory $DEST_DIR. Have you \n";
-  print "1. added $DEST_DIR to your PERL5LIB environment variable?\n" ;
-  print "2. added $DEST_DIR/htslib to your PATH environment variable?\n" ;
-  if( $this_os eq 'darwin' )
-  {
-    print "3. added $DEST_DIR/htslib to your DYLD_LIBRARY_PATH environment variable?\n" ;
+  print "1. added $DEST_DIR to your PERL5LIB environment variable?\n";
+  print "2. added $DEST_DIR/htslib to your PATH environment variable?\n";
+  if( $this_os eq 'darwin' && !$NO_HTSLIB) {
+    print "3. added $DEST_DIR/htslib to your DYLD_LIBRARY_PATH environment variable?\n";
   }
-  print "(y/n)" ;
+  print "(y/n)";
+
   my $ok = <>;
   if($ok !~ /^y/i) {
     print "Exiting. Please \n";
-    print "1. add $DEST_DIR to your PERL5LIB environment variable\n" ;
-    print "2. add $DEST_DIR/htslib to your PATH environment variable\n" ;
-    if( $this_os eq 'darwin' )
+    print "1. add $DEST_DIR to your PERL5LIB environment variable\n";
+    print "2. add $DEST_DIR/htslib to your PATH environment variable\n";
+    if( $this_os eq 'darwin' && !$NO_HTSLIB)
     {
-      print "3. add $DEST_DIR/htslib to your DYLD_LIBRARY_PATH environment variable\n" ;
+      print "3. add $DEST_DIR/htslib to your DYLD_LIBRARY_PATH environment variable\n";
     }
     exit(0);
   }
-  if( ! -d $DEST_DIR )
-  {
-      mkdir $DEST_DIR || die "Could not make destination directory $DEST_DIR"
+  if( ! -d $DEST_DIR ) {
+    mkdir $DEST_DIR || die "Could not make destination directory $DEST_DIR"
   }
   $default_dir_used = 0;
 }
-else
-{
+
+elsif(!$NO_HTSLIB) {
   $DEST_DIR ||= '.';
   $default_dir_used = 1;
   my $current_dir = cwd();
-  if( $this_os eq 'darwin' )
-  {
+
+  if( $this_os eq 'darwin' ) {
     print "Have you \n";
-    print "1. added $current_dir/htslib to your DYLD_LIBRARY_PATH environment variable?\n" ;
-    print "(y/n)" ;
+    print "1. added $current_dir/htslib to your DYLD_LIBRARY_PATH environment variable?\n";
+    print "(y/n)";
     my $ok = <>;
-    if($ok !~ /^y/i) 
-    {
+    if($ok !~ /^y/i) {
       print "Exiting. Please \n";
-      print "1. add $current_dir/htslib to your DYLD_LIBRARY_PATH environment variable\n" ;
+      print "1. add $current_dir/htslib to your DYLD_LIBRARY_PATH environment variable\n";
       exit(0);
     }
   }
-
 }
 
 $LIB_DIR = $DEST_DIR;
@@ -111,8 +107,8 @@ $PLUGIN_URL   ||= 'https://raw.githubusercontent.com/ensembl-variation/VEP_plugi
 $FTP_USER     ||= 'anonymous';
 $FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
 $PREFER_BIN     = 0 unless defined($PREFER_BIN);
-$HTSLIB_DIR   = $LIB_DIR.'/htslib' ;
-$FAIDX_DIR    = $LIB_DIR.'/FAIDX' ;
+$HTSLIB_DIR   = $LIB_DIR.'/htslib';
+$FAIDX_DIR    = $LIB_DIR.'/FAIDX';
 
 my $dirname = dirname(__FILE__) || '.';
 
@@ -139,7 +135,7 @@ if($UPDATE) {
 elsif($AUTO) {
   
   # check
-  die("ERROR: Failed to parse AUTO string - must contain any of a (API), c (cache), f (FASTA), p (plugins)\n") unless $AUTO =~ /^[acfp]+$/i;
+  die("ERROR: Failed to parse AUTO string - must contain any of a (API), l (FAIDX/htslib), c (cache), f (FASTA), p (plugins)\n") unless $AUTO =~ /^[alcfp]+$/i;
   
   # require species
   if($AUTO =~ /[cf]/i) {
@@ -154,6 +150,23 @@ elsif($AUTO) {
   }
   
   # run subs
+  if($AUTO =~ /l/ && $AUTO !~ /a/) {
+    my $curdir = getcwd;
+    chdir $curdir;
+    install_faidx();
+    chdir $curdir;
+
+    # remove Bio dir if empty
+    opendir DIR, $DEST_DIR;
+    my @files = grep {!/^\./} readdir DIR;
+    closedir DIR;
+
+    if(scalar @files <= 1) {
+      rmtree($DEST_DIR.'/'.$files[0]);
+      rmtree($DEST_DIR);
+    }
+  }
+
   api()   if $AUTO =~ /a/;
   cache() if $AUTO =~ /c/;
   fasta() if $AUTO =~ /f/;
@@ -351,7 +364,7 @@ sub install_api() {
   
     if(!-e $DEST_DIR.'/tmp/')
     {
-        mkdir( $DEST_DIR.'/tmp/' ) ;
+        mkdir( $DEST_DIR.'/tmp/' );
     }
 
     if(!-e $target_file) {
@@ -397,162 +410,163 @@ sub install_api() {
 
 # HTSLIB download/make
 ######################
-sub install_hts()
-{
-    #actually decided to follow Bio::DB::Sam template
-    # STEP 0: various dependencies
-    my $git = 'which git';
-    $git or die <<END;
-    'git' command not in path. Please install git and try again. 
-        On Debian/Ubuntu systems you can do this with the command:
-        
-        apt-get install git
+sub install_hts() {
+
+  #actually decided to follow Bio::DB::Sam template
+  # STEP 0: various dependencies
+  my $git = 'which git';
+  $git or die <<END;
+  'git' command not in path. Please install git and try again.
+  (or to skip Faidx/htslib install re-run with --NO_HTSLIB) 
+
+  On Debian/Ubuntu systems you can do this with the command:
+  
+  apt-get install git
 END
 
 
-    'which cc' or die <<END;
-    'cc' command not in path. Please install it and try again. 
-        On Debian/Ubuntu systems you can do this with the command:
+  'which cc' or die <<END;
+  'cc' command not in path. Please install it and try again. 
+  (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
 
-        apt-get install build-essential
+  On Debian/Ubuntu systems you can do this with the command:
+
+  apt-get install build-essential
 END
 
-    `which make` or die <<END;
-    'make' command not in path. Please install it and try again. 
-        On Debian/Ubuntu systems you can do this with the command:
+  `which make` or die <<END;
+  'make' command not in path. Please install it and try again. 
+  (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
 
-        apt-get install build-essential
+  On Debian/Ubuntu systems you can do this with the command:
+
+  apt-get install build-essential
 END
 
-     my $this_os =  $^O ;
-     if( $this_os ne 'darwin' )
-     {
-       -e '/usr/include/zlib.h' or die <<END;
-           zlib.h library header not found in /usr/include. Please install it and try again. 
-           On Debian/Ubuntu systems you can do this with the command:
+  my $this_os =  $^O;
+  if( $this_os ne 'darwin' ) {
+    -e '/usr/include/zlib.h' or die <<END;
+      zlib.h library header not found in /usr/include. Please install it and try again. 
+      (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
+      
+      On Debian/Ubuntu systems you can do this with the command:
 
-           apt-get install zlib1g-dev
+      apt-get install zlib1g-dev
 END
-    ;
-     }
+ ;
+  }
 
+  # STEP 1: Create a clean directory for building
+  my $htslib_install_dir = $LIB_DIR;    
+  my $curdir = getcwd;
+  chdir $htslib_install_dir;
+  my $actualdir = getcwd;
 
-    # STEP 1: Create a clean directory for building
-    my $htslib_install_dir = $LIB_DIR ;    
-    my $curdir = getcwd ;
-    chdir $htslib_install_dir;
-    my $actualdir = getcwd ;
+  # STEP 2: Check out HTSLIB / or make this a download?
+  print(" - checking out HTSLib\n");
+  system "git clone -b master https://github.com/samtools/htslib.git";
+  -d './htslib' or die "git clone seems to have failed. Could not find $htslib_install_dir/htslib directory";
+  chdir './htslib';
 
-    # STEP 2: Check out HTSLIB / or make this a download?
-    print("Checking out HTSLib\n");
-    system "git clone -b master https://github.com/samtools/htslib.git";
-    -d './htslib' or die "git clone seems to have failed. Could not find $htslib_install_dir/htslib directory";
-    chdir './htslib';
+  # Step 3: Build libhts.a
+  print(" - building HTSLIB in $htslib_install_dir/htslib\n");
+  print( "In ".getcwd."\n" );
+  # patch makefile
+  rename 'Makefile','Makefile.orig' or die "Couldn't rename Makefile to Makefile.orig: $!";
+  open my $in, '<','Makefile.orig'     or die "Couldn't open Makefile for reading: $!";
+  open my $out,'>','Makefile.new' or die "Couldn't open Makefile.new for writing: $!";
 
-    # Step 3: Build libhts.a
-    print("Building HTSLIB in $htslib_install_dir/htslib\n");
-    print( "In ".getcwd."\n" ) ;
-    # patch makefile
-    rename 'Makefile','Makefile.orig' or die "Couldn't rename Makefile to Makefile.orig: $!";
-    open my $in, '<','Makefile.orig'     or die "Couldn't open Makefile for reading: $!";
-    open my $out,'>','Makefile.new' or die "Couldn't open Makefile.new for writing: $!";
-    while (<$in>) 
-    {
-        chomp;
-        if (/^CFLAGS/ && !/-fPIC/) 
-        {
-            s/#.+//;  # get rid of comments
-            $_ .= " -fPIC -Wno-unused -Wno-unused-result";
-        }
-    } 
-    continue 
-    {
-        print $out $_,"\n";
+  while (<$in>) {
+    chomp;
+    if (/^CFLAGS/ && !/-fPIC/) {
+      s/#.+//;  # get rid of comments
+      $_ .= " -fPIC -Wno-unused -Wno-unused-result";
     }
+  } 
+  continue {
+    print $out $_,"\n";
+  }
 
-    close $in;
-    close $out;
-    rename 'Makefile.new','Makefile' or die "Couldn't rename Makefile.new to Makefile: $!";
-    system "make";
-    -e 'libhts.a' or die "Compile didn't complete. No libhts.a library file found";
- 
-    chdir $curdir ;
+  close $in;
+  close $out;
+  rename 'Makefile.new','Makefile' or die "Couldn't rename Makefile.new to Makefile: $!";
+  system "make";
+  -e 'libhts.a' or die "Compile didn't complete. No libhts.a library file found";
+
+  chdir $curdir;
 }
 
 
 # INSTALL FAIDX MODULE
 ######################
-sub install_faidx()
-{
-    install_hts() ;
-    rmtree( $DEST_DIR.'/tmp' ) ;
-    #Now install FAIDX proper
-    my $faidx_github_url = "https://github.com/Ensembl/faidx_xs" ;
-    my $faidx_zip_github_url = "$faidx_github_url/archive/master.zip" ;
-    my $faidx_zip_download_file = $DEST_DIR.'/tmp/faidx_xs.zip' ;
-    
-    mkdir $DEST_DIR.'/tmp' ;
-    download_to_file($faidx_zip_github_url, $faidx_zip_download_file) ;
-    print " - unpacking $faidx_zip_download_file to $DEST_DIR/tmp/\n" unless $QUIET;
-    unpack_arch($faidx_zip_download_file, "$DEST_DIR/tmp/");
+sub install_faidx() {
 
-    print "$DEST_DIR/tmp/faidx_xs-master - moving files to $FAIDX_DIR\n" unless $QUIET;
-    rmtree($FAIDX_DIR) ;
-    move("$DEST_DIR/tmp/faidx_xs-master", $FAIDX_DIR) or die "ERROR: Could not move directory\n".$!;
+  print "Attempting to install Faidx/htslib.\n\n>>> If this fails, try re-running with --NO_HTSLIB\n\n";
 
-    print( "Making FAIDX\n" ) ;
-    # patch makefile
-    chdir $FAIDX_DIR ;
-    rename 'Makefile.PL','Makefile.PL.orig' or die "Couldn't rename Makefile to Makefile.orig: $!";
-    open my $in, '<','Makefile.PL.orig'     or die "Couldn't open Makefile.PL.orig for reading: $!";
-    open my $out,'>','Makefile.PL.new' or die "Couldn't open Makefile.PL.new for writing: $!";
-    while (<$in>) 
-    {
-        chomp;
-        if (/LIBS/) 
-        {
-            s/#.+// ;  # get rid of comments
-            $_ = "LIBS              => ['-L../htslib/ -lhts  -lz'],";
-        }
-        if (/INC/) 
-        {
-            s/#.+// ;  # get rid of comments
-            $_ = "INC               => '-I. -I../htslib', " ;
-        }
-    } 
-    continue 
-    {
-        print $out $_,"\n";
+  install_hts();
+  rmtree( $DEST_DIR.'/tmp' );
+
+  #Now install FAIDX proper
+  my $faidx_github_url = "https://github.com/Ensembl/faidx_xs";
+  my $faidx_zip_github_url = "$faidx_github_url/archive/master.zip";
+  my $faidx_zip_download_file = $DEST_DIR.'/tmp/faidx_xs.zip';
+  
+  mkdir $DEST_DIR unless -d $DEST_DIR;
+  mkdir $DEST_DIR.'/tmp';
+  download_to_file($faidx_zip_github_url, $faidx_zip_download_file);
+  print " - unpacking $faidx_zip_download_file to $DEST_DIR/tmp/\n" unless $QUIET;
+  unpack_arch($faidx_zip_download_file, "$DEST_DIR/tmp/");
+
+  print "$DEST_DIR/tmp/faidx_xs-master - moving files to $FAIDX_DIR\n" unless $QUIET;
+  rmtree($FAIDX_DIR);
+  move("$DEST_DIR/tmp/faidx_xs-master", $FAIDX_DIR) or die "ERROR: Could not move directory\n".$!;
+
+  print( " - making FAIDX\n" );
+  # patch makefile
+  chdir $FAIDX_DIR;
+  rename 'Makefile.PL','Makefile.PL.orig' or die "Couldn't rename Makefile to Makefile.orig: $!";
+  open my $in, '<','Makefile.PL.orig'     or die "Couldn't open Makefile.PL.orig for reading: $!";
+  open my $out,'>','Makefile.PL.new' or die "Couldn't open Makefile.PL.new for writing: $!";
+
+  while (<$in>) {
+    chomp;
+    if (/LIBS/) {
+      s/#.+//;  # get rid of comments
+      $_ = "LIBS              => ['-L../htslib/ -lhts  -lz'],";
     }
 
-    close $in;
-    close $out;
-    rename 'Makefile.PL.new','Makefile.PL' or die "Couldn't rename Makefile.new to Makefile: $!";
-    system "perl Makefile.PL";
-    system "make";
-    chdir "." ;
+    if (/INC/) {
+      s/#.+//;  # get rid of comments
+      $_ = "INC               => '-I. -I../htslib', ";
+    }
+  } 
+  continue {
+    print $out $_,"\n";
+  }
 
-    #move the library to the current directory
-    my $pdir = getcwd;
-    printf( "Copying Faidx modules\n" ) ;
-    copy( "lib/Faidx.pm", "..") or die "ERROR: Could not copy Faidx module:$!\n" ;    
-    if( -e "blib/arch/auto/Faidx/Faidx.so" )
-    {
-        copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n" ;    
-    }
-    elsif( -e "blib/arch/auto/Faidx/Faidx.bundle" )
-    {
-        copy( "blib/arch/auto/Faidx/Faidx.bundle", "..") or die "ERROR: Could not copy shared bundle library:$!\n" ;
-    }
-    else
-    {
-        die "ERROR: Shared Faidx library not found\n" ;
-    }
-    chdir $pdir ;
+  close $in;
+  close $out;
+  rename 'Makefile.PL.new','Makefile.PL' or die "Couldn't rename Makefile.new to Makefile: $!";
+  system "perl Makefile.PL";
+  system "make";
+  chdir ".";
+
+  #move the library to the current directory
+  my $pdir = getcwd;
+  printf( "Copying Faidx modules\n" );
+  copy( "lib/Faidx.pm", "..") or die "ERROR: Could not copy Faidx module:$!\n";    
+  if( -e "blib/arch/auto/Faidx/Faidx.so" ) {
+    copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n";    
+  }
+  elsif( -e "blib/arch/auto/Faidx/Faidx.bundle" ) {
+    copy( "blib/arch/auto/Faidx/Faidx.bundle", "..") or die "ERROR: Could not copy shared bundle library:$!\n";
+  }
+  else {
+    die "ERROR: Shared Faidx library not found\n";
+  }
+
+  chdir $pdir;
 }
-
-
-
 
 
 # INSTALL BIOPERL
@@ -1482,14 +1496,15 @@ Options
 
 -n | --UPDATE      EXPERIMENTAL! Check for and download new VEP versions
 
--a | --AUTO        Run installer without user prompts. Use a (API), c (cache),
-                   f (FASTA), p (plugins) to specify parts to install
-                   e.g. -a ac for API and cache
+-a | --AUTO        Run installer without user prompts. Use "a" (API + Faidx/htslib),
+                   "l" (Faidx/htslib only), "c" (cache), "f" (FASTA), "p" (plugins) to specify
+                   parts to install e.g. -a ac for API and cache
 -s | --SPECIES     Comma-separated list of species to install when using --AUTO
 -y | --ASSEMBLY    Assembly name to use if more than one during --AUTO
 -g | --PLUGINS     Comma-separated list of plugins to install when using --AUTO
 -q | --QUIET       Don't write any status output when using --AUTO
 -p | --PREFER_BIN  Use this if the installer fails with out of memory errors
+-l | --NO_HTSLIB   Don't attempt to install Faidx/htslib
 
 -t | --CONVERT     Convert downloaded caches to use tabix for retrieving
                    co-located variants (requires tabix)
