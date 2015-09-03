@@ -714,25 +714,23 @@ sub input {
 
 sub can_connect {
   my $host = shift;
+  my $port = shift || 3306;
 
-  eval { use Net::Ping; };
+  eval { use DBI; };
+  return 0 if $@;
+
+  my $dsn = sprintf(
+    "DBI:mysql(RaiseError=>1):host=%s;port=%i",
+    $host,
+    $port
+  );
+  my $dbh = DBI->connect($dsn, 'anonymous', '');
 
   if($@) {
-    if(`ping -c 1 $host` =~ /bytes from/) {
-      return 1;
-    }
-    else {
-      return 0;
-    }
+    return 0;
   }
 
   else {
-    my $p = Net::Ping->new();
-    if($p->ping($host)) {
-      return 1;
-    }
-    else {
-      return 0;
-    }
+    return 1;
   }
 }
