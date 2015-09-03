@@ -1357,7 +1357,7 @@ sub plugins() {
 
     else {
       printf(
-        " - add \"--%s%s\" to your VEP command to use this plugin\n",
+        " - add \"--plugin %s%s\" to your VEP command to use this plugin\n",
         $pl->{key},
         $pl->{params} ? ',[options]' : ''
       );
@@ -1366,7 +1366,7 @@ sub plugins() {
     print " - OK\n";
   }
 
-  print "\nNB: One or more plugins that you have installed will not work without installation or downloading data; see logs above\n";
+  print "\nNB: One or more plugins that you have installed will not work without installation or downloading data; see logs above\n" if $requires_install_or_data;
 }
 
 # OTHER SUBS
