@@ -109,7 +109,7 @@ $output = `$cmd -i $Bin\/testdata/filter.vcf -f "SIFT is deleterious" -c`;
 ok($output eq "24\n", "count lines");
 
 # ontology
-if(`ping -c 1 ensembldb.ensembl.org` =~ /bytes from/) {
+if(can_connect('ensembldb.ensembl.org')) {
   @lines = grep {!/^\#/} split("\n", `$opcmd -ontology -f "Consequence is coding_sequence_variant"`);
   ok(
     (grep {/missense_variant/} @lines) &&
@@ -122,3 +122,26 @@ else {
 }
 
 done_testing();
+
+sub can_connect {
+  my $host = shift;
+  my $port = shift || 3306;
+
+  eval { use DBI; };
+  return 0 if $@;
+
+  my $dsn = sprintf(
+    "DBI:mysql(RaiseError=>1):host=%s;port=%i",
+    $host,
+    $port
+  );
+  my $dbh = DBI->connect($dsn, 'anonymous', '');
+
+  if($@) {
+    return 0;
+  }
+
+  else {
+    return 1;
+  }
+}

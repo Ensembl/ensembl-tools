@@ -6,10 +6,14 @@ perl:
 env:
   - COVERALLS=true
 
+sudo: false
+
+addons:
+    apt:
+        packages:
+        - unzip
+
 before_install:
-    - sudo apt-get -y update
-    - sudo apt-get -y install unzip
-    - sudo apt-get -y install sendmail
     - git clone --branch master --depth 1 https://github.com/Ensembl/ensembl-test.git
     - git clone --depth 1 https://github.com/Ensembl/ensembl.git
     - git clone --branch master --depth 1 https://github.com/Ensembl/ensembl-variation.git
@@ -19,6 +23,17 @@ before_install:
     - git clone --branch master --depth 1 https://github.com/samtools/tabix.git
     - cd tabix
     - make
+    - cd ../
+    - git clone --branch master --depth 1 https://github.com/samtools/htslib.git
+    - cd htslib
+    - make
+    - cd ../
+    - git clone --branch master --depth 1 https://github.com/Ensembl/faidx_xs.git
+    - cd faidx_xs
+    - perl Makefile.PL
+    - make
+    - cp lib/Faidx.pm ..
+    - cp blib/arch/auto/Faidx/Faidx.so ..
     - cd ../
 
 install:

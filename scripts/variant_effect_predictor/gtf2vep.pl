@@ -63,6 +63,8 @@ GetOptions(
   'help',
   'verbose',
   'synonyms=s',
+  'source_biotype',
+  'no_transcripts',
 
   'host=s',
   'port=s',
@@ -178,7 +180,7 @@ while(<$in_file_handle>) {
   
   # parse attributes
   if(defined($data->{attributes})) {
-    # $data->{attributes} =~ s/^\s+//g;
+    $data->{attributes} =~ s/^\s+//g;
     
     my %attribs;
     
@@ -280,13 +282,17 @@ sub parse_gene {
 sub parse_transcript {
   my ($config, $data, $biotype) = @_;
 
-  if(!exists($config->{transcripts}->{$data->{attributes}->{transcript_id}})) {
+  my $id = $data->{attributes}->{transcript_id};
+
+  if(!exists($config->{transcripts}->{$id})) {
     my $tr = create_transcript($config, $data, $biotype);
     $config->{transcripts}->{$tr->stable_id} = $tr if $tr;
 
     # store by _gff_id if exists
     $config->{transcripts_by_gff_id}->{$tr->{_gff_id}} = $tr if defined($tr->{_gff_id});
   }
+
+  return $config->{transcripts}->{$id};
 }
 
 ## NCBI RefSeq GFFs, different feature types correspond to different biotypes
@@ -376,6 +382,10 @@ sub create_transcript {
     else {
       $biotype = $data->{attributes}->{gbkey};
     }
+  }
+
+  if(!$biotype && $config->{source_biotype}) {
+    $biotype = $data->{source};
   }
   
   # don't bother creating a transcript unless we know the biotype
@@ -471,6 +481,11 @@ sub parse_exon {
   my ($config, $data) = @_;
   
   my $tr = fetch_transcript($config, $data);
+
+  # older spec Ensembl GTFs don't have explicit transcript lines
+  if(!$tr && $config->{no_transcripts}) {
+    $tr = parse_transcript($config, $data);
+  }
 
   unless($tr) {
     debug("Could not fetch transcript for exon on line $.\n") if $config->{verbose};
@@ -884,6 +899,12 @@ Options
 --port [port]             for chromosome names. Connects by default to
 --user [user]             anonymous\@ensembldb.ensembl.org:3306
 --password [pass]
+
+--verbose                 Show more warnings and status output
+--no_transcripts          Enable this flag for GTF files with no explicit
+                          transcript or gene lines
+--source_biotype          Older Ensembl GTFs have the transcript biotype in the
+                          GTF source field - enable this flag for such files
 
 END
 
