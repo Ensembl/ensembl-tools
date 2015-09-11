@@ -495,6 +495,7 @@ sub configure {
         'biotype',                 # add biotype of transcript to output
         'hgnc',                    # add HGNC gene ID to extra column
         'symbol',                  # add gene symbol (e.g. HGNC)
+        'gene_phenotype',          # indicate if genes are phenotype-associated
         'hgvs',                    # add HGVS names to extra column
         'shift_hgvs=i',            # disable/enable 3-prime shifting of HGVS indels to comply with standard
         'sift=s',                  # SIFT predictions
@@ -585,24 +586,25 @@ sub configure {
     # everything?
     if(defined($config->{everything})) {
         my %everything = (
-            sift          => 'b',
-            polyphen      => 'b',
-            ccds          => 1,
-            hgvs          => 1,
-            symbol        => 1,
-            numbers       => 1,
-            domains       => 1,
-            regulatory    => 1,
-            canonical     => 1,
-            protein       => 1,
-            biotype       => 1,
-            gmaf          => 1,
-            maf_1kg       => 1,
-            maf_esp       => 1,
-            pubmed        => 1,
-            uniprot       => 1,
-            tsl           => 1,
-            variant_class => 1,
+            sift           => 'b',
+            polyphen       => 'b',
+            ccds           => 1,
+            hgvs           => 1,
+            symbol         => 1,
+            numbers        => 1,
+            domains        => 1,
+            regulatory     => 1,
+            canonical      => 1,
+            protein        => 1,
+            biotype        => 1,
+            gmaf           => 1,
+            maf_1kg        => 1,
+            maf_esp        => 1,
+            pubmed         => 1,
+            uniprot        => 1,
+            tsl            => 1,
+            variant_class  => 1,
+            gene_phenotype => 1,
         );
         
         $config->{$_} = $everything{$_} for keys %everything;
@@ -1285,6 +1287,7 @@ sub get_adaptors {
     $config->{tva}   = $config->{reg}->get_adaptor($config->{species}, 'variation', 'transcriptvariation');
     $config->{pfpma} = $config->{reg}->get_adaptor($config->{species}, 'variation', 'proteinfunctionpredictionmatrix');
     $config->{va}    = $config->{reg}->get_adaptor($config->{species}, 'variation', 'variation');
+    $config->{pfa}   = $config->{reg}->get_adaptor($config->{species}, 'variation', 'phenotypefeature');
     
     # get fake ones for species with no var DB
     if(!defined($config->{vfa})) {
