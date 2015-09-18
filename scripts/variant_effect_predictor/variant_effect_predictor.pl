@@ -430,7 +430,8 @@ sub configure {
         'merged',                  # use merged cache
         'all_refseq',              # report consequences on all transcripts in RefSeq cache, includes CCDS, EST etc
         'gencode_basic',           # limit to using just GenCode basic transcript set
-        
+       
+        'is_multispecies=i',       # '1' for a multispecies database (e.g protists_euglenozoa1_collection_core_29_82_1)
         # runtime options
         'minimal',                 # convert input alleles to minimal representation
         'most_severe',             # only return most severe consequence
@@ -1189,7 +1190,18 @@ sub connect_to_dbs {
         
         # otherwise manually connect to DB server
         else {
-            $reg->load_registry_from_db(
+	  if($config->{is_multispecies}==1){
+             $reg->load_registry_from_db(
+                -host       => $config->{host},
+                -user       => $config->{user},
+                -pass       => $config->{password},
+                -port       => $config->{port},
+                -db_version => $config->{db_version},
+                -verbose    => $config->{verbose},
+                -no_cache   => $config->{no_slice_cache},
+             );
+           }else {
+       	     $reg->load_registry_from_db(
                 -host       => $config->{host},
                 -user       => $config->{user},
                 -pass       => $config->{password},
@@ -1199,6 +1211,7 @@ sub connect_to_dbs {
                 -verbose    => $config->{verbose},
                 -no_cache   => $config->{no_slice_cache},
             );
+	  }
         }
         
         eval { $reg->set_reconnect_when_lost() };
