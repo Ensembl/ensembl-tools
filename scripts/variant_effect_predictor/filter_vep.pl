@@ -44,6 +44,26 @@ use FileHandle;
 # set output autoflush for progress bars
 $| = 1;
 
+# global vars
+our %FILTER_SYNONYMS = (
+  '>' => 'gt',
+  '>=' => 'gte',
+  '<' => 'lt',
+  '<=' => 'lte',
+  
+  'is' => 'eq',
+  '=' => 'eq',
+  
+  '!=' => 'ne',
+  
+  'exists' => 'ex',
+  'defined' => 'ex',
+  
+  'match' => 're',
+  'matches' => 're',
+  'regex' => 're',
+);
+
 # configure from command line opts
 my $config = configure(scalar @ARGV);
 
@@ -302,109 +322,241 @@ sub parse_line {
 sub parse_filters {
   my $config = shift;
   my $filters = shift;
-  
-  my @return;
-  
-  my %filter_synonyms = (
-    '>' => 'gt',
-    '>=' => 'gte',
-    '<' => 'lt',
-    '<=' => 'lte',
-    
-    'is' => 'eq',
-    '=' => 'eq',
-    
-    '!=' => 'ne',
-    
-    'exists' => 'ex',
-    'defined' => 'ex',
-    
-    'match' => 're',
-    'matches' => 're',
-    'regex' => 're',
-  );
+
+  my $root = create_filter({
+    is_root => 1
+  });
   
   foreach my $filter_list(@$filters) {
-    
-    while($filter_list =~ m/(.+?)(\sand\s|\sor\s|$)/g) {
-      my $filter_string = $1;
-      my @words = split /\s+/, $filter_string;
-      
-      # logic
-      my $logic = lc($2 || 'and');
-      $logic =~ s/\s+//g;
-      
-      # invert?
-      my $invert;
-      if($words[0] =~ /^not$/i) {
-        $invert = 1;
-        shift @words;
+
+    my $id = 1;
+
+    my $current = {
+      logic => 'and',
+      components => [],
+      parent => $root,
+      id => $id++,
+    };
+
+    while($filter_list =~ m/([^\(^\)^\s]*?)(\s|\(|\)|$)/g) {
+      my ($word, $sep) = ($1, $2);
+
+      # use Data::Dumper;
+      # print STDERR Dumper "CURRENT ", $current;
+      # print STDERR Dumper "PARENT ", $parent;
+
+      # print STDERR "-- WORD $word\tSEP \"$sep\"\n";
+
+      if($word) {
+
+        if($word eq 'and' || $word eq 'or') {
+
+          # print STDERR "ID $id LOGIC JOIN $word\n";
+
+          my $parent = $current->{parent};
+
+          finish_filter($current);
+          push @{$parent->{components}}, $current;
+
+          $current = create_filter({
+            logic => $word,
+            parent => $parent,
+            id => $id++,
+          });
+        }
+
+        # invert with not?
+        elsif($word eq 'not') {
+
+          # print STDERR "ID $id NEGATE\n";
+
+          $current->{not} = 1;
+        }
+
+        # current gets field, operator, value in that order
+
+        # process field
+        elsif(!$current->{field}) {
+
+          # print STDERR "ID $id FIELD $word\n";
+
+          if(!defined($config->{allowed_fields}->{$word})) {
+            my @matched_fields = grep {$_ =~ /^$word/i} keys %{$config->{allowed_fields}};
+            
+            if(scalar @matched_fields == 1) {
+              $word = $matched_fields[0];
+            }
+            #else {
+            #  die("ERROR: No field matching $word found\n");
+            #}
+          }
+
+          $current->{field} = $word;
+        }
+
+        # process operator
+        elsif(!$current->{operator}) {
+
+          # print STDERR "ID $id OPERATOR $word\n";
+
+          my $sub_name = 'filter_'.$word;
+          
+          if(!defined(&$sub_name)) {
+            if(defined($FILTER_SYNONYMS{$word})) {
+              $word = $FILTER_SYNONYMS{$word};
+              $sub_name = 'filter_'.$word;
+            }
+            else {
+              die("ERROR: No such operator \"$word\"\n") unless defined(&$sub_name);
+            }
+          }
+
+          $current->{operator} = $word;
+        }
+
+        # process value
+        elsif(!$current->{value}) {
+          # print STDERR "ID $id VALUE $word\n";
+          $current->{value} = $word;
+        }
       }
+
+      if($sep) {
+        if($sep eq '(') {
+
+          # print STDERR "ID $id OPEN BRACKETS\n";
+          my $parent = $current;
+
+          $current = create_filter({
+            parent => $parent,
+            id => $id++,
+          });
+        }
+        elsif($sep eq ')') {
+          # print STDERR "ID $id CLOSE BRACKETS\n";
+
+          my $parent = $current->{parent};
+
+          # finish child
+          finish_filter($current);
+          push @{$parent->{components}}, $current;
+          $current = $parent;
+        }
+      }
+
       else {
-        $invert = 0;
+        # print STDERR "END\n";
+
+        my $parent = $current->{parent};
+
+        # parent should be root
+        # die("ERROR: Error parsing filter string - incomplete parentheses sets?\n") unless $parent->{is_root};
+
+        finish_filter($current);
+
+        push @{$parent->{components}}, $current;
       }
-      
-      # field
-      my $field = shift @words;
-      
-      # operator?
-      my $operator = scalar @words ? shift @words : 'ex';
-      
-      # value?
-      my $value = scalar @words ? shift @words : undef;
-      
-      if(!defined($value)) {
-        $operator = 'nex' if $operator eq 'ne';
-        $operator = 'ex' if $operator eq 'is';
-      }
-      
-      # sub
-      my $sub_name = 'filter_'.$operator;
-      
-      if(!defined(&$sub_name)) {
-        if(defined($filter_synonyms{$operator})) {
-          $operator = $filter_synonyms{$operator};
-          $sub_name = 'filter_'.$operator;
-        }
-        else {
-          die("ERROR: No such operator \"$operator\"\n") unless defined(&$sub_name);
-        }
-      }
-      
-      # match field
-      if(!defined($config->{allowed_fields}->{$field})) {
-        my @matched_fields = grep {$_ =~ /^$field/i} keys %{$config->{allowed_fields}};
-        
-        if(scalar @matched_fields == 1) {
-          $field = $matched_fields[0];
-        }
-        #else {
-        #  die("ERROR: No field matching $field found\n");
-        #}
-      }
-      
-      if(defined($config->{ontology}) && $field eq 'Consequence' && $operator eq 'eq') {
-        $operator = 'is_child';
-        $sub_name = 'filter_is_child';
-      }
-      
-      push @return, {
-        predicate => \&$sub_name,
-        field     => $field,
-        value     => $value,
-        invert    => $invert,
-        logic     => $logic,
-      };
     }
+
+    use Data::Dumper;
+    # $Data::Dumper::Maxdepth = 3;
+    $Data::Dumper::Indent = 1;
+    print STDERR Dumper $root;
   }
   
-  return \@return;
+  return $root;
+}
+
+sub create_filter {
+  my $filter = shift;
+
+  $filter->{logic} //= 'and';
+  $filter->{components} //= [];
+
+  return $filter;
+}
+
+sub finish_filter {
+  my $filter = shift;
+
+  $filter->{operator} ||= 'ex';
+
+  if(defined($config->{ontology}) && $filter->{field} eq 'Consequence' && $filter->{operator} eq 'eq') {
+    $filter->{operator} = 'is_child';
+  }
+
+  if(!defined($filter->{value})) {
+    $filter->{operator} = 'nex' if $filter->{operator} eq 'ne';
+    $filter->{operator} = 'ex' if $filter->{operator} eq 'is';
+  }
+
+  delete $filter->{parent};
+}
+
+sub evaluate_filter {
+  my $config = shift;
+  my $data = shift;
+  my $filter = shift;
+
+  my $return = 1;
+
+  if(scalar @{$filter->{components}}) {
+
+    foreach my $sub(@{$filter->{components}}) {
+
+      my $value = evaluate_filter($config, $data, $sub);
+
+      if($sub->{logic} eq 'and') {
+        $return *= $value;
+      }
+      elsif($sub->{logic} eq 'or') {
+        $return += $value;
+      } 
+    }
+  }
+
+  else {
+    my $predicate_name = 'filter_'.$filter->{operator};
+    my $predicate = \&$predicate_name;
+
+    # process input
+    my $field = $filter->{field};
+    my $input = $data->{$field};
+    my $value = $filter->{value};
+    
+    if(defined($input) && $input =~ /([\w\.]+)?\:?\(?([\-\d\.]*)\)?/ && $field ne 'CELL_TYPE') {
+      my ($text, $num) = ($1, $2);
+      
+      if($value =~ /^[\-\d\.]+$/) {
+        $input = $text =~ /^[\-\d\.]+$/ ? $text : $num;
+      }
+      else {
+        $input = $text;
+      }
+    }
+    
+    # run filter
+    if(defined($value) && !defined($input)) {
+      $return = 0;
+    }
+    else {
+      $return = &$predicate($input, $value, $config);
+    }
+  }
+
+  if($filter->{not}) {
+    $return = $return == 0 ? 1 : 0;
+  }
+
+  return $return;
 }
 
 sub run_filters {
   my $config = shift;
   my $data = shift;
   my $filters = shift;
+
+  return evaluate_filter($config, $data, $filters);
   
   my $pass;
   my $logic = 'and';
