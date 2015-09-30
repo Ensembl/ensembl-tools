@@ -242,7 +242,7 @@ sub main {
         my $parsed_chunk = $data[$i];
         my $raw_chunk = $chunks[$i];
         
-        $chunk_pass = run_filters($config, $parsed_chunk, $config->{filters});
+        $chunk_pass = evaluate_filter($config, $parsed_chunk, $config->{filters});
         $line_pass += $chunk_pass;
         
         push @new_chunks, $raw_chunk if $chunk_pass;
@@ -323,63 +323,54 @@ sub parse_filters {
   my $config = shift;
   my $filters = shift;
 
-  my $root = create_filter({
+  my $root = create_filter_node({
     is_root => 1
   });
   
   foreach my $filter_list(@$filters) {
 
-    my $id = 1;
-
-    my $current = {
-      logic => 'and',
-      components => [],
+    my $current = create_filter_node({
       parent => $root,
-      id => $id++,
-    };
+    });
 
     while($filter_list =~ m/([^\(^\)^\s]*?)(\s|\(|\)|$)/g) {
       my ($word, $sep) = ($1, $2);
 
-      # use Data::Dumper;
-      # print STDERR Dumper "CURRENT ", $current;
-      # print STDERR Dumper "PARENT ", $parent;
+      # no word or separator - should be end of the string
+      unless($word || $sep) {
+        my $parent = $current->{parent};
 
-      # print STDERR "-- WORD $word\tSEP \"$sep\"\n";
+        # parent should now be root if all opened parentheses have been closed
+        die("ERROR: Error parsing filter string - incomplete parentheses sets?\n") unless $parent->{is_root};
+
+        finish_filter_node($current);
+
+        push @{$parent->{components}}, $current;
+      }
 
       if($word) {
 
         if($word eq 'and' || $word eq 'or') {
-
-          # print STDERR "ID $id LOGIC JOIN $word\n";
-
           my $parent = $current->{parent};
 
-          finish_filter($current);
+          finish_filter_node($current);
           push @{$parent->{components}}, $current;
 
-          $current = create_filter({
+          $current = create_filter_node({
             logic => $word,
             parent => $parent,
-            id => $id++,
           });
         }
 
         # invert with not?
         elsif($word eq 'not') {
-
-          # print STDERR "ID $id NEGATE\n";
-
           $current->{not} = 1;
         }
 
-        # current gets field, operator, value in that order
+        ## current gets field, operator, value in that order
 
         # process field
         elsif(!$current->{field}) {
-
-          # print STDERR "ID $id FIELD $word\n";
-
           if(!defined($config->{allowed_fields}->{$word})) {
             my @matched_fields = grep {$_ =~ /^$word/i} keys %{$config->{allowed_fields}};
             
@@ -397,8 +388,7 @@ sub parse_filters {
         # process operator
         elsif(!$current->{operator}) {
 
-          # print STDERR "ID $id OPERATOR $word\n";
-
+          # check operator is valid
           my $sub_name = 'filter_'.$word;
           
           if(!defined(&$sub_name)) {
@@ -416,58 +406,34 @@ sub parse_filters {
 
         # process value
         elsif(!$current->{value}) {
-          # print STDERR "ID $id VALUE $word\n";
           $current->{value} = $word;
         }
       }
 
       if($sep) {
         if($sep eq '(') {
-
-          # print STDERR "ID $id OPEN BRACKETS\n";
           my $parent = $current;
 
-          $current = create_filter({
+          $current = create_filter_node({
             parent => $parent,
-            id => $id++,
           });
         }
         elsif($sep eq ')') {
-          # print STDERR "ID $id CLOSE BRACKETS\n";
-
           my $parent = $current->{parent};
 
           # finish child
-          finish_filter($current);
+          finish_filter_node($current);
           push @{$parent->{components}}, $current;
           $current = $parent;
         }
       }
-
-      else {
-        # print STDERR "END\n";
-
-        my $parent = $current->{parent};
-
-        # parent should be root
-        # die("ERROR: Error parsing filter string - incomplete parentheses sets?\n") unless $parent->{is_root};
-
-        finish_filter($current);
-
-        push @{$parent->{components}}, $current;
-      }
     }
-
-    use Data::Dumper;
-    # $Data::Dumper::Maxdepth = 3;
-    $Data::Dumper::Indent = 1;
-    print STDERR Dumper $root;
   }
   
   return $root;
 }
 
-sub create_filter {
+sub create_filter_node {
   my $filter = shift;
 
   $filter->{logic} //= 'and';
@@ -476,7 +442,7 @@ sub create_filter {
   return $filter;
 }
 
-sub finish_filter {
+sub finish_filter_node {
   my $filter = shift;
 
   $filter->{operator} ||= 'ex';
@@ -549,66 +515,6 @@ sub evaluate_filter {
   }
 
   return $return;
-}
-
-sub run_filters {
-  my $config = shift;
-  my $data = shift;
-  my $filters = shift;
-
-  return evaluate_filter($config, $data, $filters);
-  
-  my $pass;
-  my $logic = 'and';
-  
-  foreach my $filter(@$filters) {
-    
-    my $predicate = $filter->{predicate};
-    
-    # process input
-    my $input = $data->{$filter->{field}};
-    my $value = $filter->{value};
-    
-    if(defined($input) && $input =~ /([\w\.]+)?\:?\(?([\-\d\.]*)\)?/ && $filter->{field} ne 'CELL_TYPE') {
-      my ($text, $num) = ($1, $2);
-      
-      if($value =~ /^[\-\d\.]+$/) {
-        $input = $text =~ /^[\-\d\.]+$/ ? $text : $num;
-      }
-      else {
-        $input = $text;
-      }
-    }
-    
-    # run filter
-    my $this_pass;
-    
-    if(defined($value) && !defined($input)) {
-      $this_pass = 0;
-    }
-    else {
-      $this_pass = &$predicate($input, $value, $config);
-    }
-    
-    # invert
-    $this_pass = 1 - $this_pass if $filter->{invert};
-    
-    if(defined($pass)) {
-      if($logic eq 'and') {
-        $pass *= $this_pass;
-      }
-      elsif($logic eq 'or') {
-        $pass += $this_pass;
-      }
-    }
-    else {
-      $pass = $this_pass;
-    }
-    
-    $logic = $filter->{logic};
-  }
-  
-  return $pass;
 }
 
 sub merge_hashes {
