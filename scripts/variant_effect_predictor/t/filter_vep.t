@@ -94,6 +94,22 @@ ok(scalar (grep {/MRPL39/} grep {/SYNJ1/} @lines) == scalar @lines, "operator - 
 ok(scalar (grep {/ENST00000567517/} grep {/rs116645811/} @lines) == scalar @lines, "operator - and");
 
 
+## advanced/nested filters
+
+@lines = grep {!/^\#/} split("\n", `$opcmd -f "CDS_position is 3060 and (cDNA_position is 3060 or cDNA_position is 3068)"`);
+is(scalar @lines, 2, "nested 1");
+ok($lines[0] =~ /ENST00000382499/ && $lines[1] =~ /ENST00000433931/, "nested 2");
+
+@lines = grep {!/^\#/} split("\n", `$opcmd -f "(Consequence is missense_variant and not (SIFT is tolerated or PolyPhen is benign)) or (Consequence is regulatory_region_variant and GMAF > 0.1)"`);
+is(scalar @lines, 50, "nested 3");
+
+@lines = grep {!/^\#/} split("\n", `$opcmd -f "(Consequence is missense_variant" 2>&1`);
+ok($lines[0] =~ /^ERROR/, "nested error 1");
+
+@lines = grep {!/^\#/} split("\n", `$opcmd -f "(Consequence is missense_variant and not (SIFT is tolerated or PolyPhen is benign) or (Consequence is regulatory_region_variant and GMAF > 0.1)" 2>&1`);
+ok($lines[0] =~ /^ERROR/, "nested error 2");
+
+
 ## options
 
 # only matched
