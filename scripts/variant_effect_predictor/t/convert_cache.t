@@ -5,10 +5,10 @@ BEGIN { $| = 1;
 	#plan tests => 6;
 }
 
-use FindBin qw($Bin);
+use FindBin qw($RealBin);
 use Data::Dumper;
 use File::Copy;
-use lib $Bin.'/../';
+use lib $RealBin.'/../';
 use Bio::EnsEMBL::Variation::Utils::VEP;
 
 # find where ensembl-variation is installed
@@ -20,7 +20,7 @@ my $data_path = $var_path.'/t/testdata/';
 die("ERROR: Could not find test data path $data_path\n") unless -d $data_path;
 
 # configure script
-open CONF, "$Bin\/test.conf" or die "ERROR: Could not read from conf file $Bin\/test.conf\n";
+open CONF, "$RealBin\/test.conf" or die "ERROR: Could not read from conf file $RealBin\/test.conf\n";
 my $config;
 while(<CONF>) {
   chomp;
@@ -33,7 +33,7 @@ my $ver = $config->{cache_version};
 my $ass = $config->{assembly};
 my $sp  = $config->{species};
 
-my $script = $Bin.'/../convert_cache.pl';
+my $script = $RealBin.'/../convert_cache.pl';
 my $perl   = '/usr/bin/env perl';
 my $bascmd = "$perl $script";
 my $cmd    = "$bascmd -version $ver\_$ass -species $sp -dir $data_path\/vep-cache/ -quiet";

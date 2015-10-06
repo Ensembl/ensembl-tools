@@ -5,16 +5,16 @@ BEGIN { $| = 1;
 	#plan tests => 6;
 }
 
-use FindBin qw($Bin);
+use FindBin qw($RealBin);
 use Data::Dumper;
 
 # configure script
-my $script = $Bin.'/../filter_vep.pl';
+my $script = $RealBin.'/../filter_vep.pl';
 my $perl   = '/usr/bin/env perl';
 my $cmd = "$perl $script";
 
-my $txt = "$Bin\/testdata/filter.txt";
-my $vcf = "$Bin\/testdata/filter.vcf";
+my $txt = "$RealBin\/testdata/filter.txt";
+my $vcf = "$RealBin\/testdata/filter.vcf";
 
 my ($output, @lines);
 
@@ -25,7 +25,7 @@ my ($output, @lines);
 $output = `$cmd --help`;
 ok($output =~ /filter_vep\.pl/, "help message");
 
-my $opcmd = "$cmd -i $Bin\/testdata/filter.txt";
+my $opcmd = "$cmd -i $RealBin\/testdata/filter.txt";
 
 # error on no filters
 $output = `$opcmd 2>&1`;
@@ -36,7 +36,7 @@ ok($output =~ /ERROR: No valid filters given/, "error on no filters");
 ok(scalar @lines, "basic filter");
 
 # vcf input
-@lines = grep {!/^\#/} split("\n", `$cmd -i $Bin\/testdata/filter.vcf -f "ID is rs114942253"`);
+@lines = grep {!/^\#/} split("\n", `$cmd -i $RealBin\/testdata/filter.vcf -f "ID is rs114942253"`);
 ok(scalar @lines, "VCF input");
 
 
@@ -86,7 +86,7 @@ ok((grep {/upstream/} @lines) && (grep {/downstream/} @lines), "operator - match
 @lines = grep {!/^\#/} split("\n", `$opcmd -f "Consequence in upstream_gene_variant,downstream_gene_variant"`);
 ok((grep {/upstream/} @lines) && (grep {/downstream/} @lines), "operator - in list");
 
-@lines = grep {!/^\#/} split("\n", `$opcmd -f "Consequence in $Bin\/testdata/filter.list"`);
+@lines = grep {!/^\#/} split("\n", `$opcmd -f "Consequence in $RealBin\/testdata/filter.list"`);
 ok(scalar (grep {/MRPL39/} grep {/SYNJ1/} @lines) == scalar @lines, "operator - in file");
 
 # and
@@ -113,15 +113,15 @@ ok($lines[0] =~ /^ERROR/, "nested error 2");
 ## options
 
 # only matched
-@lines = grep {!/^\#/} split("\n", `$cmd -i $Bin\/testdata/filter.vcf -only_matched -f "Uploaded_variation is rs116645811 and Feature is ENST00000567517"`);
+@lines = grep {!/^\#/} split("\n", `$cmd -i $RealBin\/testdata/filter.vcf -only_matched -f "Uploaded_variation is rs116645811 and Feature is ENST00000567517"`);
 ok(!(grep {/ENST00000352957/} @lines), "only matched");
 
 # list fields
-@lines = grep {!/^\#/} split("\n", `$cmd -i $Bin\/testdata/filter.vcf -list`);
+@lines = grep {!/^\#/} split("\n", `$cmd -i $RealBin\/testdata/filter.vcf -list`);
 ok(scalar @lines eq 57, "list fields") or diag("Got ".(scalar @lines).", expected 57");
 
 # count
-$output = `$cmd -i $Bin\/testdata/filter.vcf -f "SIFT is deleterious" -c`;
+$output = `$cmd -i $RealBin\/testdata/filter.vcf -f "SIFT is deleterious" -c`;
 ok($output eq "24\n", "count lines");
 
 # ontology

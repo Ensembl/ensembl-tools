@@ -43,8 +43,8 @@ use strict;
 use Getopt::Long;
 use FileHandle;
 use CGI qw/:standard/;
-use FindBin qw($Bin);
-use lib $Bin;
+use FindBin qw($RealBin);
+use lib $RealBin;
 
 use Bio::EnsEMBL::Variation::Utils::Sequence qw(unambiguity_code);
 use Bio::EnsEMBL::Variation::Utils::VEP qw(

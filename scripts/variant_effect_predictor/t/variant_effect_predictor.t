@@ -5,10 +5,10 @@ BEGIN { $| = 1;
 	#plan tests => 6;
 }
 
-use FindBin qw($Bin);
+use FindBin qw($RealBin);
 use File::Copy;
 use Data::Dumper;
-use lib $Bin.'/../';
+use lib $RealBin.'/../';
 use Bio::EnsEMBL::Variation::Utils::VEP;
 
 #use Bio::EnsEMBL::Test::TestUtils;
@@ -18,7 +18,7 @@ my ($input, $output, $full_output, $expected, @lines);
 my $tmpfile = "$$\_test_vep_input";
 
 # configure script
-open CONF, "$Bin\/test.conf" or die "ERROR: Could not read from conf file $Bin\/test.conf\n";
+open CONF, "$RealBin\/test.conf" or die "ERROR: Could not read from conf file $RealBin\/test.conf\n";
 my $config;
 while(<CONF>) {
   chomp;
@@ -39,9 +39,9 @@ my $ver    = $config->{version};
 my $cver   = $config->{cache_version};
 my $ass    = $config->{assembly};
 my $sp     = $config->{species};
-my $script = $Bin.'/../variant_effect_predictor.pl';
+my $script = $RealBin.'/../variant_effect_predictor.pl';
 my $perl   = '/usr/bin/env perl';
-my $inc    = '-I ~/Variation/modules/ -I $Bin\../';
+my $inc    = '-I ~/Variation/modules/ -I $RealBin\../';
 my $bascmd = "$perl $inc $script";
 my $cmd    = "$bascmd -force -offline -dir_cache $data_path/vep-cache/ -i $tmpfile -o stdout -cache_version $cver -assembly $ass -species $sp";
 
@@ -619,7 +619,7 @@ else {
 
 ## PLUGINS
 input('21 25587758 rs116645811 G A . . .');
-$output = `$cmd --dir_plugins $Bin\/testdata/ --plugin TestPlugin`;
+$output = `$cmd --dir_plugins $RealBin\/testdata/ --plugin TestPlugin`;
 ok($output =~ /## TestPlugin\s+:\s+Test plugin/, "plugin header") or diag("Got\n$output");
 ok($output =~ /TestPlugin=ENST00000567517/, "plugin data") or diag("Got\n$output");
 
