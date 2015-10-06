@@ -88,7 +88,9 @@ my $this_os =  $^O;
 
 # check if $DEST_DIR is default
 if(defined($DEST_DIR)) {
-  print "Using non-default installation directory $DEST_DIR. Have you \n";
+  print "Using non-default API installation directory $DEST_DIR.\n";
+  print "Please note this just specifies the location for downloaded API files. The variant_effect_predictor.pl script will remain in its current location where ensembl-tools was unzipped.\n";
+  print "Have you \n";
   print "1. added $DEST_DIR to your PERL5LIB environment variable?\n";
   print "2. added $DEST_DIR/htslib to your PATH environment variable?\n";
   if( $this_os eq 'darwin' && !$NO_HTSLIB) {
@@ -169,10 +171,10 @@ if($UPDATE) {
 
 # auto?
 elsif($AUTO) {
-  
+
   # check
   die("ERROR: Failed to parse AUTO string - must contain any of a (API), l (FAIDX/htslib), c (cache), f (FASTA), p (plugins)\n") unless $AUTO =~ /^[alcfp]+$/i;
-  
+
   # require species
   if($AUTO =~ /[cf]/i) {
     die("ERROR: No species specified\n") unless $SPECIES;
@@ -184,7 +186,7 @@ elsif($AUTO) {
     die("ERROR: No plugins specified\n") unless $PLUGINS;
     $PLUGINS = [split /\,/, $PLUGINS];
   }
-  
+
   # run subs
   if($AUTO =~ /l/ && $AUTO !~ /a/) {
     my $curdir = getcwd;
@@ -211,7 +213,7 @@ elsif($AUTO) {
 
 else {
   print "\nHello! This installer is configured to install v$API_VERSION of the Ensembl API for use by the VEP.\nIt will not affect any existing installations of the Ensembl API that you may have.\n\nIt will also download and install cache files from Ensembl's FTP server.\n\n" unless $QUIET;
-  
+
   # run subs
   api() if check_api();
   cache();
@@ -239,12 +241,12 @@ sub api() {
   setup_dirs();
   my $curdir = getcwd;
   bioperl();
-  
+
   unless($NO_HTSLIB) {
     chdir $curdir;
     install_faidx();
   }
-  
+
   chdir $curdir;
   install_api();
   test();
@@ -271,7 +273,7 @@ sub check_api() {
 
   unless($@) {
     $has_api->{ensembl} = 1;
-  
+
     $installed_version = Bio::EnsEMBL::Registry->software_version;
   }
 
@@ -296,21 +298,21 @@ sub check_api() {
   my $message;
 
   if($total == 3) {
-  
+
     if(defined($installed_version)) {
       if($installed_version == $API_VERSION) {
         $message = "It looks like you already have v$API_VERSION of the API installed.\nYou shouldn't need to install the API";
       }
-    
+
       elsif($installed_version > $API_VERSION) {
         $message = "It looks like this installer is for an older distribution of the API than you already have";
       }
-    
+
       else {
         $message = "It looks like you have an older version (v$installed_version) of the API installed.\nThis installer will install a limited set of the API v$API_VERSION for use by the VEP only";
       }
     }
-  
+
     else {
       $message = "It looks like you have an unidentified version of the API installed.\nThis installer will install a limited set of the API v$API_VERSION for use by the VEP only"
     }
@@ -322,10 +324,10 @@ sub check_api() {
 
   if(defined($message)) {
     print $message unless $QUIET;
-  
+
     print "\n\nSkip to the next step (n) to install cache files\n\nDo you want to continue installing the API (y/n)? ";
     my $ok = <>;
-  
+
     if($ok !~ /^y/i) {
       print " - skipping API installation\n" unless $QUIET;
       return 0;
@@ -334,7 +336,7 @@ sub check_api() {
       return 1;
     }
   }
-  
+
   else {
     return 1;
   }
@@ -350,32 +352,32 @@ sub setup_dirs() {
   # check if install dir exists
   if(-e $DEST_DIR) {
     my $ok;
-  
+
     if($AUTO) {
       $ok = 'y';
     }
     else {
       print "Destination directory $DEST_DIR already exists.\nDo you want to overwrite it (if updating VEP this is probably OK) (y/n)? ";
-    
+
       $ok = <>;
     }
-  
+
     if($ok !~ /^y/i) {
       print "Exiting\n";
       exit(0);
     }
-  
+
     else {
       unless($default_dir_used || $AUTO) {
         print "WARNING: You are using a non-default install directory.\nPressing \"y\" again will remove $DEST_DIR and its contents!!!\nAre you really, really sure (y/n)? ";
         $ok = <>;
-      
+
         if($ok !~ /^y/i) {
           print "Exiting\n";
           exit(0);
         }
       }
-    
+
       # try to delete the existing dir
       rmtree($DEST_DIR) or die "ERROR: Could not delete directory $DEST_DIR\n";
     }
@@ -394,10 +396,10 @@ sub install_api() {
 
   foreach my $module(qw(ensembl ensembl-variation ensembl-funcgen)) {
     my $url = $ENS_GIT_ROOT.$module.$ensembl_url_tail.$API_VERSION.$archive_type;
-  
+
     print " - fetching $module\n" unless $QUIET;
     my $target_file = $DEST_DIR.'/tmp/'.$module.$archive_type;
-  
+
     if(!-e $DEST_DIR.'/tmp/')
     {
         mkdir( $DEST_DIR.'/tmp/' );
@@ -406,24 +408,24 @@ sub install_api() {
     if(!-e $target_file) {
       download_to_file($url, $target_file);
     }
-  
+
     print " - unpacking $target_file\n" unless $QUIET;
     unpack_arch("$DEST_DIR/tmp/$module$archive_type", "$DEST_DIR/tmp/");
-  
+
     print " - moving files\n" unless $QUIET;
-  
+
     if($module eq 'ensembl') {
       move("$DEST_DIR/tmp/$module\-release\-$API_VERSION/modules/Bio/EnsEMBL", "$DEST_DIR/EnsEMBL") or die "ERROR: Could not move directory\n".$!;
     }
     elsif($module eq 'ensembl-variation') {
       move("$DEST_DIR/tmp/$module\-release-$API_VERSION/modules/Bio/EnsEMBL/Variation", "$DEST_DIR/EnsEMBL/Variation") or die "ERROR: Could not move directory\n".$!;
-    
+
       # move test data
       my $test_target = "$DEST_DIR/../t/testdata/";
       mkpath($test_target) unless -d $test_target;
-    
+
       opendir TESTDATA, "$DEST_DIR/tmp/$module\-release-$API_VERSION/modules/t/testdata" or die "ERROR: Could not find ensembl-variation/modules/t/testdata directory";
-    
+
       foreach my $f(grep {!/^\./} readdir TESTDATA) {
         if(-d $test_target.$f) {
           rmtree($test_target.$f) or die "ERROR: Could not remove $test_target$f\n".$!;
@@ -439,7 +441,7 @@ sub install_api() {
     elsif($module eq 'ensembl-funcgen') {
       move("$DEST_DIR/tmp/$module\-release-$API_VERSION/modules/Bio/EnsEMBL/Funcgen", "$DEST_DIR/EnsEMBL/Funcgen") or die "ERROR: Could not move directory\n".$!;
     }
-  
+
     rmtree("$DEST_DIR/tmp/$module\-release-$API_VERSION") or die "ERROR: Failed to remove directory $DEST_DIR/tmp/$module\-release-$API_VERSION\n";
   }
 }
@@ -453,16 +455,16 @@ sub install_hts() {
   my $git = 'which git';
   $git or die <<END;
   'git' command not in path. Please install git and try again.
-  (or to skip Faidx/htslib install re-run with --NO_HTSLIB) 
+  (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
 
   On Debian/Ubuntu systems you can do this with the command:
-  
+
   apt-get install git
 END
 
 
   'which cc' or die <<END;
-  'cc' command not in path. Please install it and try again. 
+  'cc' command not in path. Please install it and try again.
   (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
 
   On Debian/Ubuntu systems you can do this with the command:
@@ -471,7 +473,7 @@ END
 END
 
   `which make` or die <<END;
-  'make' command not in path. Please install it and try again. 
+  'make' command not in path. Please install it and try again.
   (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
 
   On Debian/Ubuntu systems you can do this with the command:
@@ -482,9 +484,9 @@ END
   my $this_os =  $^O;
   if( $this_os ne 'darwin' ) {
     -e '/usr/include/zlib.h' or die <<END;
-      zlib.h library header not found in /usr/include. Please install it and try again. 
+      zlib.h library header not found in /usr/include. Please install it and try again.
       (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
-      
+
       On Debian/Ubuntu systems you can do this with the command:
 
       apt-get install zlib1g-dev
@@ -493,7 +495,7 @@ END
   }
 
   # STEP 1: Create a clean directory for building
-  my $htslib_install_dir = $LIB_DIR;    
+  my $htslib_install_dir = $LIB_DIR;
   my $curdir = getcwd;
   chdir $htslib_install_dir;
   my $actualdir = getcwd;
@@ -518,7 +520,7 @@ END
       s/#.+//;  # get rid of comments
       $_ .= " -fPIC -Wno-unused -Wno-unused-result";
     }
-  } 
+  }
   continue {
     print $out $_,"\n";
   }
@@ -546,7 +548,7 @@ sub install_faidx() {
   my $faidx_github_url = "https://github.com/Ensembl/faidx_xs";
   my $faidx_zip_github_url = "$faidx_github_url/archive/master.zip";
   my $faidx_zip_download_file = $DEST_DIR.'/tmp/faidx_xs.zip';
-  
+
   mkdir $DEST_DIR unless -d $DEST_DIR;
   mkdir $DEST_DIR.'/tmp';
   download_to_file($faidx_zip_github_url, $faidx_zip_download_file);
@@ -575,7 +577,7 @@ sub install_faidx() {
       s/#.+//;  # get rid of comments
       $_ = "INC               => '-I. -I../htslib', ";
     }
-  } 
+  }
   continue {
     print $out $_,"\n";
   }
@@ -590,9 +592,9 @@ sub install_faidx() {
   #move the library to the current directory
   my $pdir = getcwd;
   printf( "Copying Faidx modules\n" );
-  copy( "lib/Faidx.pm", "..") or die "ERROR: Could not copy Faidx module:$!\n";    
+  copy( "lib/Faidx.pm", "..") or die "ERROR: Could not copy Faidx module:$!\n";
   if( -e "blib/arch/auto/Faidx/Faidx.so" ) {
-    copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n";    
+    copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n";
   }
   elsif( -e "blib/arch/auto/Faidx/Faidx.bundle" ) {
     copy( "blib/arch/auto/Faidx/Faidx.bundle", "..") or die "ERROR: Could not copy shared bundle library:$!\n";
@@ -654,7 +656,7 @@ sub test() {
     opendir TEST, "$dirname\/t";
     my @test_files = map {"$dirname\/t\/".$_} grep {!/^\./ && /\.t$/} readdir TEST;
     closedir TEST;
-  
+
     print "Warning: Tests failed, VEP may not run correctly\n" unless runtests(@test_files);
   }
   else {
@@ -679,9 +681,9 @@ sub cache() {
   else {
     print "\nThe VEP can either connect to remote or local databases, or use local cache files.\nUsing local cache files is the fastest and most efficient way to run the VEP\n" unless $QUIET;
     print "Cache files will be stored in $CACHE_DIR\n" unless $QUIET;
-  
+
     print "Do you want to install any cache files (y/n)? ";
-  
+
     $ok = <>;
   }
 
@@ -694,15 +696,15 @@ sub cache() {
   if(!(-e $CACHE_DIR)) {
     if(!$AUTO) {
       print "Cache directory $CACHE_DIR does not exists - do you want to create it (y/n)? ";
-  
+
       my $ok = <>;
-  
+
       if($ok !~ /^y/i) {
         print "Exiting\n";
         exit(0);
       }
     }
-  
+
     mkdir($CACHE_DIR) or die "ERROR: Could not create directory $CACHE_DIR\n";
   }
 
@@ -719,11 +721,11 @@ sub cache() {
     $ftp = Net::FTP->new($2, Passive => 1) or die "ERROR: Could not connect to FTP host $2\n$@\n";
     $ftp->login($FTP_USER) or die "ERROR: Could not login as $FTP_USER\n$@\n";
     $ftp->binary();
-  
+
     foreach my $sub(split /\//, $3) {
       $ftp->cwd($sub) or die "ERROR: Could not change directory to $sub\n$@\n";
     }
-  
+
     push @files, sort grep {$_ =~ /tar.gz/} $ftp->ls;
   }
   else {
@@ -736,7 +738,7 @@ sub cache() {
   if(!scalar(@files)) {
     print "Could not get current species list - using predefined list instead\n";
     print "For more species, see http://www.ensembl.org/info/docs/tools/vep/script/vep_cache.html#pre\n";
-  
+
     @files = (
       "bos_taurus_vep_".$API_VERSION."_UMD3.1.tar.gz",
       "danio_rerio_vep_".$API_VERSION."_Zv9.tar.gz",
@@ -755,11 +757,11 @@ sub cache() {
     if($SPECIES->[0] eq 'all') {
       @indexes = (1..(scalar @files));
     }
-  
+
     else {
       foreach my $sp(@$SPECIES) {
         my @matches;
-      
+
         for my $i(0..$#files) {
           if($sp =~ /refseq|merged/i) {
             push @matches, $i + 1 if $files[$i] =~ /$sp/i;
@@ -768,36 +770,36 @@ sub cache() {
             push @matches, $i + 1 if $files[$i] =~ /$sp/i && $files[$i] !~ /refseq|merged/i;
           }
         }
-      
+
         # grep assembly if supplied
         @matches = grep {$files[$_ - 1] =~ /\_$ASSEMBLY\./} @matches if $ASSEMBLY;
-      
+
         if(scalar @matches == 1) {
           push @indexes, @matches;
         }
         elsif(scalar @matches > 1) {
           # xenopus_tropicalis_vep_76_JGI_4.2.tar.gz
-        
+
           my @assemblies = ();
           foreach my $m(@matches) {
             $files[$m-1] =~ m/\_vep\_$API_VERSION\_(.+?)\.tar\.gz/;
             push @assemblies, $1 if $1;
           }
-        
+
           die("ERROR: Multiple assemblies found (".join(", ", @assemblies).") for $sp; select one using --ASSEMBLY [name]\n")
         }
       }
     }
-  
+
     die("ERROR: No matching species found") unless scalar @indexes;
-  
+
     # uniquify and sort
     @indexes = sort {$a <=> $b} keys %{{map {$_ => 1} @indexes}};
   }
   else {
     print "The following species/files are available; which do you want (can specify multiple separated by spaces or 0 for all): \n$species_list\n? ";
     @indexes = split /\s+/, <>;
-  
+
     # user wants all species found
     if(scalar @indexes == 1 && $indexes[0] == 0) {
       @indexes = 1..(scalar @files);
@@ -806,12 +808,12 @@ sub cache() {
 
   foreach my $file(@indexes) {
     die("ERROR: File number $file not valid\n") unless defined($file) && $file =~ /^[0-9]+$/ && defined($files[$file - 1]);
-  
+
     my $file_path = $files[$file - 1];
-  
+
     my $refseq = 0;
     my ($species, $assembly, $file_name);
-  
+
     if($file_path =~ /\//) {
       ($species, $file_name) = (split /\//, $file_path);
       $file_name =~ m/^(\w+?)\_vep\_\d+\_(.+?)\.tar\.gz/;
@@ -823,40 +825,40 @@ sub cache() {
       $species = $1;
       $assembly = $2;
     }
-  
+
     push @store_species, $species;
-  
+
     # check if user already has this species and version
     if(-e "$CACHE_DIR/$species/$API_VERSION\_$assembly") {
-    
+
       my $ok;
-    
+
       print "\nWARNING: It looks like you already have the cache for $species $assembly (v$API_VERSION) installed.\n" unless $QUIET;
-    
+
       if($AUTO) {
         print "\nDelete the folder $CACHE_DIR/$species/$API_VERSION\_$assembly and re-run INSTALL.pl if you want to re-install\n";
       }
       else {
         print "If you continue the existing cache will be overwritten.\nAre you sure you want to continue (y/n)? ";
-      
+
         $ok = <>;
       }
-    
+
       if($ok !~ /^y/i) {
         print " - skipping $species\n" unless $QUIET;
         next;
       }
-    
+
       rmtree("$CACHE_DIR/$species/$API_VERSION\_$assembly") or die "ERROR: Could not delete directory $CACHE_DIR/$species/$API_VERSION\_$assembly\n";
     }
-  
+
     if($species =~ /refseq/i) {
       print "NB: Remember to use --refseq when running the VEP with this cache!\n" unless $QUIET;
     }
     if($species =~ /merged/i) {
       print "NB: Remember to use --merged when running the VEP with this cache!\n" unless $QUIET;
     }
-  
+
     my $target_file = "$CACHE_DIR/tmp/$file_name";
     if($CACHE_URL =~ /^ftp/) {
       print " - downloading $CACHE_URL/$file_path\n" unless $QUIET;
@@ -864,7 +866,7 @@ sub cache() {
         $ftp->get($file_name, $target_file) or download_to_file("$CACHE_URL/$file_path", $target_file);
 
         my $checksums = "CHECKSUMS";
-        my $checksums_target_file = "$CACHE_DIR/tmp/$checksums"; 
+        my $checksums_target_file = "$CACHE_DIR/tmp/$checksums";
         $ftp->get($checksums, $checksums_target_file) or download_to_file("$CACHE_URL/$checksums", $checksums_target_file);
         if (-e $checksums_target_file) {
           my $sum_download = `sum $target_file`;
@@ -883,24 +885,24 @@ sub cache() {
       print " - copying $CACHE_URL/$file_path\n" unless $QUIET;
       copy("$CACHE_URL/$file_path", $target_file) unless $TEST;
     }
-  
+
     print " - unpacking $file_name\n" unless $QUIET;
-  
-  
+
+
     unpack_arch($target_file, $CACHE_DIR.'/tmp/') unless $TEST;
-  
+
     # does species dir exist?
     if(!-e "$CACHE_DIR/$species" && !$TEST) {
       mkdir("$CACHE_DIR/$species") or die "ERROR: Could not create directory $CACHE_DIR/$species\n";
     }
-  
+
     # move files
     unless($TEST) {
       opendir CACHEDIR, "$CACHE_DIR/tmp/$species/";
       move("$CACHE_DIR/tmp/$species/$_", "$CACHE_DIR/$species/$_") for readdir CACHEDIR;
       closedir CACHEDIR;
     }
-  
+
     # convert?
     if($CONVERT && !$TEST) {
       print " - converting cache\n" unless $QUIET;
@@ -913,7 +915,7 @@ sub cache() {
 # FASTA FILES
 #############
 sub fasta() {
-  
+
   ### SPECIAL CASE GRCh37
   if((grep {$files[$_ - 1] =~ /GRCh37/} @indexes) || (defined($ASSEMBLY) && $ASSEMBLY eq 'GRCh37')) {
 
@@ -928,7 +930,7 @@ sub fasta() {
       $FASTA_URL =~ s/$API_VERSION/75/;
     }
   }
-  
+
   my $ok;
 
   if($AUTO) {
@@ -938,7 +940,7 @@ sub fasta() {
     print "\nThe VEP can use FASTA files to retrieve sequence data for HGVS notations and reference sequence checks.\n" unless $QUIET;
     print "FASTA files will be stored in $CACHE_DIR\n" unless $QUIET;
     print "Do you want to install any FASTA files (y/n)? ";
-  
+
     $ok = <>;
   }
 
@@ -954,11 +956,11 @@ sub fasta() {
     $ftp = Net::FTP->new($2, Passive => 1) or die "ERROR: Could not connect to FTP host $2\n$@\n";
     $ftp->login($FTP_USER) or die "ERROR: Could not login as $FTP_USER\n$@\n";
     $ftp->binary();
-  
+
     foreach my $sub(split /\//, $3) {
       $ftp->cwd($sub) or die "ERROR: Could not change directory to $sub\n$@\n";
     }
-  
+
     push @dirs, sort $ftp->ls;
   }
   else {
@@ -984,23 +986,23 @@ sub fasta() {
   }
   else {
     print "FASTA files for the following species are available; which do you want (can specify multiple separated by spaces, \"0\" to install for species specified for cache download): \n$species_list\n? ";
-  
+
     my $input = <>;
     my @nums = split /\s+/, $input;
-  
+
     @species = @store_species if grep {$_ eq '0'} @nums;
     push @species, $dirs[$_ - 1] for grep {$_ > 0} @nums;
   }
 
   foreach my $species(@species) {
-  
+
     # remove refseq name
     my $orig_species = $species;
     $species =~ s/_refseq//;
     $species =~ s/_merged//;
-  
+
     my @files;
-  
+
     if($ftp) {
       $ftp->cwd($species) or die "ERROR: Could not change directory to $species\n$@\n";
       $ftp->cwd('dna') or die "ERROR: Could not change directory to dna\n$@\n";
@@ -1014,18 +1016,18 @@ sub fasta() {
       @files = grep {$_ !~ /^\./} readdir DIR;
       closedir DIR;
     }
-  
+
     # remove repeat/soft-masked files
     @files = grep {!/_(s|r)m\./} @files;
-  
+
     my ($file) = grep {/primary_assembly.fa.gz$/} @files;
     ($file) = grep {/toplevel.fa.gz$/} @files if !defined($file);
-  
+
     unless(defined($file)) {
       warn "WARNING: No download found for $species\n";
       next;
     }
-  
+
     # work out assembly version from file name
     my $uc_species = ucfirst($species);
     $file =~ m/^$uc_species\.(.+?)(\.)?(\d+)?\.dna/;
@@ -1039,24 +1041,24 @@ sub fasta() {
     }
 
     die("ERROR: Unable to parse assembly name from $file\n") unless $assembly;
-  
+
     my $ex = "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file";
     $ex =~ s/\.gz$//;
     if(-e $ex) {
       print "Looks like you already have the FASTA file for $orig_species, skipping\n" unless $QUIET;
-    
+
       if($ftp) {
         $ftp->cwd('../');
         $ftp->cwd('../');
       }
       next;
     }
-  
+
     # create path
     mkdir($CACHE_DIR) unless -d $CACHE_DIR || $TEST;
     mkdir("$CACHE_DIR/$orig_species") unless -d "$CACHE_DIR/$orig_species" || $TEST;
     mkdir("$CACHE_DIR/$orig_species/$API_VERSION\_$assembly") unless -d "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly" || $TEST;
-  
+
     if($ftp) {
       print " - downloading $file\n" unless $QUIET;
       if(!$TEST) {
@@ -1071,7 +1073,7 @@ sub fasta() {
     if($NO_HTSLIB) {
       print " - extracting data\n" unless $QUIET;
       unpack_arch("$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/$file", "$CACHE_DIR/$orig_species/$API_VERSION\_$assembly/") unless $TEST;
-    
+
       print " - attempting to index\n" unless $QUIET;
       eval q{
         use Bio::DB::Fasta;
@@ -1083,7 +1085,7 @@ sub fasta() {
         Bio::DB::Fasta->new($ex) unless $TEST;
         print " - indexing OK\n" unless $QUIET;
       }
-    
+
       print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex\"\n\n" unless $QUIET;
     }
 
@@ -1110,13 +1112,13 @@ sub fasta() {
         print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
       }
       else {
-        Faidx->new("$ex.gz") unless $TEST;        
+        Faidx->new("$ex.gz") unless $TEST;
         print " - indexing OK\n" unless $QUIET;
       }
 
       print "The FASTA file should be automatically detected by the VEP when using --cache or --offline. If it is not, use \"--fasta $ex.gz\"\n\n" unless $QUIET;
     }
-  
+
     if($ftp) {
       $ftp->cwd('../');
       $ftp->cwd('../');
@@ -1148,36 +1150,36 @@ sub update() {
   die "ERROR: Failed to fetch software version number!\n" unless $response->{success};
 
   if(length $response->{content}) {
-    my $hash = decode_json($response->{content});  
+    my $hash = decode_json($response->{content});
     die("ERROR: Failed to get software version from JSON response\n") unless defined($hash->{release});
-  
+
     if($hash->{release} > $VERSION) {
-    
+
       print "Ensembl reports there is a newer version of the VEP ($hash->{release}) available - do you want to download? ";
-    
+
       my $ok = <>;
-    
+
       if($ok !~ /^y/i) {
         print "OK, bye!\n";
         exit(0);
       }
-    
+
       my $url = $ENS_GIT_ROOT.'ensembl-tools'.$ensembl_url_tail.$hash->{release}.$archive_type;
-    
+
       my $tmpdir = '.'.$$.'_tmp';
       mkdir($tmpdir);
-    
+
       print "Downloading version $hash->{release}\n";
       download_to_file($url, $tmpdir.'/variant_effect_predictor'.$archive_type);
-    
+
       print "Unpacking\n";
       unpack_arch($tmpdir.'/variant_effect_predictor'.$archive_type, $tmpdir);
       unlink($tmpdir.'/variant_effect_predictor'.$archive_type);
-    
+
       opendir NEWDIR, $tmpdir.'/ensembl-tools-release-'.$hash->{release}.'/scripts/variant_effect_predictor';
       my @new_files = grep {!/^\./} readdir NEWDIR;
       closedir NEWDIR;
-    
+
       foreach my $new_file(@new_files) {
         if(-e $new_file || -d $new_file) {
           print "Backing up $new_file to $new_file\.bak\_$VERSION\n";
@@ -1189,9 +1191,9 @@ sub update() {
           move($tmpdir.'/ensembl-tools-release-'.$hash->{release}.'/scripts/variant_effect_predictor/'.$new_file, $new_file);
         }
       }
-    
+
       rmtree($tmpdir);
-    
+
       print "\nLooks good! Rerun INSTALL.pl to update your API and/or get the latest cache files\n";
       exit(0);
     }
@@ -1216,9 +1218,9 @@ sub plugins() {
   else {
     print "\nThe VEP can use plugins to add functionality and data.\n" unless $QUIET;
     print "Plugins will be installed in $CACHE_DIR\/Plugins\n" unless $QUIET;
-  
+
     print "Do you want to install any plugins (y/n)? ";
-  
+
     $ok = <>;
   }
 
@@ -1231,15 +1233,15 @@ sub plugins() {
   if(!(-e $CACHE_DIR)) {
     if(!$AUTO) {
       print "Cache directory $CACHE_DIR does not exists - do you want to create it (y/n)? ";
-  
+
       my $ok = <>;
-  
+
       if($ok !~ /^y/i) {
         print "Exiting\n";
         exit(0);
       }
     }
-  
+
     mkdir($CACHE_DIR) or die "ERROR: Could not create directory $CACHE_DIR\n";
   }
   mkdir($CACHE_DIR.'/Plugins') unless -e $CACHE_DIR.'/Plugins';
@@ -1253,7 +1255,7 @@ sub plugins() {
   open IN, $plugin_config_file;
   my @content = <IN>;
   close IN;
-  
+
   my $VEP_PLUGIN_CONFIG = eval join('', @content);
   die("ERROR: Could not eval VEP plugin config file: $@\n") if $@;
   my @plugins = @{$VEP_PLUGIN_CONFIG->{plugins}};
@@ -1411,23 +1413,23 @@ sub plugins() {
 
 sub download_to_file {
   my ($url, $file) = @_;
-  
+
   $url =~ s/([a-z])\//$1\:21\// if $url =~ /ftp/ && $url !~ /\:21/;
-  
+
   if($use_curl) {
     my $output = `curl --location $url > $file`;
   }
-  
+
   elsif(have_LWP()) {
     my $response = getstore($url, $file);
-    
+
     unless($response == 200) {
-      
+
       # try no proxy
       $ua->no_proxy('github.com');
-      
+
       $response = getstore($url, $file);
-      
+
       unless($response == 200) {
         #warn "WARNING: Failed to fetch from $url\nError code: $response\n" unless $QUIET;
         print "Trying to fetch using curl\n" unless $QUIET;
@@ -1438,7 +1440,7 @@ sub download_to_file {
   }
   else {
     my $response = HTTP::Tiny->new(no_proxy => 'github.com')->get($url);
-    
+
     if($response->{success}) {
       open OUT, ">$file" or die "Could not write to file $file\n";
       binmode OUT;
@@ -1448,7 +1450,7 @@ sub download_to_file {
     else {
       #warn "WARNING: Failed to fetch from $url\nError code: $response->{reason}\nError content:\n$response->{content}\nTrying without no_proxy\n" unless $QUIET;
       $response = HTTP::Tiny->new->get($url);
-      
+
       if($response->{success}) {
         open OUT, ">$file" or die "Could not write to file $file\n";
         binmode OUT;
@@ -1460,36 +1462,36 @@ sub download_to_file {
         print "Trying to fetch using curl\n" unless $QUIET;
         $use_curl = 1;
         download_to_file($url, $file);
-      } 
+      }
     }
   }
 }
 
 sub have_LWP {
   return $have_LWP if defined($have_LWP);
-  
+
   eval q{
     use LWP::Simple qw(getstore get $ua);
   };
-  
+
   if($@) {
     $have_LWP = 0;
     warn("Using HTTP::Tiny - this may fail when downloading large files; install LWP::Simple to avoid this issue\n");
-    
+
     eval q{
       use HTTP::Tiny;
     };
-    
+
     if($@) {
       die("ERROR: No suitable package installed - this installer requires either HTTP::Tiny or LWP::Simple\n");
     }
   }
   else {
     $have_LWP = 1;
-    
+
     # set up a user agent's proxy (excluding github)
     $ua->env_proxy;
-    
+
     # enable progress
     eval q{
       $ua->show_progress(1);
@@ -1500,7 +1502,7 @@ sub have_LWP {
 # unpack a tarball
 sub unpack_arch {
   my ($arch_file, $dir) = @_;
-  
+
   my $ar = Archive::Extract->new(archive => $arch_file);
   my $ok = $ar->extract(to => $dir) or die $ar->error;
   unlink($arch_file);
@@ -1544,8 +1546,8 @@ Options
 
 -t | --CONVERT     Convert downloaded caches to use tabix for retrieving
                    co-located variants (requires tabix)
-                   
-                   
+
+
 -u | --CACHEURL    Override default cache URL; this may be a local directory or
                    a remote (e.g. FTP) address.
 -f | --FASTAURL    Override default FASTA URL; this may be a local directory or
