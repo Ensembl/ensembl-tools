@@ -457,6 +457,7 @@ sub configure {
         'gmaf',                    # add global MAF of existing var
         'maf_1kg',                 # add 1KG MAFs of existing vars
         'maf_esp',                 # add ESP MAFs of existing vars
+        'maf_exac',                # add ExAC MAFs of existing vars
         'old_maf',                 # report 1KG/ESP MAFs in the old way (no allele, always < 0.5)
         'pubmed',                  # add Pubmed IDs for publications that cite existing vars
         'freq_filter=s',           # exclude or include
@@ -601,6 +602,7 @@ sub configure {
             gmaf           => 1,
             maf_1kg        => 1,
             maf_esp        => 1,
+            maf_exac       => 1,
             pubmed         => 1,
             uniprot        => 1,
             tsl            => 1,
@@ -744,7 +746,7 @@ INTRO
         $config->{check_existing} = 1;
     }
     
-    foreach my $flag(qw(check_existing check_alleles gmaf maf_1kg maf_esp pubmed)) {
+    foreach my $flag(qw(check_existing check_alleles gmaf maf_1kg maf_esp maf_exac pubmed)) {
       $config->{check_existing} = 1 if defined $config->{$flag};
     }
     
@@ -949,14 +951,29 @@ INTRO
           my @new;
           
           foreach my $vcf_conf(@{$config->{freq_vcf}}) {
-            my ($freq_file, @file_pops) = split /\,/, $vcf_conf;
-            
-            push @new, {
+            my ($freq_file, @opts_and_pops) = split /\,/, $vcf_conf;
+
+            my @opts = grep {/\=/} @opts_and_pops;
+            my @file_pops = grep {!/\=/} @opts_and_pops;
+
+            my %opts = (
               file => $freq_file,
               pops => \@file_pops,
-            };
+            );
+
+            foreach my $opt(@opts) {
+              my ($k, $v) = split('=', $opt);
+              $opts{$k} = $v;
+            }
+
+            # create prefixed pop names if given
+            my $prefix = $opts{prefix} || '';
+            $prefix .= '_' if $prefix && $prefix !~ /\_$/;
+            @{$opts{prefixed_pops}} = map {s/\_$//r} map {$prefix.$_} @{$opts{pops}};
             
-            push @{$config->{'freq_file_pops'}}, @file_pops;
+            push @new, \%opts;
+            
+            push @{$config->{'freq_file_pops'}}, @{$opts{prefixed_pops}};
           }
           
           $config->{freq_vcf} = \@new;
@@ -1366,7 +1383,7 @@ Cache: http://www.ensembl.org/info/docs/tools/vep/script/index.html#cache
     }
   };
   
-  foreach my $flag(qw(maf_1kg maf_esp pubmed)) {
+  foreach my $flag(qw(maf_1kg maf_esp maf_exac pubmed)) {
     die("ERROR: \-\-$flag can only be used with --cache or --offline")
       if defined($config->{$flag}) && !(defined($config->{cache}) || defined($config->{offline}));
   }
