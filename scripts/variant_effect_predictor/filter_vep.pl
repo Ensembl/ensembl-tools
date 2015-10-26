@@ -490,11 +490,12 @@ sub evaluate_filter {
     my $input = $data->{$field};
     my $value = $filter->{value};
     
-    if(defined($input) && $input =~ /([\w\.]+)?\:?\(?([\-\d\.]*)\)?/ && $field ne 'CELL_TYPE') {
+    if(defined($input) && $input =~ /([\w\.\-]+)?\:?\(?([\-\d\.e]*)\)?/ && $field ne 'CELL_TYPE') {
+
       my ($text, $num) = ($1, $2);
       
-      if($value =~ /^[\-\d\.]+$/) {
-        $input = $text =~ /^[\-\d\.]+$/ ? $text : $num;
+      if($value =~ /^[\-\d\.e]+$/) {
+        $input = $text =~ /^\-?\d+\.?\d*(e\-?\d+)?$/ ? $text : $num;
       }
       else {
         $input = $text;

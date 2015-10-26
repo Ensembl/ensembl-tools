@@ -94,6 +94,18 @@ ok(scalar (grep {/MRPL39/} grep {/SYNJ1/} @lines) == scalar @lines, "operator - 
 ok(scalar (grep {/ENST00000567517/} grep {/rs116645811/} @lines) == scalar @lines, "operator - and");
 
 
+
+## other
+
+# "-" allele
+@lines = grep {!/^\#/} split("\n", `$opcmd -f "AMR_MAF > 0.4"`);
+ok((grep {/rs142545439/} @lines), "numerical operator with \"-\" allele");
+
+# scientific notation
+@lines = grep {!/^\#/} split("\n", `$opcmd -f "AMR_MAF > 4.9e-1"`);
+ok((grep {/rs142545439/} @lines), "scientific notation for number");
+
+
 ## advanced/nested filters
 
 @lines = grep {!/^\#/} split("\n", `$opcmd -f "CDS_position is 3060 and (cDNA_position is 3060 or cDNA_position is 3068)"`);
