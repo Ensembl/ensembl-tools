@@ -47,6 +47,8 @@ use FindBin qw($RealBin);
 use lib $RealBin;
 
 use Bio::EnsEMBL::Variation::Utils::Sequence qw(unambiguity_code);
+use Bio::EnsEMBL::Variation::Utils::VariationEffect qw(overlap);
+use Bio::EnsEMBL::Utils::Sequence qw(reverse_comp);
 use Bio::EnsEMBL::Variation::Utils::VEP qw(
     parse_line
     vf_to_consequences
@@ -1625,109 +1627,6 @@ sub setup_fasta() {
     }
   }
   
-  if($index_type eq 'faidx') {
-
-    # try to overwrite sequence method in Slice
-    eval q{
-      package Bio::EnsEMBL::Slice;
-      
-      # define a global variable so that we can pull in config hash
-      our $config;
-      
-      {
-        # don't want a redefine warning spat out, thanks
-        no warnings 'redefine';
-        
-        # overwrite seq method to read from FASTA DB
-        sub seq {
-          my $self = shift;
-          
-          # special case for in-between (insert) coordinates
-          return '' if($self->start() == $self->end() + 1);
-          
-          my $seq ;
-          my $length = 0 ;
-          if(defined($config->{fasta_db})) { 
-            my $location_string = $self->seq_region_name.":".$self->start."-".$self->end ;
-            ($seq, $length) = $config->{fasta_db}->get_sequence($location_string) ;
-            reverse_comp(\$seq) if $self->strand < 0;
-          }
-          
-          else {
-            return $self->{'seq'} if($self->{'seq'});
-          
-            if($self->adaptor()) {
-              my $seqAdaptor = $self->adaptor()->db()->get_SequenceAdaptor();
-              return ${$seqAdaptor->fetch_by_Slice_start_end_strand($self,1,undef,1)};
-            }
-          }
-          
-          # default to a string of Ns if we couldn't get sequence
-          $seq ||= 'N' x $self->length();
-          
-          return $seq;
-        }
-      }
-      
-      1;
-    };
-  }
-  else {
-    eval q{
-      package Bio::EnsEMBL::Slice;
-      
-      # define a global variable so that we can pull in config hash
-      our $config;
-      
-      {
-        # don't want a redefine warning spat out, thanks
-        no warnings 'redefine';
-        
-        # overwrite seq method to read from FASTA DB
-        sub seq {
-          my $self = shift;
-          
-          # special case for in-between (insert) coordinates
-          return '' if($self->start() == $self->end() + 1);
-          
-          my $seq;
-          
-          if(defined($config->{fasta_db})) {
-            $seq = $config->{fasta_db}->seq($self->seq_region_name, $self->start => $self->end);
-            reverse_comp(\$seq) if $self->strand < 0;
-          }
-          
-          else {
-            return $self->{'seq'} if($self->{'seq'});
-          
-            if($self->adaptor()) {
-              my $seqAdaptor = $self->adaptor()->db()->get_SequenceAdaptor();
-              return ${$seqAdaptor->fetch_by_Slice_start_end_strand($self,1,undef,1)};
-            }
-          }
-          
-          # default to a string of Ns if we couldn't get sequence
-          $seq ||= 'N' x $self->length();
-          
-          return $seq;
-        }
-      }
-      
-      1;
-    };
-  }
-  
-  if($@) {
-    debug($@) unless defined($config->{quiet});
-    die("ERROR: Could not redefine sequence method\n");
-  }
-  
-  # copy to Slice for offline sequence fetching
-  {
-    no warnings 'once';
-    $Bio::EnsEMBL::Slice::config = $config;
-  }
-  
   # spoof a coordinate system
   $config->{coord_system} = Bio::EnsEMBL::CoordSystem->new(
     -NAME => 'chromosome',
@@ -1765,10 +1664,147 @@ sub setup_fasta() {
   
   # run indexing
   $config->{fasta_db} = $index_type eq 'faidx' ? Faidx->new($config->{fasta}) : Bio::DB::Fasta->new($config->{fasta});
-  
+
+  # redefine Slice's seq() method
+  # to a new method that uses the FASTA sequence
+  # and some nice caching
+  no warnings 'redefine';
+  *Bio::EnsEMBL::Slice::seq = new_slice_seq();
+
+  # this method does the actual fetching
+  # separate so it can easily use Bio::DB::Fasta or Faidx
+  *Bio::EnsEMBL::Slice::_raw_seq = _raw_seq();
+
+  # we need to tell Slice about the fasta DB
+  # may as well use a package variable
+  no warnings 'once';
+  $Bio::EnsEMBL::Slice::fasta_db = $config->{fasta_db};
+
   # remove lock file
   unlink($lock_file) unless $index_exists;
 }
+
+sub new_slice_seq {
+  my $config = shift;
+
+  return sub {
+    my $self = shift;
+    my ($seq, $length) = ('', 0);
+
+    my ($sr_name, $start, $end, $strand) = ($self->seq_region_name, $self->start, $self->end, $self->strand);
+
+    my $cache = $Bio::EnsEMBL::Slice::vep_sequence_cache->{$sr_name} ||= [];
+
+    if(my ($region) = grep {overlap($start, $end, $_->{start}, $_->{end})} @$cache) {
+      my ($region_start, $region_end, $region_strand) = ($region->{start}, $region->{end}, $region->{strand});
+
+      my $updated = 0;
+
+      ## Get any extra sequence we need
+      ## What we do is append sequence to the current region
+      ## This means we fetch it on the same strand as the original region
+      ## even if the requested sequence is for the opposite strand,
+      ## the idea being that most times you will be requesting sequence for the same strand in a given region
+      ## revcomp is slow so trying to reduce the number of calls to it
+      ## We then revcomp later if you are actually asking for the opposite
+
+      # overhang 3'
+      if($start < $region_start) {
+        
+        # get missing sequence
+        my $missing_seq = $self->_raw_seq($sr_name, $start, $region_start - 1, $region_strand);
+
+        # reverse strand: append to current seq
+        if($region_strand < 0) {
+          $region->{seq} .= $missing_seq;
+        }
+
+        # forward strand: prepend to current seq
+        else {
+          $region->{seq} = $missing_seq.$region->{seq};
+        }
+
+        # update region start
+        $region->{start} = $start;
+        $updated = 1;
+      }
+
+      # overhang 5'
+      if($end > $region_end) {
+        
+        # get missing sequence
+        my $missing_seq = $self->_raw_seq($sr_name, $region_end + 1, $end, $region_strand);
+
+        # reverse strand: prepend to current seq
+        if($region_strand < 0) {
+          $region->{seq} = $missing_seq.$region->{seq};
+        }
+
+        # forward strand: append to current seq
+        else {
+          $region->{seq} .= $missing_seq;
+        }
+
+        # update region end
+        $region->{end} = $end;
+        $updated = 1;
+      }
+
+      # get new variables if updated
+      my ($new_region_start, $new_region_end) = ($region->{start}, $region->{end});
+
+      my $substr_start = $region_strand < 0 ? $new_region_end - $end : $start - $new_region_start;
+      $seq = substr($region->{seq}, $substr_start, ($end - $start) + 1);
+
+      # now reverse comp if requested strand opposite
+      reverse_comp(\$seq) if $strand != $region_strand;
+    }
+
+    if(!$seq) {
+      $seq = $self->_raw_seq($sr_name, $start, $end, $strand);
+
+      push @$cache, {
+        seq    => $seq,
+        start  => $start,
+        end    => $end,
+        strand => $strand
+      };
+
+      # prune the cache
+      @$cache = grep {overlap($_->{start}, $_->{end}, $start - 1e6, $end + 1e6)} @$cache;
+    }
+
+    return $seq;
+  };
+}
+
+sub _raw_seq {
+  return sub {
+    my ($self, $sr_name, $start, $end, $strand) = @_;
+
+    # get fasta DB from package variable
+    my $fasta_db = $Bio::EnsEMBL::Slice::fasta_db;
+
+    my ($seq, $length);
+
+    # different modules have different calls
+    if($fasta_db->isa('Faidx')) {
+      my $location_string = $sr_name.":".$start."-".$end ;
+      ($seq, $length) = $fasta_db->get_sequence($location_string);
+    }
+    else {
+      $seq = $fasta_db->seq($sr_name, $start => $end);
+    }
+    
+    # default to a string of Ns if we couldn't get sequence
+    $seq ||= 'N' x (($end - $start) + 1);
+
+    reverse_comp(\$seq) if defined($strand) && $strand < 0;
+
+    return $seq;
+  }
+}
+
 
 sub setup_custom {
   my $config = shift;
