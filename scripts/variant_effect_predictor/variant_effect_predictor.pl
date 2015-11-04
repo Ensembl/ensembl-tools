@@ -556,6 +556,7 @@ sub configure {
         'fasta=s',                 # file or dir containing FASTA files with reference sequence
         'freq_file=s',             # file containing freqs to add to cache build
         'freq_vcf=s' => ($config->{freq_vcf} ||= []), # VCF file containing freqs
+        'sereal',                  # user Sereal instead of Storable for the cache
         
         # debug
         'cluck',                   # these two need some mods to Bio::EnsEMBL::DBSQL::StatementHandle to work. Clucks callback trace and SQL
