@@ -1696,7 +1696,17 @@ sub new_slice_seq {
 
     my $cache = $Bio::EnsEMBL::Slice::vep_sequence_cache->{$sr_name} ||= [];
 
-    if(my ($region) = grep {overlap($start, $end, $_->{start}, $_->{end})} @$cache) {
+    # find matching regions, if any
+    my $region;
+    for(my $i=0; $i<scalar(@$cache); $i++) {
+      my $tmp_region = $cache->[$i];
+      if(overlap($start, $end, $tmp_region->{start}, $tmp_region->{end})) {
+        $region = $tmp_region;
+        last;
+      }
+    }
+
+    if($region) {
       my ($region_start, $region_end, $region_strand) = ($region->{start}, $region->{end}, $region->{strand});
 
       my $updated = 0;
@@ -1751,28 +1761,32 @@ sub new_slice_seq {
         $updated = 1;
       }
 
-      # get new variables if updated
-      my ($new_region_start, $new_region_end) = ($region->{start}, $region->{end});
-
-      my $substr_start = $region_strand < 0 ? $new_region_end - $end : $start - $new_region_start;
+      my $substr_start = $region_strand < 0 ? $region->{end} - $end : $start - $region->{start};
       $seq = substr($region->{seq}, $substr_start, ($end - $start) + 1);
 
       # now reverse comp if requested strand opposite
       reverse_comp(\$seq) if $strand != $region_strand;
     }
 
+    # no sequence in cache
+    # we need to fetch
     if(!$seq) {
+
+      # do raw fetch
       $seq = $self->_raw_seq($sr_name, $start, $end, $strand);
 
-      push @$cache, {
+      # prune the cache
+      # do this before we add the new one to do one fewer greps
+      @$cache = grep {overlap($_->{start}, $_->{end}, $start - 1e6, $end + 1e6)} @$cache;
+
+      # use unshift on the cache array
+      # this way we'll likely find this sooner next time
+      unshift @$cache, {
         seq    => $seq,
         start  => $start,
         end    => $end,
         strand => $strand
       };
-
-      # prune the cache
-      @$cache = grep {overlap($_->{start}, $_->{end}, $start - 1e6, $end + 1e6)} @$cache;
     }
 
     return $seq;
