@@ -141,12 +141,12 @@ while(<$in_file_handle>) {
   $data->{seqname} =~ s/chr//ig if !$config->{fasta_db}->length($data->{seqname});
 
   # check chr synonyms
-  unless($config->{fasta_db}->length($data->{seqname})) {
+  unless(defined($config->{fasta_db}->length($data->{seqname}))) {
     my $synonyms = get_seq_region_synonyms($config);
     $data->{seqname} = $synonyms->{$data->{seqname}} if $synonyms->{$data->{seqname}};
   }
 
-  unless($config->{fasta_db}->length($data->{seqname})) {
+  unless(defined($config->{fasta_db}->length($data->{seqname}))) {
     warn("WARNING: Could not find chromosome named ".$data->{seqname}." in FASTA file\n") unless $config->{missing_chromosomes}->{$data->{seqname}} || $config->{verbose};
     $config->{missing_chromosomes}->{$data->{seqname}} = 1;
     next;
@@ -244,7 +244,7 @@ sub fix_data {
 sub parse_gene {
   my ($config, $data) = @_;
 
-  my $id = $data->{attributes}->{id} || $data->{attributes}->{gene_id};
+  my $id = $data->{attributes}->{id} || $data->{attributes}->{gene_id} || $data->{attributes}->{name};
   $config->{genes}->{$id} = $data;
 
   # pseudogenes in NCBI RefSeq GFFs dont have transcript entries, so create one here
@@ -256,7 +256,7 @@ sub parse_gene {
 sub parse_transcript {
   my ($config, $data, $biotype) = @_;
 
-  my $id = $data->{attributes}->{transcript_id};
+  my $id = $data->{attributes}->{transcript_id} || $data->{attributes}->{name} || $data->{attributes}->{id};
 
   if(!exists($config->{transcripts}->{$id})) {
     my $tr = create_transcript($config, $data, $biotype);
@@ -479,7 +479,14 @@ sub parse_exon {
   
   # get sequence
   if(defined($config->{fasta_db})) {
-    my $seq = $config->{fasta_db}->seq($data->{seqname}, $data->{start} => $data->{end});
+    my $seq;
+    if($config->{fasta_db}->isa('Faidx')) {
+      $seq = ($config->{fasta_db}->get_sequence($data->{seqname}.':'.$data->{start}.'-'.$data->{end}))[0];
+    }
+    else {
+      $seq = $config->{fasta_db}->seq($data->{seqname}, $data->{start} => $data->{end});
+    }
+
     reverse_comp(\$seq) if $data->{strand} < 0;
     $exon->{_seq_cache} = $seq;
   }
