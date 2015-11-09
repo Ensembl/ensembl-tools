@@ -333,17 +333,19 @@ $expected = 'rs2282471';
 ok($output =~ /$expected/, "colocated ID") or diag("Expected\n$expected\n\nGot\n$output");
 
 # gmaf
-$expected = 'GMAF=T:0.1538';
+$expected = 'GMAF=T:0.1757';
 ok($output =~ /$expected/, "GMAF") or diag("Expected\n$expected\n\nGot\n$output");
 
 # population freqs
-$expected = 'AFR_MAF=T:0.04';
+$expected = 'AFR_MAF=T:0.0356';
 ok($output =~ /$expected/, "AFR MAF") or diag("Expected\n$expected\n\nGot\n$output");
-$expected = 'AMR_MAF=T:0.15';
+$expected = 'AMR_MAF=T:0.1369';
 ok($output =~ /$expected/, "AMR MAF") or diag("Expected\n$expected\n\nGot\n$output");
-$expected = 'ASN_MAF=T:0.26';
+$expected = 'EAS_MAF=T:0.2371';
 ok($output =~ /$expected/, "ASN MAF") or diag("Expected\n$expected\n\nGot\n$output");
-$expected = 'EUR_MAF=T:0.15';
+$expected = 'EUR_MAF=T:0.1392';
+ok($output =~ /$expected/, "EUR MAF") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = 'SAS_MAF=T:0.3671';
 ok($output =~ /$expected/, "EUR MAF") or diag("Expected\n$expected\n\nGot\n$output");
 
 # pubmed
@@ -354,6 +356,38 @@ ok($output =~ /$expected/, "pubmed") or diag("Expected\n$expected\n\nGot\n$outpu
 $output = `$cmd --check_alleles`;
 $expected = 'rs2282471';
 ok($output !~ /$expected/, "colocated ID") or diag("Expected not to find\n$expected\n\nGot\n$output");
+
+# ExAC freqs
+input(qq{21 25585733 25585733 C/T +});
+$output = `$cmd --check_existing --maf_exac`;
+
+$expected = 'ExAC_MAF=T:4.119e-04';
+ok($output =~ /$expected/, "ExAC MAF") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = 'ExAC_Adj_MAF=T:0.0004133';
+ok($output =~ /$expected/, "ExAC Adj MAF") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = 'ExAC_AFR_MAF=T:0.004681';
+ok($output =~ /$expected/, "ExAC AFR MAF") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = 'ExAC_AMR_MAF=T:0.000173';
+ok($output =~ /$expected/, "ExAC AMR MAF") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = 'ExAC_EAS_MAF=T:0';
+ok($output =~ /$expected/, "ExAC EAS MAF") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = 'ExAC_FIN_MAF=T:0';
+ok($output =~ /$expected/, "ExAC FIN MAF") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = 'ExAC_NFE_MAF=T:0';
+ok($output =~ /$expected/, "ExAC NFE MAF") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = 'ExAC_OTH_MAF=T:0';
+ok($output =~ /$expected/, "ExAC OTH MAF") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = 'ExAC_SAS_MAF=T:0';
+ok($output =~ /$expected/, "ExAC SAS MAF") or diag("Expected\n$expected\n\nGot\n$output");
+
+# ESP freqs
+input(qq{21 25573911 25573911 G/A +});
+$output = `$cmd --check_existing --maf_esp`;
+
+$expected = 'AA_MAF=A:0.0007';
+ok($output =~ /$expected/, "ESP AA MAF") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = 'EA_MAF=A:0';
+ok($output =~ /$expected/, "ESP EA MAF") or diag("Expected\n$expected\n\nGot\n$output");
 
 # somatic
 input(qq{21 25585742 25585742 G/A +});
@@ -368,22 +402,12 @@ input($input);
 
 # filter common
 $output = `$cmd --filter_common`;
-ok($output !~ /test1/ && $output =~ /test2/, "filter common") or diag("Got\n$output");
-
-# specific filter
-$output = `$cmd --check_frequency --freq_pop 1kg_asn --freq_freq 0.04 --freq_gt_lt lt --freq_filter include`;
-ok($output !~ /test1/ && $output =~ /test2/, "check frequency 1");
-
-$output = `$cmd --check_frequency --freq_pop 1kg_asn --freq_freq 0.04 --freq_gt_lt lt --freq_filter exclude`;
-ok($output =~ /test1/ && $output !~ /test2/, "check frequency 2");
-
-$output = `$cmd --check_frequency --freq_pop 1kg_asn --freq_freq 0.04 --freq_gt_lt gt --freq_filter include`;
-ok($output =~ /test1/ && $output !~ /test2/, "check frequency 3");
+ok($output =~ /test1/ && $output =~ /test2/, "filter common") or diag("Got\n$output");
 
 
 ## external IDs etc
 input('21 25587758 rs116645811 G A . . .');
-$full_output = `$cmd --ccds --canonical --protein --uniprot --symbol --biotype --tsl --xref_refseq --numbers --domains --variant_class`;
+$full_output = `$cmd --ccds --canonical --protein --uniprot --symbol --biotype --tsl --xref_refseq --numbers --domains --variant_class --appris`;
 $output = (grep {/ENST00000352957/} (split "\n", $full_output))[0];
 
 # gene symbol
@@ -422,13 +446,17 @@ ok($output =~ /$expected/, "RefSeq xref") or diag("Expected\n$expected\n\nGot\n$
 $expected = 'TSL=1';
 ok($output =~ /$expected/, "TSL") or diag("Expected\n$expected\n\nGot\n$output");
 
+# APPRIS
+$expected = 'APPRIS=P3';
+ok($output =~ /$expected/, "APPRIS") or diag("Expected\n$expected\n\nGot\n$output");
+
 # numbers
 $output = (grep {/ENST00000307301/} (split "\n", $full_output))[0];
 $expected = 'EXON=10/11';
 ok($output =~ /$expected/, "exon number") or diag("Expected\n$expected\n\nGot\n$output");
 
 # protein domains
-$expected = 'DOMAINS=Low_complexity_\(Seg\):Seg';
+$expected = 'DOMAINS=Low_complexity_\(Seg\):seg';
 ok($output =~ /$expected/, "protein domains") or diag("Expected\n$expected\n\nGot\n$output");
 
 
@@ -441,6 +469,7 @@ ok(
   $output =~ /SYMBOL/ &&
   $output =~ /BIOTYPE/ &&
   $output =~ /TSL/ &&
+  $output =~ /APPRIS/ &&
   $output =~ /CCDS/ &&
   $output =~ /ENSP/ &&
   $output =~ /SWISSPROT/ &&
@@ -522,6 +551,13 @@ $expected = {
   'HGMD-PUBLIC	20142' => 1
 };
 is_deeply($output, $expected, "show cache info");
+
+# dont_skip
+input(qq{dummy 1 test1 A G});
+$output = `$cmd --vcf`;
+ok($output !~ /test1/, "dont skip 1");
+$output = `$cmd --vcf --dont_skip`;
+ok($output =~ /test1/, "dont skip 2");
 
 # check ref
 $input = qq{21 25587758 test1 G A . . .
@@ -640,7 +676,7 @@ if(can_connect('ensembldb.ensembl.org')) {
   my $tmp_dbcmd = $dbcmd;
   $tmp_dbcmd =~ s/\-+database//;
   $output = `$tmp_dbcmd -force -cache -dir_cache $data_path/vep-cache/ -cache_version $cver -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp -maf_1kg`;
-  ok($output =~ /AFR_MAF=T:0.04/, "DB - with cache") or diag("Got\n$output");
+  ok($output =~ /AFR_MAF=T:0.0356/, "DB - with cache") or diag("Got\n$output");
   
   # HGVS as input
   input('21:g.25606454G>C');
