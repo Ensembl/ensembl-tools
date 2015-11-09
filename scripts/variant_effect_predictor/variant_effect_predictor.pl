@@ -423,7 +423,7 @@ sub configure {
         'registry=s',              # registry file
         'host=s',                  # database host
         'port=s',                  # database port
-        'user=s',                  # database user name
+        'user|u=s',                  # database user name
         'password=s',              # database password
         'db_version=i',            # Ensembl database version to use e.g. 62
         'assembly|a=s',            # assembly version to use
