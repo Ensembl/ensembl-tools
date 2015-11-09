@@ -267,7 +267,7 @@ sub main {
         }
             
         # validate the VF
-        next unless validate_vf($config, $vf);
+        next unless validate_vf($config, $vf) || defined($config->{dont_skip});
             
         # make a name if one doesn't exist
         $vf->{variation_name} ||= ($vf->{original_chr} || $vf->{chr}).'_'.$vf->{start}.'_'.($vf->{allele_string} || $vf->{class_SO_term});
@@ -472,6 +472,7 @@ sub configure {
         'individual=s',            # give results by genotype for individuals
         'phased',                  # force VCF genotypes to be interpreted as phased
         'fork=i',                  # fork into N processes
+        'dont_skip',               # don't skip vars that fail validation
         
         # verbosity options
         'verbose|v',               # print out a bit more info while running
@@ -492,6 +493,7 @@ sub configure {
         'coding_only',             # only return results for consequences in coding regions
         'canonical',               # indicates if transcript is canonical
         'tsl',                     # output transcript support level
+        'appris',                  # output APPRIS transcript annotation
         'ccds',                    # output CCDS identifer
         'xref_refseq',             # output refseq mrna xref
         'uniprot',                 # output Uniprot identifiers (includes UniParc)
@@ -609,6 +611,7 @@ sub configure {
             pubmed         => 1,
             uniprot        => 1,
             tsl            => 1,
+            appris         => 1,
             variant_class  => 1,
             gene_phenotype => 1,
         );
