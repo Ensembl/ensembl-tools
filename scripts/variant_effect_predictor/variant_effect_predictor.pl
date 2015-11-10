@@ -1684,6 +1684,33 @@ sub setup_fasta() {
   no warnings 'once';
   $Bio::EnsEMBL::Slice::fasta_db = $config->{fasta_db};
 
+  # we also need to tell it about PARs, ugh hacky
+  if($config->{species} =~ /sapiens|human/i) {
+    if($config->{assembly} eq 'GRCh37') {
+      $Bio::EnsEMBL::Slice::PARs = [
+        {
+          start => 10001, # start of region on Y
+          end => 2649520, # end of region on Y
+          adj => 50000    # how much to adjust Y coords by to get X coords
+        }
+      ];
+    }
+    elsif($config->{assembly} eq 'GRCh38') {
+      $Bio::EnsEMBL::Slice::PARs = [
+        {
+          start => 10001,   # start of region on Y
+          end   => 2781479, # end of region on Y
+          adj   => 0        # how much to adjust Y coords by to get X coords
+        },
+        {
+          start => 56887903, # start of region on Y
+          end   => 57217415, # end of region on Y
+          adj   => 98813480  # how much to adjust Y coords by to get X coords
+        }
+      ];
+    }
+  }
+
   # remove lock file
   unlink($lock_file) unless $index_exists;
 }
@@ -1800,6 +1827,49 @@ sub _raw_seq {
   return sub {
     my ($self, $sr_name, $start, $end, $strand) = @_;
 
+    ## handle PARS
+    my ($pre, $post) = ('', '');
+
+    if(
+      $sr_name eq 'Y' &&
+      $Bio::EnsEMBL::Slice::PARs &&
+      (my ($par) = grep {overlap($_->{start}, $_->{end}, $start, $end)} @{$Bio::EnsEMBL::Slice::PARs})
+    ) {
+
+      if($start < $par->{start}) {
+        my $tmp_seq = $self->_raw_seq('Y', $start, $par->{start} - 1, $strand);
+
+        if($strand > 0) {
+          $pre = $tmp_seq;
+        }
+        else {
+          $post = $tmp_seq;
+        }
+
+        $start = $par->{start};
+      }
+
+      if($end > $par->{end}) {
+
+        my $tmp_seq = $self->_raw_seq('Y', $par->{end} + 1, $end, $strand);
+        if($strand > 0) {
+          $post = $tmp_seq;
+        }
+        else {
+          $pre = $tmp_seq;
+        }
+
+        $end = $par->{end};
+      }
+
+      # rest of seq is fetched from X
+      $sr_name = 'X';
+
+      # adjust coords
+      $start += $par->{adj};
+      $end += $par->{adj};
+    }
+
     # get fasta DB from package variable
     my $fasta_db = $Bio::EnsEMBL::Slice::fasta_db;
 
@@ -1818,6 +1888,9 @@ sub _raw_seq {
     $seq ||= 'N' x (($end - $start) + 1);
 
     reverse_comp(\$seq) if defined($strand) && $strand < 0;
+
+    # add on PAR overlapped chunks
+    $seq = $pre.$seq.$post;
 
     return $seq;
   }
