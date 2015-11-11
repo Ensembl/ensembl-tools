@@ -70,12 +70,20 @@ sub configure {
     'compress|c=s',      # eg zcat
     'bgzip|b=s',         # path to bgzip
     'tabix|t=s',         # path to tabix
+
+    'sereal',            # convert transcript and reg caches to sereal
   ) or die "ERROR: Failed to parse command-line flags\n";
   
   # print usage message if requested or no args supplied
   if(defined($config->{help}) || !$args) {
     &usage;
     exit(0);
+  }
+
+  # check sereal
+  if($config->{sereal}) {
+    eval q{ use Sereal::Encoder; };
+    die("ERROR: Could not use Sereal::Encoder perl module; perhaps you forgot to install it?\n$@") if $@;
   }
   
   $config->{dir} ||= join '/', ($ENV{'HOME'}, '.vep');
@@ -177,7 +185,7 @@ sub main {
       my %var_cols = map {$cols[$_] => $_} (0..$#cols);
       $config->{pos_col} = $var_cols{start};
       
-      foreach my $t(qw(_var)) {
+      foreach my $t($config->{sereal} ? qw(_tr _reg _var) : qw(_var)) {
       #foreach my $t(qw(_tr _reg _var)) {
         
         my %chr_files;
@@ -236,7 +244,10 @@ sub main {
           }
           
           my $out_fh = new FileHandle;
-          $out_fh->open(">$outfilepath") or die("ERROR: Could not write to file $outfilepath\n");
+
+          if($type eq '_var') {
+            $out_fh->open(">$outfilepath") or die("ERROR: Could not write to file $outfilepath\n");
+          }
           
           foreach my $file(@{$chr_files{$chr}}) {
             progress($config, $i++, $total);
@@ -251,26 +262,24 @@ sub main {
           $out_fh->close();
           
           # sort
-          if($type ne '_var') {
-            `sort -k2,2n -k3,3n $outfilepath > $outfilepath\.sorted; mv $outfilepath\.sorted $outfilepath`;
+          if($type eq '_var') {
+
+            # bgzip
+            my $bgzipout = `$bgzip $outfilepath 2>&1`;
+            die("ERROR: bgzip failed\n$bgzipout") if $bgzipout;
+            
+            # tabix
+            my ($b, $e) = ($config->{pos_col} + 2, $config->{pos_col} + 2);
+            my $tabixout = `$tabix -s 1 -b $b -e $e $outfilepath\.gz 2>&1`;
+            die("ERROR: tabix failed\n$tabixout") if $tabixout;
           }
-          
-          # bgzip
-          my $bgzipout = `$bgzip $outfilepath 2>&1`;
-          die("ERROR: bgzip failed\n$bgzipout") if $bgzipout;
-          
-          # tabix
-          my ($b, $e) = $type eq '_var' ? ($config->{pos_col} + 2, $config->{pos_col} + 2) : (2, 3);
-          my $tabixout = `$tabix -s 1 -b $b -e $e $outfilepath\.gz 2>&1`;
-          die("ERROR: tabix failed\n$tabixout") if $tabixout;
         }
         
         end_progress($config);
       }
       
       $config->{cache_var_type} = 'tabix';
-      #$config->{cache_tr_type} = 'tabix';
-      #$config->{cache_reg_type} = 'tabix';
+      $config->{cache_serialiser_type} = 'sereal' if $config->{sereal};
       $config->{cache_variation_cols} = 'chr,'.join(",", @{$config->{cache_variation_cols}}) unless $config->{cache_variation_cols}->[0] eq 'chr';
       
       open OUT, ">".$config->{dir}.'/info.txt' or die("ERROR: Could not write to info.txt\n");
@@ -308,30 +317,18 @@ sub process_tr {
   $tr_cache = fd_retrieve($fh);
   close $fh;
   
-  foreach my $tmp_chr(keys %$tr_cache) {
-    my @tmp;
-    
-    foreach my $tr(@{$tr_cache->{$tmp_chr}}) {
-      next if $config->{seen}->{$tr->stable_id};
-      $config->{seen}->{$tr->stable_id} = 1;
-      
-      my ($s, $e) = ($tr->start, $tr->end);
-      $s -= MAX_DISTANCE_FROM_TRANSCRIPT;
-      $e += MAX_DISTANCE_FROM_TRANSCRIPT;
-      $s = 1 if $s < 1;
-      
-      push @tmp, {
-        s => $s,
-        e => $e,
-        d => encode_base64(freeze($tr), " ")
-      };
-    }
-    
-    print $out_fh join("\t", ($chr, $_->{s}, $_->{e}, $_->{d}))."\n" for sort {$a->{s} <=> $b->{s} || $a->{e} <=> $b->{e}} @tmp;
-  }
+  $config->{encoder} ||= Sereal::Encoder->new({compress => 1});
+
+  $infilepath =~ s/\.gz/\.sereal/;
+
+  die("ERROR: File $infilepath already exists - use --force_overwrite to overwrite\n") if !defined($config->{force_overwrite}) && -e $infilepath;
+
+  open OUT, ">".$infilepath or die("ERROR: Could not write to dump file $infilepath");
+  print OUT $config->{encoder}->encode($tr_cache);
+  close OUT;
 }
 
-sub process_rf {
+sub process_reg {
   my ($config, $chr, $infilepath, $out_fh) = @_;
   my $zcat = $config->{compress};
   
@@ -340,24 +337,15 @@ sub process_rf {
   $rf_cache = fd_retrieve($fh);
   close $fh;
   
-  foreach my $tmp_chr(keys %$rf_cache) {
-    my @tmp;
-    
-    foreach my $type(keys %{$rf_cache->{$tmp_chr}}) {
-      foreach my $rf(@{$rf_cache->{$tmp_chr}}) {
-        my ($s, $e) = $rf->start, $rf->end;
-        $s = 1 if $s < 1;
-        
-        push @tmp, {
-          s => $s,
-          e => $e,
-          d => encode_base64(freeze($rf), " ")
-        };
-      }
-    }
-    
-    print $out_fh join("\t", ($chr, $_->{s}, $_->{e}, $_->{d}))."\n" for sort {$a->{s} <=> $b->{s} || $a->{e} <=> $b->{e}} @tmp;
-  }
+  $config->{encoder} ||= Sereal::Encoder->new({compress => 1});
+
+  $infilepath =~ s/\.gz/\.sereal/;
+
+  die("ERROR: File $infilepath already exists - use --force_overwrite to overwrite\n") if !defined($config->{force_overwrite}) && -e $infilepath;
+
+  open OUT, ">".$infilepath or die("ERROR: Could not write to dump file $infilepath");
+  print OUT $config->{encoder}->encode($rf_cache);
+  close OUT;
 }
 
 sub process_var {
