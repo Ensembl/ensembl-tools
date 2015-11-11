@@ -89,7 +89,7 @@ my $max = (sort {$a <=> $b} keys %col_counts)[-1] + 1;
 ok($max == scalar keys %col_nums, "all_vars.gz - column number") or diag("Max $max\nKeys ".(scalar keys %col_nums));
 ok(!$pos_non_ints, "all_vars.gz - start int");
 
-eval q{use Sereal; };
+eval q{ use Sereal::Decoder; };
 if($@) {
   print STDERR "# Sereal module not installed, skipping Sereal tests\n";
   finish_script();
