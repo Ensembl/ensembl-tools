@@ -146,6 +146,10 @@ my $config = &configure(scalar @ARGV);
 # run the main sub routine
 &main($config);
 
+# run with leaktrace
+# use Test::LeakTrace;
+# leaktrace { &main($config); undef $config; } -verbose;
+
 # this is the main sub-routine - it needs the configured $config hash
 sub main {
   my $config = shift;
@@ -285,7 +289,7 @@ sub main {
                 
           if($vf_count == $config->{buffer_size}) {
             debug("Read $vf_count variants into buffer") unless defined($config->{quiet});
-                    
+            
             $config->{stats}->{out_count} += print_line($config, $_) foreach @{get_all_consequences($config, \@vfs)};
                     
             # calculate stats
@@ -1589,6 +1593,16 @@ sub setup_cache() {
       die("ERROR: Unable to use --".$disabled." with this cache\n");
     }
   }
+
+  # enable sereal
+  if(defined($config->{cache_serialiser_type}) && $config->{cache_serialiser_type} eq 'sereal') {
+    $config->{sereal} = 1;
+  }
+
+  if(defined($config->{sereal})) {
+    eval q{ use Sereal; };
+    die("ERROR: Could not use Sereal perl module; perhaps you forgot to install it?\n$@") if $@;
+  }
 }
 
 # setup FASTA file
@@ -1791,11 +1805,27 @@ sub new_slice_seq {
         $updated = 1;
       }
 
-      my $substr_start = $region_strand < 0 ? $region->{end} - $end : $start - $region->{start};
-      $seq = substr($region->{seq}, $substr_start, ($end - $start) + 1);
+      # delete revcomped seq if coords updated
+      delete $region->{revseq} if $updated;
 
       # now reverse comp if requested strand opposite
-      reverse_comp(\$seq) if $strand != $region_strand;
+      if($strand != $region_strand) {
+
+        # get and cache revcomped seq
+        if(!$region->{revseq}) {
+          my $revseq = $region->{seq};
+          reverse_comp(\$revseq);
+          $region->{revseq} = $revseq;
+        }
+
+        my $substr_start = $region_strand < 0 ? $start - $region->{start} : $region->{end} - $end;
+        $seq = substr($region->{revseq}, $substr_start, ($end - $start) + 1);
+      }
+
+      else {
+        my $substr_start = $region_strand < 0 ? $region->{end} - $end : $start - $region->{start};
+        $seq = substr($region->{seq}, $substr_start, ($end - $start) + 1);
+      }
     }
 
     # no sequence in cache
@@ -1830,15 +1860,21 @@ sub _raw_seq {
     ## handle PARS
     my ($pre, $post) = ('', '');
 
+    # There's an assumption here that we won't get asked for a sequence that overlaps more than one PAR
+    # Let's face it though that would be >54Mbp so unlikely!
     if(
       $sr_name eq 'Y' &&
       $Bio::EnsEMBL::Slice::PARs &&
       (my ($par) = grep {overlap($_->{start}, $_->{end}, $start, $end)} @{$Bio::EnsEMBL::Slice::PARs})
     ) {
 
+      # check for partial overlap at 5' end
       if($start < $par->{start}) {
+
+        # get chunk of non-PAR sequence
         my $tmp_seq = $self->_raw_seq('Y', $start, $par->{start} - 1, $strand);
 
+        # then make it a prefix (+ve) or a suffix (-ve) depending on requested strand
         if($strand > 0) {
           $pre = $tmp_seq;
         }
@@ -1846,12 +1882,17 @@ sub _raw_seq {
           $post = $tmp_seq;
         }
 
+        # adjust start for the remaining sequence to be requested
         $start = $par->{start};
       }
 
+      # check for partial overlap at 3' end
       if($end > $par->{end}) {
 
+        # get chunk of non-PAR sequence
         my $tmp_seq = $self->_raw_seq('Y', $par->{end} + 1, $end, $strand);
+
+        # then make it a suffix (+ve) or a prefix (-ve) depending on requested strand
         if($strand > 0) {
           $post = $tmp_seq;
         }
@@ -1859,15 +1900,14 @@ sub _raw_seq {
           $pre = $tmp_seq;
         }
 
+        # adjust end for the remaining sequence to be requested
         $end = $par->{end};
       }
 
-      # rest of seq is fetched from X
+      # rest of seq is fetched from X on adjusted coords
       $sr_name = 'X';
-
-      # adjust coords
-      $start += $par->{adj};
-      $end += $par->{adj};
+      $start  += $par->{adj};
+      $end    += $par->{adj};
     }
 
     # get fasta DB from package variable
@@ -1962,6 +2002,11 @@ sub setup_custom {
 sub setup_forking {
   my $config = shift;
   
+  if($config->{fork} == 0) {
+    delete $config->{fork};
+    return;
+  }
+
   die "ERROR: Fork number must be greater than 1\n" if $config->{fork} <= 1;
   
   # check we can use MIME::Base64
