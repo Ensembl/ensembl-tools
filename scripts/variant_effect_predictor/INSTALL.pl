@@ -654,7 +654,7 @@ sub test() {
   if(!$@) {
     $ENV{PERL5LIB} = $ENV{PERL5LIB} ? $ENV{PERL5LIB}.':'.$DEST_DIR : $DEST_DIR;
     opendir TEST, "$dirname\/t";
-    my @test_files = map {"$dirname\/t\/".$_} grep {!/^\./ && /\.t$/} readdir TEST;
+    my @test_files = map {"$dirname\/t\/".$_} grep {!/_db/ && !/^\./ && /\.t$/} readdir TEST;
     closedir TEST;
 
     print "Warning: Tests failed, VEP may not run correctly\n" unless runtests(@test_files);

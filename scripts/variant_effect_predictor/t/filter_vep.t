@@ -136,40 +136,5 @@ ok(scalar @lines eq 57, "list fields") or diag("Got ".(scalar @lines).", expecte
 $output = `$cmd -i $RealBin\/testdata/filter.vcf -f "SIFT is deleterious" -c`;
 ok($output eq "24\n", "count lines");
 
-# ontology
-if(can_connect('ensembldb.ensembl.org')) {
-  @lines = grep {!/^\#/} split("\n", `$opcmd -ontology -f "Consequence is coding_sequence_variant"`);
-  ok(
-    (grep {/missense_variant/} @lines) &&
-    (grep {/synonymous_variant/} @lines),
-    "ontology"
-  );
-}
-else {
-  print STDERR "# could not contact ensembldb.ensembl.org, skipping DB tests\n";
-}
 
 done_testing();
-
-sub can_connect {
-  my $host = shift;
-  my $port = shift || 3306;
-
-  eval { use DBI; };
-  return 0 if $@;
-
-  my $dsn = sprintf(
-    "DBI:mysql(RaiseError=>1):host=%s;port=%i",
-    $host,
-    $port
-  );
-  my $dbh = DBI->connect($dsn, 'anonymous', '');
-
-  if($@) {
-    return 0;
-  }
-
-  else {
-    return 1;
-  }
-}
