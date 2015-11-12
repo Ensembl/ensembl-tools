@@ -100,13 +100,15 @@ ORDER BY old_version ASC, CAST(new_release AS UNSIGNED)
 my $sth = $adaptor->dbc()->db_handle()->prepare($statement);
 
 while ( my $stable_id = $in->getline() ) {
-  chomp($stable_id);
 
   # Strip off any comment (from '#' to the end of the line).
   $stable_id =~ s/\s*#.*$//;
 
+  # Strip off any padding white spaces, new line chars and carriage returns
+  $stable_id =~ s/^\s*|\s*$//g;
+
   # Skip lines containing only whitespace.
-  if ( $stable_id =~ /^\s*$/ ) { next }
+  next unless $stable_id;
 
   print("Old stable ID, New stable ID, Release, Mapping score\n");
 
