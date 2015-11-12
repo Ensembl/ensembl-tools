@@ -27,11 +27,15 @@ use IO::File;
 use Getopt::Long;
 use DBI qw(:sql_types);
 
-my ( $filename, $species );
+my ( $filename, $species, $host, $user, $port, $pass );
 my $help = '';
 
 if ( !GetOptions( 'file|f=s'    => \$filename,
                   'species|s=s' => \$species,
+                  'host=s'      => \$host,
+                  'user=s'      => \$user,
+                  'port=s'      => \$port,
+                  'pass=s'      => \$pass,
                   'help|h!'     => \$help )
      || !defined($species)
      || $help )
@@ -49,6 +53,14 @@ Usage:
     --file    / -f  (Optional) Name of file containing a list of stable
                     IDs.  The default is to read the list from standard
                     input.
+
+    --host          (Optional) Database host (defaults to public ensembldb)
+
+    --user          (Optional) User for the database connection
+
+    --port          (Optional) Port number for the database connection
+
+    --pass          (Optional) Password for the database connection
 
     --help    / -h  To see this text.
 
@@ -70,8 +82,10 @@ $filename ||= '-';
 
 my $registry = 'Bio::EnsEMBL::Registry';
 
-$registry->load_registry_from_db( -host => 'ensembldb.ensembl.org',
-                                  -user => 'anonymous' );
+$registry->load_registry_from_db( -host => $host || 'ensembldb.ensembl.org',
+                                  -user => $user || 'anonymous',
+                                  -port => $port || 3306,
+                                  -pass => $pass || '' );
 
 my $adaptor = $registry->get_DBAdaptor( $species, 'Core' );
 
