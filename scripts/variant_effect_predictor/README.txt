@@ -10,7 +10,7 @@ Genome Research Limited.  All rights reserved.
 This software is distributed under a modified Apache license.
 For license details, please see
 
-http://www.ensembl.org/info/about/code_licence.html
+http://www.ensembl.org/info/about/legal/code_licence.html
 
 Please email comments or questions to the public Ensembl
 developers list at <http://lists.ensembl.org/mailman/listinfo/dev>.
