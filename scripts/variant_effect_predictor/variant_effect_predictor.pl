@@ -69,6 +69,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
     %FILTER_SHORTCUTS
     @PICK_ORDER
 );
+use Bio::EnsEMBL::Variation::Utils::FastaSequence qw(setup_fasta);
 
 # global vars
 my $VERSION = '82';
@@ -817,8 +818,22 @@ INTRO
       exit(0);
     }
     
-    # setup FASTA file using Bio::DB
-    setup_fasta($config) if defined($config->{fasta});
+    # setup FASTA file
+    if(defined($config->{fasta})) {
+      # spoof a coordinate system
+      $config->{coord_system} = Bio::EnsEMBL::CoordSystem->new(
+        -NAME => 'chromosome',
+        -RANK => 1,
+      );
+
+      $config->{fasta_db} = setup_fasta(
+        -FASTA => $config->{fasta},
+        -ASSEMBLY => $config->{assembly},
+        -OFFLINE => $config->{offline},
+      ) if defined($config->{fasta});
+
+      $DB::single = 1;1;
+    }
     
     # setup custom files
     setup_custom($config) if defined($config->{custom});
@@ -1602,337 +1617,6 @@ sub setup_cache() {
   if(defined($config->{sereal})) {
     eval q{ use Sereal; };
     die("ERROR: Could not use Sereal perl module; perhaps you forgot to install it?\n$@") if $@;
-  }
-}
-
-# setup FASTA file
-sub setup_fasta() {
-  my $config = shift;
-  
-  die "ERROR: Specified FASTA file/directory not found" unless -e $config->{fasta};
-
-  my $index_type = 'faidx';
-  
-  eval q{ use Faidx; };
-  
-  if($@) {
-
-    # if FASTA file is gzipped, we can't index it without Faidx
-    if($config->{fasta} =~ /\.gz$/) {
-
-      # but first check that the unpacked file doesn't exist
-      my $unpacked_fa = $config->{fasta};
-      $unpacked_fa =~ s/\.gz$//;
-
-      # if it does, we can use it instead
-      if(-e $unpacked_fa) {
-        $config->{fasta} = $unpacked_fa;
-      }
-      else {
-        die("ERROR: Cannot index gzipped FASTA file without Faidx\n");
-      }
-    }
-    
-
-    debug("Unable to use Faidx, falling back to Bio::DB::Fasta\n") unless defined($config->{quiet});
-    $index_type = 'bioperl';
-
-    # try and fall back to 
-    eval q{ use Bio::DB::Fasta; };
-    
-    if($@) {
-      die("ERROR: Could not load required Faidx or BioPerl module\n");
-    }
-  }
-  
-  # spoof a coordinate system
-  $config->{coord_system} = Bio::EnsEMBL::CoordSystem->new(
-    -NAME => 'chromosome',
-    -RANK => 1,
-  );
-  
-  # check lock file
-  my $lock_file = $config->{fasta};
-  $lock_file .= -d $config->{fasta} ? '/.vep.lock' : '.vep.lock';
-  
-  # lock file exists, indexing failed
-  if(-e $lock_file) {
-    for(qw(.fai .index .gzi /directory.index /directory.fai .vep.lock)) {
-      unlink($config->{fasta}.$_) if -e $config->{fasta}.$_;
-    }
-  }
-  
-  my $index_exists = 0;
-
-  for my $fn(map {$config->{fasta}.$_} qw(.fai .index .gzi /directory.index /directory.fai)) {
-    if(-e $fn) {
-      $index_exists = 1;
-      last;
-    }
-  }
-
-  # create lock file
-  unless($index_exists) {
-    debug("Creating FASTA index") unless defined($config->{quiet});
-
-    open LOCK, ">$lock_file" or die("ERROR: Could not write to FASTA lock file $lock_file\n");
-    print LOCK "1\n";
-    close LOCK;
-  }
-  
-  # run indexing
-  $config->{fasta_db} = $index_type eq 'faidx' ? Faidx->new($config->{fasta}) : Bio::DB::Fasta->new($config->{fasta});
-
-  # redefine Slice's seq() method
-  # to a new method that uses the FASTA sequence
-  # and some nice caching
-  no warnings 'redefine';
-  *Bio::EnsEMBL::Slice::seq = new_slice_seq();
-
-  # this method does the actual fetching
-  # separate so it can easily use Bio::DB::Fasta or Faidx
-  *Bio::EnsEMBL::Slice::_raw_seq = _raw_seq();
-
-  # we need to tell Slice about the fasta DB
-  # may as well use a package variable
-  no warnings 'once';
-  $Bio::EnsEMBL::Slice::fasta_db = $config->{fasta_db};
-
-  # we also need to tell it about PARs, ugh hacky
-  if($config->{species} =~ /sapiens|human/i) {
-    if($config->{assembly} eq 'GRCh37') {
-      $Bio::EnsEMBL::Slice::PARs = [
-        {
-          start => 10001, # start of region on Y
-          end => 2649520, # end of region on Y
-          adj => 50000    # how much to adjust Y coords by to get X coords
-        }
-      ];
-    }
-    elsif($config->{assembly} eq 'GRCh38') {
-      $Bio::EnsEMBL::Slice::PARs = [
-        {
-          start => 10001,   # start of region on Y
-          end   => 2781479, # end of region on Y
-          adj   => 0        # how much to adjust Y coords by to get X coords
-        },
-        {
-          start => 56887903, # start of region on Y
-          end   => 57217415, # end of region on Y
-          adj   => 98813480  # how much to adjust Y coords by to get X coords
-        }
-      ];
-    }
-  }
-
-  # remove lock file
-  unlink($lock_file) unless $index_exists;
-}
-
-sub new_slice_seq {
-  my $config = shift;
-
-  return sub {
-    my $self = shift;
-    my ($seq, $length) = ('', 0);
-
-    my ($sr_name, $start, $end, $strand) = ($self->seq_region_name, $self->start, $self->end, $self->strand);
-
-    my $cache = $Bio::EnsEMBL::Slice::vep_sequence_cache->{$sr_name} ||= [];
-
-    # find matching regions, if any
-    my $region;
-    for(my $i=0; $i<scalar(@$cache); $i++) {
-      my $tmp_region = $cache->[$i];
-      if(overlap($start, $end, $tmp_region->{start}, $tmp_region->{end})) {
-        $region = $tmp_region;
-        last;
-      }
-    }
-
-    if($region) {
-      my ($region_start, $region_end, $region_strand) = ($region->{start}, $region->{end}, $region->{strand});
-
-      my $updated = 0;
-
-      ## Get any extra sequence we need
-      ## What we do is append sequence to the current region
-      ## This means we fetch it on the same strand as the original region
-      ## even if the requested sequence is for the opposite strand,
-      ## the idea being that most times you will be requesting sequence for the same strand in a given region
-      ## revcomp is slow so trying to reduce the number of calls to it
-      ## We then revcomp later if you are actually asking for the opposite
-
-      # overhang 3'
-      if($start < $region_start) {
-        
-        # get missing sequence
-        my $missing_seq = $self->_raw_seq($sr_name, $start, $region_start - 1, $region_strand);
-
-        # reverse strand: append to current seq
-        if($region_strand < 0) {
-          $region->{seq} .= $missing_seq;
-        }
-
-        # forward strand: prepend to current seq
-        else {
-          $region->{seq} = $missing_seq.$region->{seq};
-        }
-
-        # update region start
-        $region->{start} = $start;
-        $updated = 1;
-      }
-
-      # overhang 5'
-      if($end > $region_end) {
-        
-        # get missing sequence
-        my $missing_seq = $self->_raw_seq($sr_name, $region_end + 1, $end, $region_strand);
-
-        # reverse strand: prepend to current seq
-        if($region_strand < 0) {
-          $region->{seq} = $missing_seq.$region->{seq};
-        }
-
-        # forward strand: append to current seq
-        else {
-          $region->{seq} .= $missing_seq;
-        }
-
-        # update region end
-        $region->{end} = $end;
-        $updated = 1;
-      }
-
-      # delete revcomped seq if coords updated
-      delete $region->{revseq} if $updated;
-
-      # now reverse comp if requested strand opposite
-      if($strand != $region_strand) {
-
-        # get and cache revcomped seq
-        if(!$region->{revseq}) {
-          my $revseq = $region->{seq};
-          reverse_comp(\$revseq);
-          $region->{revseq} = $revseq;
-        }
-
-        my $substr_start = $region_strand < 0 ? $start - $region->{start} : $region->{end} - $end;
-        $seq = substr($region->{revseq}, $substr_start, ($end - $start) + 1);
-      }
-
-      else {
-        my $substr_start = $region_strand < 0 ? $region->{end} - $end : $start - $region->{start};
-        $seq = substr($region->{seq}, $substr_start, ($end - $start) + 1);
-      }
-    }
-
-    # no sequence in cache
-    # we need to fetch
-    if(!$seq) {
-
-      # do raw fetch
-      $seq = $self->_raw_seq($sr_name, $start, $end, $strand);
-
-      # prune the cache
-      # do this before we add the new one to do one fewer greps
-      @$cache = grep {overlap($_->{start}, $_->{end}, $start - 1e6, $end + 1e6)} @$cache;
-
-      # use unshift on the cache array
-      # this way we'll likely find this sooner next time
-      unshift @$cache, {
-        seq    => $seq,
-        start  => $start,
-        end    => $end,
-        strand => $strand
-      };
-    }
-
-    return $seq;
-  };
-}
-
-sub _raw_seq {
-  return sub {
-    my ($self, $sr_name, $start, $end, $strand) = @_;
-
-    ## handle PARS
-    my ($pre, $post) = ('', '');
-
-    # There's an assumption here that we won't get asked for a sequence that overlaps more than one PAR
-    # Let's face it though that would be >54Mbp so unlikely!
-    if(
-      $sr_name eq 'Y' &&
-      $Bio::EnsEMBL::Slice::PARs &&
-      (my ($par) = grep {overlap($_->{start}, $_->{end}, $start, $end)} @{$Bio::EnsEMBL::Slice::PARs})
-    ) {
-
-      # check for partial overlap at 5' end
-      if($start < $par->{start}) {
-
-        # get chunk of non-PAR sequence
-        my $tmp_seq = $self->_raw_seq('Y', $start, $par->{start} - 1, $strand);
-
-        # then make it a prefix (+ve) or a suffix (-ve) depending on requested strand
-        if($strand > 0) {
-          $pre = $tmp_seq;
-        }
-        else {
-          $post = $tmp_seq;
-        }
-
-        # adjust start for the remaining sequence to be requested
-        $start = $par->{start};
-      }
-
-      # check for partial overlap at 3' end
-      if($end > $par->{end}) {
-
-        # get chunk of non-PAR sequence
-        my $tmp_seq = $self->_raw_seq('Y', $par->{end} + 1, $end, $strand);
-
-        # then make it a suffix (+ve) or a prefix (-ve) depending on requested strand
-        if($strand > 0) {
-          $post = $tmp_seq;
-        }
-        else {
-          $pre = $tmp_seq;
-        }
-
-        # adjust end for the remaining sequence to be requested
-        $end = $par->{end};
-      }
-
-      # rest of seq is fetched from X on adjusted coords
-      $sr_name = 'X';
-      $start  += $par->{adj};
-      $end    += $par->{adj};
-    }
-
-    # get fasta DB from package variable
-    my $fasta_db = $Bio::EnsEMBL::Slice::fasta_db;
-
-    my ($seq, $length);
-
-    # different modules have different calls
-    if($fasta_db->isa('Faidx')) {
-      my $location_string = $sr_name.":".$start."-".$end ;
-      ($seq, $length) = $fasta_db->get_sequence($location_string);
-    }
-    else {
-      $seq = $fasta_db->seq($sr_name, $start => $end);
-    }
-    
-    # default to a string of Ns if we couldn't get sequence
-    $seq ||= 'N' x (($end - $start) + 1);
-
-    reverse_comp(\$seq) if defined($strand) && $strand < 0;
-
-    # add on PAR overlapped chunks
-    $seq = $pre.$seq.$post;
-
-    return $seq;
   }
 }
 
