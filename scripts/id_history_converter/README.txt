@@ -46,6 +46,14 @@ Usage:
                     IDs.  The default is to read the list from standard
                     input.
 
+    --host          (Optional) Database host (defaults to public ensembldb)
+
+    --user          (Optional) User for the database connection
+
+    --port          (Optional) Port number for the database connection
+
+    --pass          (Optional) Password for the database connection
+
     --help    / -h  To see this text.
 
 Example usage:
