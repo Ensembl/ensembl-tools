@@ -113,39 +113,44 @@ ORDER BY old_version ASC, CAST(new_release AS UNSIGNED)
 
 my $sth = $adaptor->dbc()->db_handle()->prepare($statement);
 
-while ( my $stable_id = $in->getline() ) {
+while ( my $line = $in->getline() ) {
 
   # Strip off any comment (from '#' to the end of the line).
-  $stable_id =~ s/\s*#.*$//;
+  $line =~ s/\s*#.*$//;
 
   # Strip off any padding white spaces, new line chars and carriage returns
-  $stable_id =~ s/^\s*|\s*$//g;
+  $line =~ s/^\s*|\s*$//g;
 
   # Skip lines containing only whitespace.
-  next unless $stable_id;
+  next unless $line;
 
-  print("Old stable ID, New stable ID, Release, Mapping score\n");
+  # if comma or space used as a delimiter, split the string into multiple ids
+  foreach my $stable_id (grep $_, split /[\s\,]+/, $line) {
 
-  $sth->bind_param( 1, $stable_id, SQL_VARCHAR );
+    print("Old stable ID, New stable ID, Release, Mapping score\n");
 
-  $sth->execute();
+    $sth->bind_param( 1, $stable_id, SQL_VARCHAR );
 
-  my ( $version, $release, $new_stable_id, $new_version, $new_release,
-       $score );
+    $sth->execute();
 
-  $sth->bind_columns( \( $version,     $release,     $new_stable_id,
-                         $new_version, $new_release, $score ) );
+    my ( $version, $release, $new_stable_id, $new_version, $new_release, $score );
 
-  while ( $sth->fetch() ) {
-    if ( defined($new_stable_id) ) {
-      printf( "%s.%s, %s.%s, %s, %s\n",
-              $stable_id, $version, $new_stable_id, $new_version,
-              $new_release, $score );
-    } elsif ( !defined($new_stable_id) ) {
-      printf( "%s.%s, <retired>, %s, %s\n",
-              $stable_id, $version, $new_release, $score );
+    $sth->bind_columns( \( $version, $release, $new_stable_id, $new_version, $new_release, $score ) );
+
+    while ( $sth->fetch() ) {
+
+      if ( defined($new_stable_id) ) {
+
+        printf( "%s.%s, %s.%s, %s, %s\n", $stable_id, $version, $new_stable_id, $new_version, $new_release, $score );
+
+      } elsif ( !defined($new_stable_id) ) {
+
+        printf( "%s.%s, <retired>, %s, %s\n", $stable_id, $version, $new_release, $score );
+
+      }
     }
+
+    print("\n");
   }
 
-  print("\n");
 } ## end while ( my $stable_id = $in...)
