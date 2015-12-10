@@ -147,4 +147,6 @@ sub finish_script {
   unlink("$data_path\/vep-cache/$sp/$ver\_$ass/21/25000001-26000000_reg.sereal");
 
   done_testing();
+
+  exit(0);
 }
