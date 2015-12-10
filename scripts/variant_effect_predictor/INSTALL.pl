@@ -32,7 +32,7 @@ limitations under the License.
 
 INSTALL.pl - a script to install required code and data for the VEP
 
-Version 82
+Version 83
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -47,7 +47,7 @@ use Cwd;
 use strict;
 
 $| = 1;
-our $VERSION = 82;
+our $VERSION = 83;
 our $have_LWP;
 our $use_curl = 0;
 have_LWP();
