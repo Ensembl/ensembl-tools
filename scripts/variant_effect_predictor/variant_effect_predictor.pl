@@ -912,8 +912,11 @@ INTRO
             $cls = $config->{cache_cell_types};
         }
         else {
-            my $cta = $config->{RegulatoryFeature_adaptor}->db->get_CellTypeAdaptor();
-            $cls = join ",", map {$_->name} @{$cta->fetch_all};
+            my $aa = $config->{RegulatoryFeature_adaptor}->db->get_AnalysisAdaptor();
+            my $analysis = $aa->fetch_by_logic_name('Regulatory_Build');
+            my $fsa = $config->{RegulatoryFeature_adaptor}->db->get_FeatureSetAdaptor();
+
+            $cls = join ",", map {$_->cell_type->name} @{$fsa->fetch_all_by_Analysis($analysis)};
         }
         
         foreach my $cl(@{$config->{cell_type}}) {
