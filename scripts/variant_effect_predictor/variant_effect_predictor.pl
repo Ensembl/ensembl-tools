@@ -992,7 +992,7 @@ INTRO
             # create prefixed pop names if given
             my $prefix = $opts{prefix} || '';
             $prefix .= '_' if $prefix && $prefix !~ /\_$/;
-            @{$opts{prefixed_pops}} = map {s/\_$//r} map {$prefix.$_} @{$opts{pops}};
+            @{$opts{prefixed_pops}} = map {s/\_$//; $_} map {$prefix.$_} @{$opts{pops}};
             
             push @new, \%opts;
             
