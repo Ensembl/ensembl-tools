@@ -544,22 +544,22 @@ sub install_biodbhts() {
   install_htslib();
   rmtree( $DEST_DIR.'/tmp' );
 
-  #Now install FAIDX proper
-  my $faidx_github_url = "https://github.com/Ensembl/faidx_xs";
-  my $faidx_zip_github_url = "$faidx_github_url/archive/master.zip";
-  my $faidx_zip_download_file = $DEST_DIR.'/tmp/faidx_xs.zip';
+  #Now install Bio::DB::HTS proper
+  my $biodbhts_github_url = "https://github.com/Ensembl/Bio-HTS";
+  my $biodbhts_zip_github_url = "$biodbhts_github_url/archive/master.zip";
+  my $biodbhts_zip_download_file = $DEST_DIR.'/tmp/biodbhts.zip';
 
   mkdir $DEST_DIR unless -d $DEST_DIR;
   mkdir $DEST_DIR.'/tmp';
-  download_to_file($faidx_zip_github_url, $faidx_zip_download_file);
-  print " - unpacking $faidx_zip_download_file to $DEST_DIR/tmp/\n" unless $QUIET;
-  unpack_arch($faidx_zip_download_file, "$DEST_DIR/tmp/");
+  download_to_file($biodbhts_zip_github_url, $biodbhts_zip_download_file);
+  print " - unpacking $biodbhts_zip_download_file to $DEST_DIR/tmp/\n" unless $QUIET;
+  unpack_arch($biodbhts_zip_download_file, "$DEST_DIR/tmp/");
 
-  print "$DEST_DIR/tmp/faidx_xs-master - moving files to $FAIDX_DIR\n" unless $QUIET;
+  print "$DEST_DIR/tmp/Bio-HTS-master - moving files to $FAIDX_DIR\n" unless $QUIET;
   rmtree($FAIDX_DIR);
-  move("$DEST_DIR/tmp/faidx_xs-master", $FAIDX_DIR) or die "ERROR: Could not move directory\n".$!;
+  move("$DEST_DIR/tmp/Bio-HTS-master", $FAIDX_DIR) or die "ERROR: Could not move directory\n".$!;
 
-  print( " - making FAIDX\n" );
+  print( " - making Bio::DB:HTS\n" );
   # patch makefile
   chdir $FAIDX_DIR;
   rename 'Makefile.PL','Makefile.PL.orig' or die "Couldn't rename Makefile to Makefile.orig: $!";
@@ -591,8 +591,8 @@ sub install_biodbhts() {
 
   #move the library to the current directory
   my $pdir = getcwd;
-  printf( "Copying Faidx modules\n" );
-  copy( "lib/Faidx.pm", "..") or die "ERROR: Could not copy Faidx module:$!\n";
+  printf( "Copying Bio::DB::HTS modules\n" );
+  copy( "lib/HTS.pm", "..") or die "ERROR: Could not copy Faidx module:$!\n";
   if( -e "blib/arch/auto/Faidx/Faidx.so" ) {
     copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n";
   }
@@ -600,7 +600,7 @@ sub install_biodbhts() {
     copy( "blib/arch/auto/Faidx/Faidx.bundle", "..") or die "ERROR: Could not copy shared bundle library:$!\n";
   }
   else {
-    die "ERROR: Shared Faidx library not found\n";
+    die "ERROR: Shared Bio::DB:HTS library not found\n";
   }
 
   chdir $pdir;
