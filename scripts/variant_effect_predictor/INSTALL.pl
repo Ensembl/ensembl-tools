@@ -562,9 +562,9 @@ sub install_biodbhts() {
   print( " - making Bio::DB:HTS\n" );
   # patch makefile
   chdir $FAIDX_DIR;
-  rename 'Makefile.PL','Makefile.PL.orig' or die "Couldn't rename Makefile to Makefile.orig: $!";
-  open my $in, '<','Makefile.PL.orig'     or die "Couldn't open Makefile.PL.orig for reading: $!";
-  open my $out,'>','Makefile.PL.new' or die "Couldn't open Makefile.PL.new for writing: $!";
+  rename 'Build.PL','Build.PL.orig' or die "Couldn't rename Build to Build.orig: $!";
+  open my $in, '<','Build.PL.orig'     or die "Couldn't open Build.PL.orig for reading: $!";
+  open my $out,'>','Build.PL.new' or die "Couldn't open Build.PL.new for writing: $!";
 
   while (<$in>) {
     chomp;
@@ -584,9 +584,9 @@ sub install_biodbhts() {
 
   close $in;
   close $out;
-  rename 'Makefile.PL.new','Makefile.PL' or die "Couldn't rename Makefile.new to Makefile: $!";
-  system "perl Makefile.PL";
-  system "make";
+  rename 'Build.PL.new','Build.PL' or die "Couldn't rename Build.new to Build: $!";
+  system "perl Build.PL";
+  system "./Build";
   chdir ".";
 
   #move the library to the current directory
