@@ -191,7 +191,7 @@ elsif($AUTO) {
   if($AUTO =~ /l/ && $AUTO !~ /a/) {
     my $curdir = getcwd;
     chdir $curdir;
-    install_faidx();
+    install_biodbhts();
     chdir $curdir;
 
     # remove Bio dir if empty
@@ -244,7 +244,7 @@ sub api() {
 
   unless($NO_HTSLIB) {
     chdir $curdir;
-    install_faidx();
+    install_biodbhts();
   }
 
   chdir $curdir;
@@ -448,14 +448,14 @@ sub install_api() {
 
 # HTSLIB download/make
 ######################
-sub install_hts() {
+sub install_htslib() {
 
   #actually decided to follow Bio::DB::Sam template
   # STEP 0: various dependencies
   my $git = 'which git';
   $git or die <<END;
   'git' command not in path. Please install git and try again.
-  (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
+  (or to skip Bio::DB::HTS/htslib install re-run with --NO_HTSLIB)
 
   On Debian/Ubuntu systems you can do this with the command:
 
@@ -465,7 +465,7 @@ END
 
   'which cc' or die <<END;
   'cc' command not in path. Please install it and try again.
-  (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
+  (or to skip Bio::DB::HTS/htslib install re-run with --NO_HTSLIB)
 
   On Debian/Ubuntu systems you can do this with the command:
 
@@ -474,7 +474,7 @@ END
 
   `which make` or die <<END;
   'make' command not in path. Please install it and try again.
-  (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
+  (or to skip Bio::DB::HTS/htslib install re-run with --NO_HTSLIB)
 
   On Debian/Ubuntu systems you can do this with the command:
 
@@ -485,7 +485,7 @@ END
   if( $this_os ne 'darwin' ) {
     -e '/usr/include/zlib.h' or die <<END;
       zlib.h library header not found in /usr/include. Please install it and try again.
-      (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
+      (or to skip Bio::DB::HTS/htslib install re-run with --NO_HTSLIB)
 
       On Debian/Ubuntu systems you can do this with the command:
 
@@ -537,11 +537,11 @@ END
 
 # INSTALL FAIDX MODULE
 ######################
-sub install_faidx() {
+sub install_biodbhts() {
 
-  print "Attempting to install Faidx/htslib.\n\n>>> If this fails, try re-running with --NO_HTSLIB\n\n";
+  print "Attempting to install Bio::DB::HTS and htslib.\n\n>>> If this fails, try re-running with --NO_HTSLIB\n\n";
 
-  install_hts();
+  install_htslib();
   rmtree( $DEST_DIR.'/tmp' );
 
   #Now install FAIDX proper
