@@ -591,17 +591,16 @@ sub install_biodbhts() {
 
   #move the library to the current directory
   my $pdir = getcwd;
-  printf( "Copying Bio::DB::HTS modules\n" );
-  copy( "lib/HTS.pm", "..") or die "ERROR: Could not copy Faidx module:$!\n";
-  if( -e "blib/arch/auto/Faidx/Faidx.so" ) {
-    copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n";
-  }
-  elsif( -e "blib/arch/auto/Faidx/Faidx.bundle" ) {
-    copy( "blib/arch/auto/Faidx/Faidx.bundle", "..") or die "ERROR: Could not copy shared bundle library:$!\n";
-  }
-  else {
-    die "ERROR: Shared Bio::DB:HTS library not found\n";
-  }
+  #printf( "Copying Bio::DB::HTS modules\n" );
+  #if( -e "blib/arch/auto/Faidx/Faidx.so" ) {
+  #  copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n";
+  #}
+  #elsif( -e "blib/arch/auto/Faidx/Faidx.bundle" ) {
+  #  copy( "blib/arch/auto/Faidx/Faidx.bundle", "..") or die "ERROR: Could not copy shared bundle library:$!\n";
+  #}
+  #else {
+  #  die "ERROR: Shared Bio::DB:HTS library not found\n";
+  #}
 
   chdir $pdir;
 }
