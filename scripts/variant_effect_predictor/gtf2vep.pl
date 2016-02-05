@@ -480,7 +480,7 @@ sub parse_exon {
   # get sequence
   if(defined($config->{fasta_db})) {
     my $seq;
-    if($config->{fasta_db}->isa('Faidx')) {
+    if($config->{fasta_db}->isa('Bio::DB::HTS::Faidx')) {
       $seq = ($config->{fasta_db}->get_sequence($data->{seqname}.':'.$data->{start}.'-'.$data->{end}))[0];
     }
     else {
