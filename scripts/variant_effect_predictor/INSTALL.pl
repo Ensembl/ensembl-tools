@@ -532,6 +532,7 @@ END
   -e 'libhts.a' or die "Compile didn't complete. No libhts.a library file found";
 
   chdir $curdir;
+  my $retval = $htslib_install_dir/htslib ;
 }
 
 
@@ -541,7 +542,7 @@ sub install_biodbhts() {
 
   print "Attempting to install Bio::DB::HTS and htslib.\n\n>>> If this fails, try re-running with --NO_HTSLIB\n\n";
 
-  install_htslib();
+  my $htslib_location = install_htslib();
   rmtree( $DEST_DIR.'/tmp' );
 
   #Now install Bio::DB::HTS proper
@@ -585,7 +586,7 @@ sub install_biodbhts() {
   close $in;
   close $out;
   rename 'Build.PL.new','Build.PL' or die "Couldn't rename Build.new to Build: $!";
-  system "perl Build.PL";
+  system "perl Build.PL $htslib_location";
   system "./Build";
   chdir ".";
 
