@@ -595,6 +595,7 @@ sub install_biodbhts() {
   my $pdir = getcwd;
 
   #Perl modules to go alongside the API
+  print("Copying modules into $DEST_DIR\n");
   dircopy("lib/Bio",$DEST_DIR);
 
   #The shared object XS library
