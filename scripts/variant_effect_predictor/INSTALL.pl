@@ -532,7 +532,7 @@ END
   -e 'libhts.a' or die "Compile didn't complete. No libhts.a library file found";
 
   chdir $curdir;
-  my $retval = Cwd::realpath($actualdir) ;
+  my $retval = Cwd::realpath($htslib_install_dir/htslib) ;
 }
 
 
