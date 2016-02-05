@@ -532,7 +532,7 @@ END
   -e 'libhts.a' or die "Compile didn't complete. No libhts.a library file found";
 
   chdir $curdir;
-  my $retval = "$htslib_install_dir/htslib" ;
+  my $retval = Cwd::realpath($actualdir) ;
 }
 
 
@@ -586,8 +586,7 @@ sub install_biodbhts() {
   close $in;
   close $out;
   rename 'Build.PL.new','Build.PL' or die "Couldn't rename Build.new to Build: $!";
-  my $real_htslib = Cwd::realpath($htslib_location) ;
-  system "perl Build.PL $real_htslib";
+  system "perl Build.PL $htslib_location";
   system "./Build";
   chdir ".";
 
