@@ -40,7 +40,7 @@ by Will McLaren (wm2@ebi.ac.uk)
 use Getopt::Long;
 use File::Path qw(mkpath rmtree);
 use File::Copy;
-use File::Copy::Recursive;
+use File::Copy::Recursive qw(dircopy);
 use File::Basename;
 use Archive::Extract;
 use Net::FTP;
