@@ -1,12 +1,12 @@
 #!/usr/bin/perl
 # Copyright [1999-2016] Wellcome Trust Sanger Institute and the EMBL-European Bioinformatics Institute
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #      http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -104,10 +104,10 @@ my ($prev_chr, $by_region);
 my $in_file_handle = new FileHandle;
 
 if(defined($config->{input})) {
-  
+
   # check defined input file exists
   die("ERROR: Could not find input file ", $config->{input}, "\n") unless -e $config->{input};
-  
+
   if($config->{input} =~ /\.gz$/){
     $in_file_handle->open($config->{compress}." ". $config->{input} . " | " ) or die("ERROR: Could not read from input file ", $config->{input_file}, "\n");
   }
@@ -125,18 +125,18 @@ else {
 
 while(<$in_file_handle>) {
   chomp;
-  
+
   next if $_ =~ /^#/; #skip lines starting with comments
-  
+
   my @split = split /\t/, $_;
-  
+
   my $data;
-  
+
   # parse split data into hash
   for my $i(0..$#split) {
     $data->{$fields[$i]} = $split[$i];
   }
-  
+
   # check chr name exists
   $data->{seqname} =~ s/chr//ig if !$config->{fasta_db}->length($data->{seqname});
 
@@ -151,13 +151,13 @@ while(<$in_file_handle>) {
     $config->{missing_chromosomes}->{$data->{seqname}} = 1;
     next;
   }
-  
+
   # parse attributes
   if(defined($data->{attributes})) {
     $data->{attributes} =~ s/^\s+//g;
-    
+
     my %attribs;
-    
+
     foreach my $pair(split /;\s*/, $data->{attributes}) {
       my ($key, $value);
 
@@ -168,28 +168,28 @@ while(<$in_file_handle>) {
         ($key, $value) = split /\s+/, $pair;
       }
       next unless defined($key) and defined($value);
-      
+
       # remove quote marks
       $value =~ s/\"//g;
-      
+
       # lowercase key to reduce chances of mess up!
       $attribs{lc($key)} = $value;
     }
-    
+
     $data->{attributes} = \%attribs;
   }
-  
+
   # dump if into new region or new chrom
   # this of course assumes input file is in chrom order!!!
   if(defined($prev_chr) && $prev_chr ne $data->{seqname}) {
     debug("Dumping data for chromosome ".$prev_chr) if $config->{verbose};
     export_data($config, $prev_chr);
   }
-  
+
   debug("Processing chromosome ".$data->{seqname}) if !defined($prev_chr) || $data->{seqname} ne $prev_chr;
 
   my $ref = parse_data($config, $data);
-  
+
   $prev_chr = $data->{seqname};
 }
 
@@ -201,9 +201,9 @@ debug("All done!");
 
 sub parse_data {
   my ($config, $data) = @_;
-  
+
   return unless defined($data);
-  
+
   # check defined feature type
   if(!defined($data->{feature})) {
     debug("Feature type not described on line $.\n") if $config->{verbose};
@@ -215,20 +215,20 @@ sub parse_data {
     debug("Cannot parse feature type ".$data->{feature}."\n") if $config->{verbose};
     return;
   }
-  
+
 
   # run data fix
   fix_data($config, $data);
 
   # create transcript if not already done
   # $config->{transcripts}->{$data->{attributes}->{transcript_id}} ||= create_transcript($config, $data);
-  
+
   #print "running $method\n";
-  
+
   return &$method_ref($config, $data);
 }
 
-sub function_exists {    
+sub function_exists {
   no strict 'refs';
   my $funcname = shift;
   return defined &{$funcname} ? \&{$funcname} : undef;
@@ -236,7 +236,7 @@ sub function_exists {
 
 sub fix_data {
   my ($config, $data) = @_;
-  
+
   # fix strand
   $data->{strand} = $data->{strand} =~ /\-/ ? -1 : 1;
 }
@@ -361,7 +361,7 @@ sub create_transcript {
   if(!$biotype && $config->{source_biotype}) {
     $biotype = $data->{source};
   }
-  
+
   # don't bother creating a transcript unless we know the biotype
   # will only create issues later
   if(!$biotype) {
@@ -397,7 +397,7 @@ sub create_transcript {
 
   # store some private attribs we use either later or in VEP
   $transcript->{_gff_id} = $data->{attributes}->{id};
-  
+
   # gene ID
   $transcript->{_gene_stable_id} = $data->{attributes}->{gene_id};
 
@@ -426,7 +426,7 @@ sub create_transcript {
   if(!$transcript->{_gene_symbol} && $gene) {
     $transcript->{_gene_symbol} = $gene->{attributes}->{name} if $gene->{attributes}->{name};
   }
-  
+
   return $transcript;
 }
 
@@ -453,7 +453,7 @@ sub fetch_transcript {
 # creates a new exon object
 sub parse_exon {
   my ($config, $data) = @_;
-  
+
   my $tr = fetch_transcript($config, $data);
 
   # older spec Ensembl GTFs don't have explicit transcript lines
@@ -465,7 +465,7 @@ sub parse_exon {
     debug("Could not fetch transcript for exon on line $.\n") if $config->{verbose};
     return;
   }
-  
+
   my $exon = new Bio::EnsEMBL::Exon(
     -START  => $data->{start},
     -END    => $data->{end},
@@ -473,14 +473,14 @@ sub parse_exon {
     -SLICE  => get_slice($config, $data->{seqname}),
     -PHASE  => -1,    # default phase to -1
   );
-  
+
   # hidden number field
   $exon->{_number} = $data->{attributes}->{exon_number};
-  
+
   # get sequence
   if(defined($config->{fasta_db})) {
     my $seq;
-    if($config->{fasta_db}->isa('Faidx')) {
+    if($config->{fasta_db}->isa('Bio::DB::HTS::Faidx')) {
       $seq = ($config->{fasta_db}->get_sequence($data->{seqname}.':'.$data->{start}.'-'.$data->{end}))[0];
     }
     else {
@@ -490,7 +490,7 @@ sub parse_exon {
     reverse_comp(\$seq) if $data->{strand} < 0;
     $exon->{_seq_cache} = $seq;
   }
-  
+
   # add it to the transcript
   # sometimes this can fail if the coordinates overlap
   eval {$tr->add_Exon($exon);};
@@ -501,14 +501,14 @@ sub parse_exon {
     delete $config->{transcripts}->{$tr->stable_id};
     return;
   }
-  
+
   return $exon;
 }
 
 # modifies a transcript with coding start/end info
 sub parse_cds {
   my ($config, $data) = @_;
-  
+
   # update the coding_region_start/end
   my $tr = fetch_transcript($config, $data);
 
@@ -519,21 +519,21 @@ sub parse_cds {
 
   # check transcript has exons
   return unless defined($tr->{_trans_exon_array});
-  
+
   # update/create the translation
   if(!exists($tr->{translation})) {
     $tr->{translation} ||= new Bio::EnsEMBL::Translation(
       -TRANSCRIPT => $tr,
       -VERSION    => 1,
     );
-    
+
     weaken($tr->{translation}->{transcript});
   }
 
   my $translation = $tr->{translation};
-  
+
   # return unless $tr->biotype eq 'protein_coding';
-  
+
   # get overlapping exon
   my ($matched_exon) = grep {overlap($_->start, $_->end, $data->{start}, $data->{end})} @{$tr->get_all_Exons};
 
@@ -541,42 +541,42 @@ sub parse_cds {
     debug("Could not fetch exon matching CDS on line $.\n") if $config->{verbose};
     return;
   }
-  
+
   $translation->start_Exon($matched_exon) unless defined($translation->start_Exon);
   $translation->end_Exon($matched_exon);
-  
+
   my ($start_exon, $end_exon) = ($translation->start_Exon, $translation->end_Exon);
-  
+
   # overlap start exon?
   if(overlap($start_exon->start, $start_exon->end, $data->{start}, $data->{end})) {
     my $offset;
-    
+
     if($data->{strand} > 0) {
       $offset = ($data->{start} - $start_exon->start) + 1;
     }
     else {
       $offset = ($start_exon->end - $data->{end}) + 1;
     }
-    
+
     $translation->start($offset);
-    
+
     # update phase
     $start_exon->phase(frame_to_phase($data->{frame}));
   }
-  
+
   # overlap end exon?
   if(overlap($end_exon->start, $end_exon->end, $data->{start}, $data->{end})) {
     my $offset;
-    
+
     if($data->{strand} > 0) {
       $offset = ($data->{end} - $end_exon->start) + 1;
     }
     else {
       $offset = ($end_exon->end - $data->{start}) + 1;
     }
-    
+
     $translation->end($offset);
-    
+
     # update phase
     $end_exon->phase(frame_to_phase($data->{frame}));
   }
@@ -600,7 +600,7 @@ sub frame_to_phase {
 sub get_slice {
   my $config = shift;
   my $chr = shift;
-  
+
   if(!defined($config->{slice_cache}->{$chr})) {
     $config->{slice_cache}->{$chr} = Bio::EnsEMBL::Slice->new(
       -COORD_SYSTEM      => $config->{coord_system},
@@ -610,14 +610,14 @@ sub get_slice {
       -SEQ_REGION_LENGTH => $config->{fasta_db}->length($chr)
     );
   }
-  
+
   return $config->{slice_cache}->{$chr};
 }
 
 sub get_regions {
   my $config = shift;
   my $obj = shift;
-  
+
   my ($obj_start, $obj_end) = ($obj->start, $obj->end);
 
   my @regions;
@@ -634,7 +634,7 @@ sub get_regions {
     $e += $config->{cache_region_size};
     push @regions, $s.'-'.$e;
   }
-  
+
   return \@regions;
 }
 
@@ -643,45 +643,45 @@ sub get_dump_file_name {
   my $chr    = shift;
   my $region = shift;
   my $type   = shift;
-  
+
   $type ||= 'transcript';
-  
+
   if($type eq 'transcript') {
     $type = '';
   }
   else {
     $type = '_'.$type;
   }
-  
+
   my $dir = $config->{dir}.'/'.$chr;
   my $dump_file = $dir.'/'.$region.$type.(defined($config->{tabix}) ? '_tabix' : '').'.gz';
-  
+
   # make directory if it doesn't exist
   if(!(-e $dir) && defined($config->{write_cache})) {
     make_path($dir);
   }
-  
+
   return $dump_file;
 }
 
 sub export_data {
   my $config = shift;
   my $chr = shift;
-  
+
   my $hash;
   foreach my $tr(values %{$config->{transcripts}}) {
     next unless $tr->seq_region_name eq $chr;
-    
+
     fix_transcript($tr);
     next unless check_transcript($config, $tr);
-    
+
     foreach my $region(@{get_regions($config, $tr)}) {
       push @{$hash->{$region}}, $tr;
     }
   }
-  
+
   foreach my $region(keys %{$hash}) {
-    
+
     # unique and sort list
     my @array =
       sort {$a->start <=> $b->start || $a->end <=> $b->end}
@@ -692,7 +692,7 @@ sub export_data {
       }};
 
     dump_transcript_cache($config, {$chr => \@array}, $chr, $region);
-    
+
     # remove all the dumped transcripts
     delete $hash->{$region};
   }
@@ -704,7 +704,7 @@ sub export_data {
 
 sub fix_transcript {
   my $tr = shift;
-  
+
   # no CDS processed, can't be protein coding
   if(!defined($tr->{translation}->{start_exon})) {
     delete $tr->{translation};
@@ -715,9 +715,9 @@ sub fix_transcript {
 sub check_transcript {
   my $config = shift;
   my $tr = shift;
-  
+
   my @errors;
-  
+
   push @errors, "Object is not a transcript" unless $tr->isa('Bio::EnsEMBL::Transcript');
   if(!(defined($tr->{_trans_exon_array}) && scalar @{$tr->get_all_Exons})) {
     push @errors, "No exons found";
@@ -725,12 +725,12 @@ sub check_transcript {
   else {
     push @errors, "Exon missing phase" if grep {not defined $_->phase} @{$tr->get_all_Exons};
   }
-  
+
   if($tr->biotype eq 'protein_coding') {
     push @errors, "No start_exon defined on translation" unless defined $tr->{translation}->{start_exon};
     push @errors, "No end_exon defined on translation" unless defined $tr->{translation}->{end_exon};
   }
-  
+
   if(scalar @errors) {
     warn "WARNING: Transcript ".$tr->stable_id." fails checks: ".(join ", ", @errors)."\n";
     return 0;
@@ -745,11 +745,11 @@ sub dump_transcript_cache {
   my $tr_cache = shift;
   my $chr = shift;
   my $region = shift;
-  
+
   #debug("Dumping cached transcript data") unless defined($config->{quiet});
-  
+
   my $dump_file = get_dump_file_name($config, $chr, $region, 'transcript');
-  
+
   #debug("Writing to $dump_file") unless defined($config->{quiet});
   #$DB::single = 1;
 
@@ -777,7 +777,7 @@ sub get_seq_region_synonyms {
     my $sa = $reg->get_adaptor($config->{species}, 'core', 'slice');
 
     my %synonyms = ();
-    
+
     if($sa) {
       my $slices = $sa->fetch_all('toplevel');
 
@@ -815,13 +815,13 @@ sub read_synonyms_file {
 # setup FASTA file
 sub setup_fasta() {
   my $config = shift;
-  
+
   die "ERROR: Specified FASTA file/directory not found" unless -e $config->{fasta};
 
   my $index_type = 'faidx';
-  
-  eval q{ use Faidx; };
-  
+
+  eval q{ use Bio::DB::HTS::Faidx; };
+
   if($@) {
 
     # if FASTA file is gzipped, we can't index it without Faidx
@@ -839,139 +839,139 @@ sub setup_fasta() {
         die("ERROR: Cannot index gzipped FASTA file without Faidx\n");
       }
     }
-    
+
 
     debug("Unable to use Faidx, falling back to Bio::DB::Fasta\n") unless defined($config->{quiet});
     $index_type = 'bioperl';
 
-    # try and fall back to 
+    # try and fall back to
     eval q{ use Bio::DB::Fasta; };
-    
+
     if($@) {
       die("ERROR: Could not load required Faidx or BioPerl module\n");
     }
   }
-  
+
   if($index_type eq 'faidx') {
 
     # try to overwrite sequence method in Slice
     eval q{
       package Bio::EnsEMBL::Slice;
-      
+
       # define a global variable so that we can pull in config hash
       our $config;
-      
+
       {
         # don't want a redefine warning spat out, thanks
         no warnings 'redefine';
-        
+
         # overwrite seq method to read from FASTA DB
         sub seq {
           my $self = shift;
-          
+
           # special case for in-between (insert) coordinates
           return '' if($self->start() == $self->end() + 1);
-          
+
           my $seq ;
           my $length = 0 ;
-          if(defined($config->{fasta_db})) { 
+          if(defined($config->{fasta_db})) {
             my $location_string = $self->seq_region_name.":".$self->start."-".$self->end ;
             ($seq, $length) = $config->{fasta_db}->get_sequence($location_string) ;
             reverse_comp(\$seq) if $self->strand < 0;
           }
-          
+
           else {
             return $self->{'seq'} if($self->{'seq'});
-          
+
             if($self->adaptor()) {
               my $seqAdaptor = $self->adaptor()->db()->get_SequenceAdaptor();
               return ${$seqAdaptor->fetch_by_Slice_start_end_strand($self,1,undef,1)};
             }
           }
-          
+
           # default to a string of Ns if we couldn't get sequence
           $seq ||= 'N' x $self->length();
-          
+
           return $seq;
         }
       }
-      
+
       1;
     };
   }
   else {
     eval q{
       package Bio::EnsEMBL::Slice;
-      
+
       # define a global variable so that we can pull in config hash
       our $config;
-      
+
       {
         # don't want a redefine warning spat out, thanks
         no warnings 'redefine';
-        
+
         # overwrite seq method to read from FASTA DB
         sub seq {
           my $self = shift;
-          
+
           # special case for in-between (insert) coordinates
           return '' if($self->start() == $self->end() + 1);
-          
+
           my $seq;
-          
+
           if(defined($config->{fasta_db})) {
             $seq = $config->{fasta_db}->seq($self->seq_region_name, $self->start => $self->end);
             reverse_comp(\$seq) if $self->strand < 0;
           }
-          
+
           else {
             return $self->{'seq'} if($self->{'seq'});
-          
+
             if($self->adaptor()) {
               my $seqAdaptor = $self->adaptor()->db()->get_SequenceAdaptor();
               return ${$seqAdaptor->fetch_by_Slice_start_end_strand($self,1,undef,1)};
             }
           }
-          
+
           # default to a string of Ns if we couldn't get sequence
           $seq ||= 'N' x $self->length();
-          
+
           return $seq;
         }
       }
-      
+
       1;
     };
   }
-  
+
   if($@) {
     debug($@) unless defined($config->{quiet});
     die("ERROR: Could not redefine sequence method\n");
   }
-  
+
   # copy to Slice for offline sequence fetching
   {
     no warnings 'once';
     $Bio::EnsEMBL::Slice::config = $config;
   }
-  
+
   # spoof a coordinate system
   $config->{coord_system} = Bio::EnsEMBL::CoordSystem->new(
     -NAME => 'chromosome',
     -RANK => 1,
   );
-  
+
   # check lock file
   my $lock_file = $config->{fasta};
   $lock_file .= -d $config->{fasta} ? '/.vep.lock' : '.vep.lock';
-  
+
   # lock file exists, indexing failed
   if(-e $lock_file) {
     for(qw(.fai .index .gzi /directory.index /directory.fai .vep.lock)) {
       unlink($config->{fasta}.$_) if -e $config->{fasta}.$_;
     }
   }
-  
+
   my $index_exists = 0;
 
   for my $fn(map {$config->{fasta}.$_} qw(.fai .index .gzi /directory.index /directory.fai)) {
@@ -989,10 +989,10 @@ sub setup_fasta() {
     print LOCK "1\n";
     close LOCK;
   }
-  
+
   # run indexing
-  $config->{fasta_db} = $index_type eq 'faidx' ? Faidx->new($config->{fasta}) : Bio::DB::Fasta->new($config->{fasta});
-  
+  $config->{fasta_db} = $index_type eq 'faidx' ? Bio::DB::HTS::Faidx->new($config->{fasta}) : Bio::DB::Fasta->new($config->{fasta});
+
   # remove lock file
   unlink($lock_file) unless $index_exists;
 }
@@ -1029,7 +1029,7 @@ sub get_time() {
 sub debug {
     my $text = (@_ ? (join "", @_) : "No message");
     my $time = get_time;
-    
+
     print $time." - ".$text.($text =~ /\n$/ ? "" : "\n");
 }
 

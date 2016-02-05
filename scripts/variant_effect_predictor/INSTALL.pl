@@ -40,6 +40,7 @@ by Will McLaren (wm2@ebi.ac.uk)
 use Getopt::Long;
 use File::Path qw(mkpath rmtree);
 use File::Copy;
+use File::Copy::Recursive qw(dircopy);
 use File::Basename;
 use Archive::Extract;
 use Net::FTP;
@@ -55,7 +56,7 @@ have_LWP();
 # CONFIGURE
 ###########
 
-our ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $ASSEMBLY, $ENS_GIT_ROOT, $BIOPERL_URL, $CACHE_URL, $CACHE_DIR, $PLUGINS, $PLUGIN_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST, $NO_HTSLIB, $LIB_DIR, $HTSLIB_DIR, $FAIDX_DIR);
+our ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $ASSEMBLY, $ENS_GIT_ROOT, $BIOPERL_URL, $CACHE_URL, $CACHE_DIR, $PLUGINS, $PLUGIN_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST, $NO_HTSLIB, $LIB_DIR, $HTSLIB_DIR, $BIODBHTS_DIR, $REALPATH_DEST_DIR );
 
 GetOptions(
   'DESTDIR|d=s'  => \$DEST_DIR,
@@ -136,6 +137,7 @@ else {
 $LIB_DIR = $DEST_DIR;
 
 $DEST_DIR       .= '/Bio';
+$REALPATH_DEST_DIR  .= Cwd::realpath($DEST_DIR);
 $ENS_GIT_ROOT ||= 'https://github.com/Ensembl/';
 $BIOPERL_URL  ||= 'https://github.com/bioperl/bioperl-live/archive/release-1-6-924.zip';
 $API_VERSION  ||= $VERSION;
@@ -146,7 +148,7 @@ $FTP_USER     ||= 'anonymous';
 $FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
 $PREFER_BIN     = 0 unless defined($PREFER_BIN);
 $HTSLIB_DIR   = $LIB_DIR.'/htslib';
-$FAIDX_DIR    = $LIB_DIR.'/FAIDX';
+$BIODBHTS_DIR    = $LIB_DIR.'/biodbhts';
 
 my $dirname = dirname(__FILE__) || '.';
 
@@ -191,7 +193,7 @@ elsif($AUTO) {
   if($AUTO =~ /l/ && $AUTO !~ /a/) {
     my $curdir = getcwd;
     chdir $curdir;
-    install_faidx();
+    install_biodbhts();
     chdir $curdir;
 
     # remove Bio dir if empty
@@ -244,7 +246,7 @@ sub api() {
 
   unless($NO_HTSLIB) {
     chdir $curdir;
-    install_faidx();
+    install_biodbhts();
   }
 
   chdir $curdir;
@@ -448,14 +450,14 @@ sub install_api() {
 
 # HTSLIB download/make
 ######################
-sub install_hts() {
+sub install_htslib() {
 
   #actually decided to follow Bio::DB::Sam template
   # STEP 0: various dependencies
   my $git = 'which git';
   $git or die <<END;
   'git' command not in path. Please install git and try again.
-  (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
+  (or to skip Bio::DB::HTS/htslib install re-run with --NO_HTSLIB)
 
   On Debian/Ubuntu systems you can do this with the command:
 
@@ -465,7 +467,7 @@ END
 
   'which cc' or die <<END;
   'cc' command not in path. Please install it and try again.
-  (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
+  (or to skip Bio::DB::HTS/htslib install re-run with --NO_HTSLIB)
 
   On Debian/Ubuntu systems you can do this with the command:
 
@@ -474,7 +476,7 @@ END
 
   `which make` or die <<END;
   'make' command not in path. Please install it and try again.
-  (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
+  (or to skip Bio::DB::HTS/htslib install re-run with --NO_HTSLIB)
 
   On Debian/Ubuntu systems you can do this with the command:
 
@@ -485,7 +487,7 @@ END
   if( $this_os ne 'darwin' ) {
     -e '/usr/include/zlib.h' or die <<END;
       zlib.h library header not found in /usr/include. Please install it and try again.
-      (or to skip Faidx/htslib install re-run with --NO_HTSLIB)
+      (or to skip Bio::DB::HTS/htslib install re-run with --NO_HTSLIB)
 
       On Debian/Ubuntu systems you can do this with the command:
 
@@ -532,39 +534,40 @@ END
   -e 'libhts.a' or die "Compile didn't complete. No libhts.a library file found";
 
   chdir $curdir;
+  my $retval = Cwd::realpath("$htslib_install_dir/htslib") ;
 }
 
 
-# INSTALL FAIDX MODULE
+# INSTALL Bio::DB::HTS
 ######################
-sub install_faidx() {
+sub install_biodbhts() {
 
-  print "Attempting to install Faidx/htslib.\n\n>>> If this fails, try re-running with --NO_HTSLIB\n\n";
+  print "Attempting to install Bio::DB::HTS and htslib.\n\n>>> If this fails, try re-running with --NO_HTSLIB\n\n";
 
-  install_hts();
+  my $htslib_location = install_htslib();
   rmtree( $DEST_DIR.'/tmp' );
 
-  #Now install FAIDX proper
-  my $faidx_github_url = "https://github.com/Ensembl/faidx_xs";
-  my $faidx_zip_github_url = "$faidx_github_url/archive/master.zip";
-  my $faidx_zip_download_file = $DEST_DIR.'/tmp/faidx_xs.zip';
+  #Now install Bio::DB::HTS proper
+  my $biodbhts_github_url = "https://github.com/Ensembl/Bio-HTS";
+  my $biodbhts_zip_github_url = "$biodbhts_github_url/archive/master.zip";
+  my $biodbhts_zip_download_file = $DEST_DIR.'/tmp/biodbhts.zip';
 
   mkdir $DEST_DIR unless -d $DEST_DIR;
   mkdir $DEST_DIR.'/tmp';
-  download_to_file($faidx_zip_github_url, $faidx_zip_download_file);
-  print " - unpacking $faidx_zip_download_file to $DEST_DIR/tmp/\n" unless $QUIET;
-  unpack_arch($faidx_zip_download_file, "$DEST_DIR/tmp/");
+  download_to_file($biodbhts_zip_github_url, $biodbhts_zip_download_file);
+  print " - unpacking $biodbhts_zip_download_file to $DEST_DIR/tmp/\n" unless $QUIET;
+  unpack_arch($biodbhts_zip_download_file, "$DEST_DIR/tmp/");
 
-  print "$DEST_DIR/tmp/faidx_xs-master - moving files to $FAIDX_DIR\n" unless $QUIET;
-  rmtree($FAIDX_DIR);
-  move("$DEST_DIR/tmp/faidx_xs-master", $FAIDX_DIR) or die "ERROR: Could not move directory\n".$!;
+  print "$DEST_DIR/tmp/Bio-HTS-master - moving files to $BIODBHTS_DIR\n" unless $QUIET;
+  rmtree($BIODBHTS_DIR);
+  move("$DEST_DIR/tmp/Bio-HTS-master", $BIODBHTS_DIR) or die "ERROR: Could not move directory\n".$!;
 
-  print( " - making FAIDX\n" );
+  print( " - making Bio::DB:HTS\n" );
   # patch makefile
-  chdir $FAIDX_DIR;
-  rename 'Makefile.PL','Makefile.PL.orig' or die "Couldn't rename Makefile to Makefile.orig: $!";
-  open my $in, '<','Makefile.PL.orig'     or die "Couldn't open Makefile.PL.orig for reading: $!";
-  open my $out,'>','Makefile.PL.new' or die "Couldn't open Makefile.PL.new for writing: $!";
+  chdir $BIODBHTS_DIR;
+  rename 'Build.PL','Build.PL.orig' or die "Couldn't rename Build to Build.orig: $!";
+  open my $in, '<','Build.PL.orig'     or die "Couldn't open Build.PL.orig for reading: $!";
+  open my $out,'>','Build.PL.new' or die "Couldn't open Build.PL.new for writing: $!";
 
   while (<$in>) {
     chomp;
@@ -584,23 +587,32 @@ sub install_faidx() {
 
   close $in;
   close $out;
-  rename 'Makefile.PL.new','Makefile.PL' or die "Couldn't rename Makefile.new to Makefile: $!";
-  system "perl Makefile.PL";
-  system "make";
+  rename 'Build.PL.new','Build.PL' or die "Couldn't rename Build.new to Build: $!";
+  system "perl Build.PL $htslib_location";
+  system "./Build";
   chdir ".";
 
-  #move the library to the current directory
+  #move the library
   my $pdir = getcwd;
-  printf( "Copying Faidx modules\n" );
-  copy( "lib/Faidx.pm", "..") or die "ERROR: Could not copy Faidx module:$!\n";
-  if( -e "blib/arch/auto/Faidx/Faidx.so" ) {
-    copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n";
+
+  #Perl modules to go alongside the API
+  dircopy("lib/Bio",$REALPATH_DEST_DIR);
+
+  #The shared object XS library
+  if( -e "blib/arch/auto/Bio/DB/HTS/HTS.so" ) {
+    copy( "blib/arch/auto/Bio/DB/HTS/Faidx/Faidx.so", "..")
+      or die "ERROR: Could not copy shared Faidx.so library:$!\n";
+    copy( "blib/arch/auto/Bio/DB/HTS/HTS.so", "..")
+      or die "ERROR: Could not copy shared HTS.so library:$!\n";
   }
-  elsif( -e "blib/arch/auto/Faidx/Faidx.bundle" ) {
-    copy( "blib/arch/auto/Faidx/Faidx.bundle", "..") or die "ERROR: Could not copy shared bundle library:$!\n";
+  elsif( -e "blib/arch/auto/Bio/DB/HTS/HTS.bundle" ) {
+    copy( "blib/arch/auto/Bio/DB/HTS/Faidx/Faidx.bundle", "..")
+      or die "ERROR: Could not copy shared Faidx.bundle library:$!\n";
+    copy( "blib/arch/auto/Bio/DB/HTS/HTS.bundle", "..")
+      or die "ERROR: Could not copy shared HTS.bundle library:$!\n";
   }
   else {
-    die "ERROR: Shared Faidx library not found\n";
+    die "ERROR: Shared Bio::DB:HTS library not found\n";
   }
 
   chdir $pdir;
@@ -1092,7 +1104,7 @@ sub fasta() {
     else {
       print " - converting sequence data to bgzip format\n" unless $QUIET;
       my $curdir = getcwd;
-      my $bgzip_convert = "$FAIDX_DIR/scripts/convert_gz_2_bgz.sh "."$ex.gz $HTSLIB_DIR/bgzip";
+      my $bgzip_convert = "$BIODBHTS_DIR/scripts/convert_gz_2_bgz.sh "."$ex.gz $HTSLIB_DIR/bgzip";
       print " Going to run:\n$bgzip_convert\nThis may take some time and will be removed when files are provided in bgzip format\n";
       my $bgzip_result = `/bin/bash $bgzip_convert` unless $TEST;
 
@@ -1105,14 +1117,14 @@ sub fasta() {
 
       #Indexing needs Faidx, but this will not be present when the script is started up.
       eval q{
-        use Faidx;
+        use Bio::DB::HTS::Faidx;
       };
 
       if($@) {
         print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
       }
       else {
-        Faidx->new("$ex.gz") unless $TEST;
+        Bio::DB::HTS::Faidx->new("$ex.gz") unless $TEST;
         print " - indexing OK\n" unless $QUIET;
       }
 
