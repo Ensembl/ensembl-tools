@@ -1117,7 +1117,7 @@ sub fasta() {
 
       #Indexing needs Faidx, but this will not be present when the script is started up.
       eval q{
-        use Faidx;
+        use Bio::DB::HTS::Faidx;
       };
 
       if($@) {
