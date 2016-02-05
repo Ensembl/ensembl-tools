@@ -991,7 +991,7 @@ sub setup_fasta() {
   }
 
   # run indexing
-  $config->{fasta_db} = $index_type eq 'faidx' ? Faidx->new($config->{fasta}) : Bio::DB::Fasta->new($config->{fasta});
+  $config->{fasta_db} = $index_type eq 'faidx' ? Bio::DB::HTS::Faidx->new($config->{fasta}) : Bio::DB::Fasta->new($config->{fasta});
 
   # remove lock file
   unlink($lock_file) unless $index_exists;

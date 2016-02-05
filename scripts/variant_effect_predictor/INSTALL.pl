@@ -1124,7 +1124,7 @@ sub fasta() {
         print "Indexing failed - VEP will attempt to index the file the first time you use it\n" unless $QUIET;
       }
       else {
-        Faidx->new("$ex.gz") unless $TEST;
+        Bio::DB::HTS::Faidx->new("$ex.gz") unless $TEST;
         print " - indexing OK\n" unless $QUIET;
       }
 
