@@ -137,6 +137,7 @@ else {
 $LIB_DIR = $DEST_DIR;
 
 $DEST_DIR       .= '/Bio';
+$REALPATH_DEST_DIR  .= Cwd::realpath($DEST_DIR);
 $ENS_GIT_ROOT ||= 'https://github.com/Ensembl/';
 $BIOPERL_URL  ||= 'https://github.com/bioperl/bioperl-live/archive/release-1-6-924.zip';
 $API_VERSION  ||= $VERSION;
@@ -595,8 +596,8 @@ sub install_biodbhts() {
   my $pdir = getcwd;
 
   #Perl modules to go alongside the API
-  print("Copying modules into $DEST_DIR\n");
-  dircopy("lib/Bio",$DEST_DIR);
+  print("Copying modules into $REALPATH_DEST_DIR\n");
+  dircopy("lib/Bio",$REALPATH_DEST_DIR);
 
   #The shared object XS library
   #if( -e "blib/arch/auto/Faidx/Faidx.so" ) {
