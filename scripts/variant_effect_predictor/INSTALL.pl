@@ -595,7 +595,7 @@ sub install_biodbhts() {
   my $pdir = getcwd;
 
   #Perl modules to go alongside the API
-  dircopy("lib/Bio","..");
+  dircopy("lib/Bio",$DEST_DIR);
 
   #The shared object XS library
   #if( -e "blib/arch/auto/Faidx/Faidx.so" ) {
