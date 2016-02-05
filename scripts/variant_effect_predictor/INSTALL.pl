@@ -40,6 +40,7 @@ by Will McLaren (wm2@ebi.ac.uk)
 use Getopt::Long;
 use File::Path qw(mkpath rmtree);
 use File::Copy;
+use File::Copy::Recursive;
 use File::Basename;
 use Archive::Extract;
 use Net::FTP;
@@ -536,7 +537,7 @@ END
 }
 
 
-# INSTALL FAIDX MODULE
+# INSTALL Bio::DB::HTS
 ######################
 sub install_biodbhts() {
 
@@ -590,10 +591,13 @@ sub install_biodbhts() {
   system "./Build";
   chdir ".";
 
-  #move the library to the current directory
+  #move the library
   my $pdir = getcwd;
 
-  #printf( "Copying Bio::DB::HTS modules\n" );
+  #Perl modules to go alongside the API
+  dircopy("lib/Bio","..");
+
+  #The shared object XS library
   #if( -e "blib/arch/auto/Faidx/Faidx.so" ) {
   #  copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n";
   #}
