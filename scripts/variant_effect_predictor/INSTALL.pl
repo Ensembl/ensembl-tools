@@ -55,7 +55,7 @@ have_LWP();
 # CONFIGURE
 ###########
 
-our ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $ASSEMBLY, $ENS_GIT_ROOT, $BIOPERL_URL, $CACHE_URL, $CACHE_DIR, $PLUGINS, $PLUGIN_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST, $NO_HTSLIB, $LIB_DIR, $HTSLIB_DIR, $FAIDX_DIR);
+our ($DEST_DIR, $ENS_CVS_ROOT, $API_VERSION, $ASSEMBLY, $ENS_GIT_ROOT, $BIOPERL_URL, $CACHE_URL, $CACHE_DIR, $PLUGINS, $PLUGIN_URL, $FASTA_URL, $FTP_USER, $help, $UPDATE, $SPECIES, $AUTO, $QUIET, $PREFER_BIN, $CONVERT, $TEST, $NO_HTSLIB, $LIB_DIR, $HTSLIB_DIR, $BIODBHTS_DIR);
 
 GetOptions(
   'DESTDIR|d=s'  => \$DEST_DIR,
@@ -146,7 +146,7 @@ $FTP_USER     ||= 'anonymous';
 $FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
 $PREFER_BIN     = 0 unless defined($PREFER_BIN);
 $HTSLIB_DIR   = $LIB_DIR.'/htslib';
-$FAIDX_DIR    = $LIB_DIR.'/FAIDX';
+$BIODBHTS_DIR    = $LIB_DIR.'/biodbhts';
 
 my $dirname = dirname(__FILE__) || '.';
 
@@ -556,13 +556,13 @@ sub install_biodbhts() {
   print " - unpacking $biodbhts_zip_download_file to $DEST_DIR/tmp/\n" unless $QUIET;
   unpack_arch($biodbhts_zip_download_file, "$DEST_DIR/tmp/");
 
-  print "$DEST_DIR/tmp/Bio-HTS-master - moving files to $FAIDX_DIR\n" unless $QUIET;
-  rmtree($FAIDX_DIR);
-  move("$DEST_DIR/tmp/Bio-HTS-master", $FAIDX_DIR) or die "ERROR: Could not move directory\n".$!;
+  print "$DEST_DIR/tmp/Bio-HTS-master - moving files to $BIODBHTS_DIR\n" unless $QUIET;
+  rmtree($BIODBHTS_DIR);
+  move("$DEST_DIR/tmp/Bio-HTS-master", $BIODBHTS_DIR) or die "ERROR: Could not move directory\n".$!;
 
   print( " - making Bio::DB:HTS\n" );
   # patch makefile
-  chdir $FAIDX_DIR;
+  chdir $BIODBHTS_DIR;
   rename 'Build.PL','Build.PL.orig' or die "Couldn't rename Build to Build.orig: $!";
   open my $in, '<','Build.PL.orig'     or die "Couldn't open Build.PL.orig for reading: $!";
   open my $out,'>','Build.PL.new' or die "Couldn't open Build.PL.new for writing: $!";
@@ -592,6 +592,7 @@ sub install_biodbhts() {
 
   #move the library to the current directory
   my $pdir = getcwd;
+
   #printf( "Copying Bio::DB::HTS modules\n" );
   #if( -e "blib/arch/auto/Faidx/Faidx.so" ) {
   #  copy( "blib/arch/auto/Faidx/Faidx.so", "..") or die "ERROR: Could not copy shared so library:$!\n";
@@ -1092,7 +1093,7 @@ sub fasta() {
     else {
       print " - converting sequence data to bgzip format\n" unless $QUIET;
       my $curdir = getcwd;
-      my $bgzip_convert = "$FAIDX_DIR/scripts/convert_gz_2_bgz.sh "."$ex.gz $HTSLIB_DIR/bgzip";
+      my $bgzip_convert = "$BIODBHTS_DIR/scripts/convert_gz_2_bgz.sh "."$ex.gz $HTSLIB_DIR/bgzip";
       print " Going to run:\n$bgzip_convert\nThis may take some time and will be removed when files are provided in bgzip format\n";
       my $bgzip_result = `/bin/bash $bgzip_convert` unless $TEST;
 
