@@ -1,8 +1,10 @@
 #!/bin/bash
 
-export PERL5LIB=$PWD/bioperl-live-bioperl-release-1-2-3:$PWD/ensembl-test/modules:$PWD/ensembl/modules:$PWD/ensembl-variation/modules:$PWD/ensembl-funcgen/modules:
+export PERL5LIB=$PWD/bioperl-live-bioperl-release-1-2-3:$PWD/ensembl-test/modules:$PWD/ensembl/modules:$PWD/ensembl-variation/modules:$PWD/ensembl-funcgen/modules:$PWD/Bio-HTS/lib
 
 export PATH=$PATH:$PWD/tabix
+
+export HTSLIB_DIR=$PWD/htslib
 
 echo "Running test suite"
 echo "Using $PERL5LIB"
