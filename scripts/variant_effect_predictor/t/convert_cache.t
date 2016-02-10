@@ -38,6 +38,9 @@ my $perl   = '/usr/bin/env perl';
 my $bascmd = "$perl $script";
 my $cmd    = "$bascmd -version $ver\_$ass -species $sp -dir $data_path\/vep-cache/ -quiet";
 
+# backup info.txt
+copy("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt", "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt.bak");
+
 ok(-e $script, "script exists");
 
 # check for tabix and bgzip
@@ -46,9 +49,6 @@ unless(`which tabix` =~ /tabix/ && `which bgzip` =~ /bgzip/) {
   done_testing();
   exit(0);
 }
-
-# backup info.txt
-copy("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt", "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt.bak");
 
 # run script
 ok(!system($cmd), "run script");
