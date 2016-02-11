@@ -248,6 +248,12 @@ ok($output =~ /$expected/, "variant type - structural variation - duplication") 
 ## OPTIONS
 ##########
 
+# transcript flags
+input(qq{21 25606454 25606454 G/C + test});
+$output = `$cmd | grep -v '#'`;
+$expected = 'FLAGS=cds_end_NF';
+ok($output =~ /$expected/, "transcript flags") or diag("Expected\n$expected\n\nGot\n$output");
+
 ## pathogenicity
 input(qq{21 25606454 25606454 G/C +});
 $full_output = `$cmd --sift b --polyphen b`;
@@ -450,8 +456,11 @@ ok($output =~ /$expected/, "TSL") or diag("Expected\n$expected\n\nGot\n$output")
 $expected = 'APPRIS=P3';
 ok($output =~ /$expected/, "APPRIS") or diag("Expected\n$expected\n\nGot\n$output");
 
-# numbers
 $output = (grep {/ENST00000307301/} (split "\n", $full_output))[0];
+$expected = 'APPRIS=A2';
+ok($output =~ /$expected/, "APPRIS alternative") or diag("Expected\n$expected\n\nGot\n$output");
+
+# numbers
 $expected = 'EXON=10/11';
 ok($output =~ /$expected/, "exon number") or diag("Expected\n$expected\n\nGot\n$output");
 

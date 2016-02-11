@@ -2201,7 +2201,7 @@ sub print_line {
     
     # normal
     elsif(ref($line) eq 'HASH') {
-        my %extra = %{$line->{Extra}};
+        my %extra = %{$line->{Extra} || {}};
         
         # create extra field order?
         if(!defined($config->{field_order})) {
