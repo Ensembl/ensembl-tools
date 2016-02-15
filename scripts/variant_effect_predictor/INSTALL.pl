@@ -148,6 +148,7 @@ else {
         exit(0);
       }
     }
+  }
 }
 
 $LIB_DIR = $DEST_DIR;
