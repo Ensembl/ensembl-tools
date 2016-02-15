@@ -33,6 +33,8 @@ before_install:
     - cd Bio-HTS
     - perl Build.PL $HTSLIB_DIR
     - ./Build
+    - cp blib/arch/auto/Bio/DB/HTS/Faidx/Faidx.so ..
+    - cp blib/arch/auto/Bio/DB/HTS/HTS.so ..
     - cd ../
 
 install:
