@@ -137,7 +137,17 @@ else {
       print "1. add $current_dir/htslib to your DYLD_LIBRARY_PATH environment variable\n";
       exit(0);
     }
-  }
+    elsif( !$NO_HTSLIB ) {
+      print "Have you \n";
+      print "1. added $current_dir/htslib to your LD_LIBRARY_PATH environment variable?\n";
+      print "(y/n)";
+      my $ok = <>;
+      if($ok !~ /^y/i) {
+        print "Exiting. Please \n";
+        print "1. add $current_dir/htslib to your LD_LIBRARY_PATH environment variable\n";
+        exit(0);
+      }
+    }
 }
 
 $LIB_DIR = $DEST_DIR;
