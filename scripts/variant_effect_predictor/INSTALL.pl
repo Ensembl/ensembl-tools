@@ -97,6 +97,10 @@ if(defined($DEST_DIR)) {
   if( $this_os eq 'darwin' && !$NO_HTSLIB) {
     print "3. added $DEST_DIR/htslib to your DYLD_LIBRARY_PATH environment variable?\n";
   }
+  elsif (!$NO_HTSLIB) {
+    print "3. added $DEST_DIR/htslib to your LD_LIBRARY_PATH environment variable?\n";
+  }
+
   print "(y/n)";
 
   my $ok = <>;
@@ -104,9 +108,11 @@ if(defined($DEST_DIR)) {
     print "Exiting. Please \n";
     print "1. add $DEST_DIR to your PERL5LIB environment variable\n";
     print "2. add $DEST_DIR/htslib to your PATH environment variable\n";
-    if( $this_os eq 'darwin' && !$NO_HTSLIB)
-    {
+    if( $this_os eq 'darwin' && !$NO_HTSLIB) {
       print "3. add $DEST_DIR/htslib to your DYLD_LIBRARY_PATH environment variable\n";
+    }
+    elsif (!$NO_HTSLIB) {
+      print "3. add $DEST_DIR/htslib to your LD_LIBRARY_PATH environment variable\n";
     }
     exit(0);
   }
