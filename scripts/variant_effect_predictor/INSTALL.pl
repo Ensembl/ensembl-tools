@@ -604,6 +604,23 @@ sub install_biodbhts() {
   #Perl modules to go alongside the API
   dircopy("lib/Bio",$REALPATH_DEST_DIR);
 
+  #The shared object XS library
+  if( -e "blib/arch/auto/Bio/DB/HTS/HTS.so" ) {
+    copy( "blib/arch/auto/Bio/DB/HTS/Faidx/Faidx.so", "..")
+      or die "ERROR: Could not copy shared Faidx.so library:$!\n";
+    copy( "blib/arch/auto/Bio/DB/HTS/HTS.so", "..")
+      or die "ERROR: Could not copy shared HTS.so library:$!\n";
+  }
+  elsif( -e "blib/arch/auto/Bio/DB/HTS/HTS.bundle" ) {
+    copy( "blib/arch/auto/Bio/DB/HTS/Faidx/Faidx.bundle", "..")
+      or die "ERROR: Could not copy shared Faidx.bundle library:$!\n";
+    copy( "blib/arch/auto/Bio/DB/HTS/HTS.bundle", "..")
+      or die "ERROR: Could not copy shared HTS.bundle library:$!\n";
+  }
+  else {
+    die "ERROR: Shared Bio::DB:HTS library not found\n";
+  }
+
   chdir $pdir;
 }
 
