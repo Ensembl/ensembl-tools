@@ -95,6 +95,8 @@ if($@) {
   finish_script();
 }
 
+unlink("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt");
+move("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt.bak", "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt");
 unlink("$data_path\/vep-cache/$sp/$ver\_$ass/21/all_vars.gz");
 unlink("$data_path\/vep-cache/$sp/$ver\_$ass/21/all_vars.gz.tbi");
 
