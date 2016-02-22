@@ -337,7 +337,7 @@ sub parse_filters {
       my ($word, $sep) = ($1, $2);
 
       # no word or separator - should be end of the string
-      unless($word || $sep) {
+      unless(defined_and_non_empty($word) || defined_and_non_empty($sep)) {
         my $parent = $current->{parent};
 
         # parent should now be root if all opened parentheses have been closed
@@ -348,7 +348,7 @@ sub parse_filters {
         push @{$parent->{components}}, $current;
       }
 
-      if($word) {
+      if(defined_and_non_empty($word)) {
 
         if($word eq 'and' || $word eq 'or') {
           my $parent = $current->{parent};
@@ -405,7 +405,7 @@ sub parse_filters {
         }
 
         # process value
-        elsif(!$current->{value}) {
+        elsif(!defined($current->{value})) {
           $current->{value} = $word;
         }
       }
@@ -431,6 +431,10 @@ sub parse_filters {
   }
   
   return $root;
+}
+
+sub defined_and_non_empty {
+  return defined($_[0]) && $_[0] ne '';
 }
 
 sub create_filter_node {

@@ -105,6 +105,9 @@ ok((grep {/rs142545439/} @lines), "numerical operator with \"-\" allele");
 @lines = grep {!/^\#/} split("\n", `$opcmd -f "AMR_MAF > 4.9e-1"`);
 ok((grep {/rs142545439/} @lines), "scientific notation for number");
 
+@lines = grep {!/^\#/} split("\n", `$opcmd -f "AMR_MAF > 0"`);
+ok((grep {/rs142545439/} @lines), "0 value");
+
 
 ## advanced/nested filters
 
