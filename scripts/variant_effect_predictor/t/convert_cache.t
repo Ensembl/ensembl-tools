@@ -39,7 +39,7 @@ my $bascmd = "$perl $script";
 my $cmd    = "$bascmd -version $ver\_$ass -species $sp -dir $data_path\/vep-cache/ -quiet";
 
 # backup info.txt
-copy("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt", "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt.bak");
+copy("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt", "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt.bak") or die "ERROR: Failed to backup info.txt\n";
 
 ok(-e $script, "script exists");
 
@@ -96,7 +96,7 @@ if($@) {
 }
 
 unlink("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt");
-move("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt.bak", "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt");
+copy("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt.bak", "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt");
 unlink("$data_path\/vep-cache/$sp/$ver\_$ass/21/all_vars.gz");
 unlink("$data_path\/vep-cache/$sp/$ver\_$ass/21/all_vars.gz.tbi");
 
