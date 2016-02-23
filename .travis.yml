@@ -31,7 +31,7 @@ before_install:
     - cd ../
     - git clone --branch master --depth 1 https://github.com/Ensembl/Bio-HTS
     - cd Bio-HTS
-    - perl Build.PL $HTSLIB_DIR
+    - perl Build.PL --htslib $HTSLIB_DIR
     - ./Build
     - cp blib/arch/auto/Bio/DB/HTS/Faidx/Faidx.so ..
     - cp blib/arch/auto/Bio/DB/HTS/HTS.so ..
