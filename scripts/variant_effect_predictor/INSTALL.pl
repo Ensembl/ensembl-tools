@@ -97,10 +97,6 @@ if(defined($DEST_DIR)) {
   if( $this_os eq 'darwin' && !$NO_HTSLIB) {
     print "3. added $DEST_DIR/htslib to your DYLD_LIBRARY_PATH environment variable?\n";
   }
-  elsif (!$NO_HTSLIB) {
-    print "3. added $DEST_DIR/htslib to your LD_LIBRARY_PATH environment variable?\n";
-  }
-
   print "(y/n)";
 
   my $ok = <>;
@@ -110,9 +106,6 @@ if(defined($DEST_DIR)) {
     print "2. add $DEST_DIR/htslib to your PATH environment variable\n";
     if( $this_os eq 'darwin' && !$NO_HTSLIB) {
       print "3. add $DEST_DIR/htslib to your DYLD_LIBRARY_PATH environment variable\n";
-    }
-    elsif (!$NO_HTSLIB) {
-      print "3. add $DEST_DIR/htslib to your LD_LIBRARY_PATH environment variable\n";
     }
     exit(0);
   }
@@ -135,17 +128,6 @@ else {
     if($ok !~ /^y/i) {
       print "Exiting. Please \n";
       print "1. add $current_dir/htslib to your DYLD_LIBRARY_PATH environment variable\n";
-      exit(0);
-    }
-  }
-  elsif( !$NO_HTSLIB ) {
-    print "Have you \n";
-    print "1. added $current_dir/htslib to your LD_LIBRARY_PATH environment variable?\n";
-    print "(y/n)";
-    my $ok = <>;
-    if($ok !~ /^y/i) {
-      print "Exiting. Please \n";
-      print "1. add $current_dir/htslib to your LD_LIBRARY_PATH environment variable\n";
       exit(0);
     }
   }
