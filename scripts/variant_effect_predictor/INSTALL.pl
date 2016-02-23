@@ -605,7 +605,7 @@ sub install_biodbhts() {
   close $in;
   close $out;
   rename 'Build.PL.new','Build.PL' or die "Couldn't rename Build.new to Build: $!";
-  system "perl Build.PL $htslib_location";
+  system "perl Build.PL --htslib $htslib_location";
   system "./Build";
   chdir ".";
 
