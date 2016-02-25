@@ -77,6 +77,7 @@ GetOptions(
   'CONVERT|t'    => \$CONVERT,
   'TEST'         => \$TEST,
   'NO_HTSLIB|l'  => \$NO_HTSLIB,
+  'CURL'         => \$use_curl,
 ) or die("ERROR: Failed to parse arguments");
 
 if(defined($help)) {
@@ -142,7 +143,7 @@ $BIOPERL_URL  ||= 'https://github.com/bioperl/bioperl-live/archive/release-1-6-9
 $API_VERSION  ||= $VERSION;
 $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP";
 $CACHE_DIR    ||= $ENV{HOME} ? $ENV{HOME}.'/.vep' : 'cache';
-$PLUGIN_URL   ||= 'https://raw.githubusercontent.com/ensembl-variation/VEP_plugins/master/plugin_config.txt';
+$PLUGIN_URL   ||= 'https://raw.githubusercontent.com/Ensembl/VEP_plugins';
 $FTP_USER     ||= 'anonymous';
 $FASTA_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/fasta/";
 $PREFER_BIN     = 0 unless defined($PREFER_BIN);
@@ -1257,9 +1258,11 @@ sub plugins() {
   }
   mkdir($CACHE_DIR.'/Plugins') unless -e $CACHE_DIR.'/Plugins';
 
+  my $plugin_url_root = $PLUGIN_URL.'/release/'.$API_VERSION;
+
   # download and eval plugin config file
   my $plugin_config_file = $CACHE_DIR.'/Plugins/plugin_config.txt';
-  download_to_file($PLUGIN_URL, $plugin_config_file);
+  download_to_file($plugin_url_root.'/plugin_config.txt', $plugin_config_file);
 
   die("ERROR: Could not access plugin config file $plugin_config_file\n") unless($plugin_config_file && -e $plugin_config_file);
 
@@ -1426,6 +1429,8 @@ sub download_to_file {
   my ($url, $file) = @_;
 
   $url =~ s/([a-z])\//$1\:21\// if $url =~ /ftp/ && $url !~ /\:21/;
+
+  # print STDERR "Downloading $url to $file\n";
 
   if($use_curl) {
     my $output = `curl --location $url > $file`;
