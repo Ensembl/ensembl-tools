@@ -53,6 +53,9 @@ ok(!(grep {/rs114942253/} @lines), "operator - ne");
 # ex
 @lines = grep {!/^\#/} split("\n", `$opcmd -f "PolyPhen ex"`);
 ok(scalar (grep {/PolyPhen/} @lines) == scalar @lines, "operator - ex");
+# ex
+@lines = grep {!/^\#/} split("\n", `$opcmd -f "PolyPhen"`);
+ok(scalar (grep {/PolyPhen/} @lines) == scalar @lines, "implicit ex");
 
 # nex
 @lines = grep {!/^\#/} split("\n", `$opcmd -f "PolyPhen nex"`);

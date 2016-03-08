@@ -314,7 +314,11 @@ sub parse_line {
     }
   }
   
-  map {$data{$_} = undef if $data{$_} eq ''} keys %data;
+  # clean
+  foreach my $key(keys %data) {
+    $data{$key} = undef if
+      $data{$key} eq '' || ($key ne 'Allele' && $data{$key} eq '-');
+  }
   
   return \%data;
 }
@@ -469,6 +473,7 @@ sub evaluate_filter {
   my $filter = shift;
 
   my $return = 1;
+  $DB::single = 1;
 
   if(scalar @{$filter->{components}}) {
 
