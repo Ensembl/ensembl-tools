@@ -21,6 +21,8 @@ use FileHandle;
 use File::Path qw(make_path);
 use Storable qw(nstore_fd);
 use Scalar::Util qw(weaken);
+use Storable qw(nstore_fd fd_retrieve freeze thaw);
+use MIME::Base64;
 
 use Bio::EnsEMBL::CoordSystem;
 use Bio::EnsEMBL::Slice;
