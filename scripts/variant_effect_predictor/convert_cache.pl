@@ -37,10 +37,14 @@ by Will McLaren (wm2@ebi.ac.uk)
 use strict;
 use Getopt::Long;
 use FileHandle;
-use Bio::EnsEMBL::Variation::Utils::VEP qw(read_cache_info get_version_data);
-use Bio::EnsEMBL::Variation::Utils::VariationEffect qw(MAX_DISTANCE_FROM_TRANSCRIPT);
 use Storable qw(nstore_fd fd_retrieve freeze thaw);
 use MIME::Base64;
+
+use FindBin qw($RealBin);
+use lib $RealBin;
+
+use Bio::EnsEMBL::Variation::Utils::VEP qw(read_cache_info get_version_data);
+use Bio::EnsEMBL::Variation::Utils::VariationEffect qw(MAX_DISTANCE_FROM_TRANSCRIPT);
 
 # set output autoflush for progress bars
 $| = 1;
