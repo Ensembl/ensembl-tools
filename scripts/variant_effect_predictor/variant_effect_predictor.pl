@@ -522,6 +522,7 @@ sub configure {
         'vcf',                     # produce vcf output
         'solr',                    # produce XML output for Solr
         'json',                    # produce JSON document output
+        'tab',                     # produce tabulated output
         'vcf_info_field=s',        # allow user to change VCF info field name
         'keep_csq',                # don't nuke existing CSQ fields in VCF
         'keep_ann',                # synonym for keep_csq
@@ -2035,6 +2036,15 @@ HEAD
             }
         }
     }
+
+    if($config->{tab} && !$config->{fields_redefined}) {        
+      my @extra_fields =
+        map {@{$_->{cols}}}
+        grep {defined $config->{$_->{flag}}}
+        @EXTRA_HEADERS;
+
+      @{$config->{fields}} = grep {$_ ne 'Extra'} (@{$config->{fields}}, @extra_fields);
+    }
     
     # add column headers
     print $out_file_handle '#', (join "\t", @{$config->{fields}});
@@ -2197,6 +2207,15 @@ sub print_line {
     if(ref($line) eq 'HASH' && defined($config->{json})) {
       $config->{json_obj} ||= JSON->new;
       $output = $config->{json_obj}->encode($line);
+    }
+
+    # tabulated output
+    elsif($config->{tab}) {
+      my %extra = %{$line->{Extra} || {}};
+
+      $output = join "\t", map {
+        (defined $line->{$_} ? $line->{$_} : (defined $extra{$_} ? $extra{$_} : '-'))
+      } @{$config->{fields}};
     }
     
     # normal
