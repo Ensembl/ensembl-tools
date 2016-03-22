@@ -87,6 +87,11 @@ $output = `$cmd --vcf | grep -v '#'`;
 $expected = '21\s25606454\stest\sG\sC\s.\s.\sCSQ=C|ENSG00000154719|ENST00000419219|Transcript|missense_variant|284|275|92|A/G|gCc/gGc|||-1,C|ENSG00000154719|ENST00000352957|Transcript|missense_variant|317|275|92|A/G|gCc/gGc|||-1,C|ENSG00000154719|ENST00000307301|Transcript|missense_variant|317|275|92|A/G|gCc/gGc|||-1';
 ok($output =~ /$expected/, "VCF output") or diag("Expected\n$expected\n\nGot\n$output");
 
+# tab
+$output = `$cmd --tab | grep -v '#'`;
+$expected = 'test\s21:25606454\sC\sENSG00000154719\sENST00000419219\sTranscript\smissense_variant\s284\s275\s92\sA/G\sgCc/gGc\s-\sMODERATE\s-\s-1\scds_end_NF';
+ok($output =~ /$expected/, "tabulated output") or diag("Expected\n$expected\n\nGot\n$output");
+
 # json
 eval q{ use JSON; };
 
