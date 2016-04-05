@@ -2043,6 +2043,8 @@ HEAD
         grep {defined $config->{$_->{flag}}}
         @EXTRA_HEADERS;
 
+      push @extra_fields, map {$_->[0]} @{get_plugin_headers($config)};
+
       @{$config->{fields}} = grep {$_ ne 'Extra'} (@{$config->{fields}}, @extra_fields);
     }
     
