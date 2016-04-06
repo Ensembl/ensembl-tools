@@ -624,6 +624,14 @@ ok($ens =~ /ENST00000419219/, "merged cache Ensembl") or diag("Got\n$ens");
 ok($ref =~ /NM_080794/, "merged cache RefSeq") or diag("Got\n$ref");
 ok($ref =~ /NM_080794.+MRPL39/, "merged cache RefSeq gene symbol") or diag("Got\n$ref");
 
+# merged cache with pick, choose ensembl by default
+@lines = grep {!/^\#/} split("\n", `$cmd --merged --pick`);
+ok($lines[0] =~ /SOURCE=Ensembl/, 'merged with pick choose ensembl') or diag("Got\n$lines[0]");
+
+# merged cache with pick, choose refseq with pick_order
+@lines = grep {!/^\#/} split("\n", `$cmd --merged --pick --pick_order refseq`);
+ok($lines[0] =~ /SOURCE=RefSeq/, 'merged with pick choose refseq') or diag("Got\n$lines[0]");
+
 # stats file
 $output = `$bascmd -force -offline -dir_cache $data_path/vep-cache -i $tmpfile -o $tmpfile\.out -cache_version $cver -assembly $ass -species $sp`;
 ok(-e $tmpfile.'.out_summary.html', "stats file");
