@@ -2679,8 +2679,6 @@ sub stats_html_head {
       padding: 0px;
       height: 80px;
       width: 500px;
-      float: right;
-      display: inline;
     }
     
     .main_content {
