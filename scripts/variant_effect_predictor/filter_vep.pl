@@ -40,6 +40,8 @@ by Will McLaren (wm2@ebi.ac.uk)
 use strict;
 use Getopt::Long;
 use FileHandle;
+use FindBin qw($RealBin);
+use lib $RealBin;
 
 # set output autoflush for progress bars
 $| = 1;
@@ -646,7 +648,7 @@ sub filter_is_child {
     
     # connect to DBs here
     if(!defined($config->{ontology_adaptor})) {
-      eval {
+      eval q{
         use Bio::EnsEMBL::Registry;
       };
       
