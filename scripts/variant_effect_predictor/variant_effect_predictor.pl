@@ -72,7 +72,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 use Bio::EnsEMBL::Variation::Utils::FastaSequence qw(setup_fasta);
 
 # global vars
-my $VERSION = '84';
+my $VERSION = '85';
 
 my %ts_tv = (
   'A/G' => 'Ts',
