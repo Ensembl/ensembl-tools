@@ -130,7 +130,7 @@ foreach my $chunk(split(";", (split("\t", $output))[-1])) {
 is_deeply($out_hash, $exp_gvf_hash, "GVF consequence");
 
 # custom fields
-$output = `$cmd --fields Uploaded_variation,Feature,Consequence --pick | grep -v '#'`;
+$output = `$cmd --tab --fields Uploaded_variation,Feature,Consequence --pick | grep -v '#'`;
 $expected = 'test\sENST00000307301\smissense_variant';
 ok($output =~ /$expected/, "custom fields") or diag("Expected\n$expected\n\nGot\n$output");
 
@@ -146,8 +146,8 @@ ok($output =~ /$expected/, "convert to pileup") or diag("Expected\n$expected\n\n
 
 # individual
 $input = qq{##fileformat=VCFv4.0
-#CHROM POS ID REF ALT QUAL FILTER INFO FORMAT A B
-21 25587758 rs116645811 G A . . . GT 1|1 0|0};
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	A	B
+21	25587758	rs116645811	G	A	.	.	.	GT	1|1	0|0};
 input($input);
 $output = `$cmd --individual all`;
 ok($output =~ /IND=A/ && $output !~ /IND=B/ && $output =~ /ZYG=HOM/, "individual");
@@ -289,7 +289,7 @@ ok($output =~ /$expected/, "HGVSp") or diag("Expected\n$expected\n\nGot\n$output
 
 ## regulation
 input(qq{21 25487468 25487468 A/T +});
-$full_output = `$cmd --regulatory`;
+$full_output = `$cmd --regulatory | grep -v '#'`;
 
 # reg feat
 $output = (grep {/ENSR00000612061/} (split "\n", $full_output))[0];
@@ -567,7 +567,7 @@ $expected = {
 is_deeply($output, $expected, "show cache info");
 
 # dont_skip
-input(qq{dummy 1 test1 A G});
+input(qq{dummy 1 test1 A G . . .});
 $output = `$cmd --vcf`;
 ok($output !~ /test1/, "dont skip 1");
 $output = `$cmd --vcf --dont_skip`;
@@ -600,16 +600,16 @@ $output = `$cmd --chr 21`;
 ok($output !~ /test1/ && $output =~ /test2/, "chr");
 
 # fork
-$input = qq{21      25607440        rs61735760      C       T       .       .       .
-21      25606638        rs3989369       A       G       .       .       .
-21      25606478        rs75377686      T       C       .       .       .
-21      25603925        rs7278284       C       T       .       .       .
-21      25603910        rs7278168       C       T       .       .       .
-21      25603832        rs116331755     A       G       .       .       .
-21      25592893        rs1057885       T       C       .       .       .
-21      25592860        rs10576 T       C       .       .       .
-21      25592836        rs1135638       G       A       .       .       .
-21      25587758        rs116645811     G       A       .       .       .};
+$input = qq{21 25607440 rs61735760 C T . . .
+21 25606638 rs3989369 A G . . .
+21 25606478 rs75377686 T C . . .
+21 25603925 rs7278284 C T . . .
+21 25603910 rs7278168 C T . . .
+21 25603832 rs116331755 A G . . .
+21 25592893 rs1057885 T C . . .
+21 25592860 rs10576 T C . . .
+21 25592836 rs1135638 G A . . .
+21 25587758 rs116645811 G A . . .};
 input($input);
 $output = `$cmd --fork 2 --vcf | grep -v '#' | cut -f 2`;
 $expected = "25607440\n25606638\n25606478\n25603925\n25603910\n25603832\n25592893\n25592860\n25592836\n25587758";
