@@ -913,11 +913,15 @@ INTRO
             $cls = $config->{cache_cell_types};
         }
         else {
-            my $aa = $config->{RegulatoryFeature_adaptor}->db->get_AnalysisAdaptor();
-            my $analysis = $aa->fetch_by_logic_name('Regulatory_Build');
-            my $fsa = $config->{RegulatoryFeature_adaptor}->db->get_FeatureSetAdaptor();
+            my $regulatory_build_adaptor = $config->{RegulatoryFeature_adaptor}->db->get_RegulatoryBuildAdaptor();
+            my $regulatory_build = $regulatory_build_adaptor->fetch_current_regulatory_build;
+            my @cell_types = 
+              sort
+              map {s/ /\_/g; $_}
+              map {$_->display_label}
+              @{$regulatory_build->get_all_Epigenomes};
 
-            $cls = join ",", map {$_->cell_type->name} @{$fsa->fetch_all_by_Analysis($analysis)};
+            $cls = join ",", @cell_types;
         }
         
         foreach my $cl(@{$config->{cell_type}}) {
