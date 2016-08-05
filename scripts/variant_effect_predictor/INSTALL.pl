@@ -559,9 +559,11 @@ sub install_biodbhts() {
   print " - unpacking $biodbhts_zip_download_file to $DEST_DIR/tmp/\n" unless $QUIET;
   unpack_arch($biodbhts_zip_download_file, "$DEST_DIR/tmp/");
 
-  print "$DEST_DIR/tmp/Bio-HTS-master - moving files to $BIODBHTS_DIR\n" unless $QUIET;
+  my $tmp_name = -d "$DEST_DIR/tmp/Bio-HTS-master" ? 'Bio-HTS-master' : 'Bio-DB-HTS-master';
+
+  print "$DEST_DIR/tmp/$tmp_name - moving files to $BIODBHTS_DIR\n" unless $QUIET;
   rmtree($BIODBHTS_DIR);
-  move("$DEST_DIR/tmp/Bio-HTS-master", $BIODBHTS_DIR) or die "ERROR: Could not move directory\n".$!;
+  move("$DEST_DIR/tmp/$tmp_name", $BIODBHTS_DIR) or die "ERROR: Could not move directory\n".$!;
 
   print( " - making Bio::DB:HTS\n" );
   # patch makefile
