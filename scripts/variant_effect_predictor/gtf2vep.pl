@@ -515,6 +515,11 @@ sub parse_cds {
   # update the coding_region_start/end
   my $tr = fetch_transcript($config, $data);
 
+  # older spec Ensembl GTFs don't have explicit transcript lines
+  if(!$tr && $config->{no_transcripts}) {
+    $tr = parse_transcript($config, $data);
+  }
+
   unless($tr) {
     debug("Could not fetch transcript for CDS on line $.\n") if $config->{verbose};
     return;
