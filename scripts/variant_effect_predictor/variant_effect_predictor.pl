@@ -566,6 +566,7 @@ sub configure {
         'freq_file=s',             # file containing freqs to add to cache build
         'freq_vcf=s' => ($config->{freq_vcf} ||= []), # VCF file containing freqs
         'sereal',                  # user Sereal instead of Storable for the cache
+        'synonyms=s',              # chromosome synonyms file
         
         # debug
         'cluck',                   # these two need some mods to Bio::EnsEMBL::DBSQL::StatementHandle to work. Clucks callback trace and SQL
@@ -819,6 +820,9 @@ INTRO
       print "$_\t".$v->{$_}."\n" for keys %$v;
       exit(0);
     }
+
+    # chromosome synonyms
+    read_chromosome_synonyms($config, $config->{synonyms}) if defined($config->{synonyms});
     
     # setup FASTA file
     if(defined($config->{fasta})) {
@@ -832,6 +836,7 @@ INTRO
         -FASTA => $config->{fasta},
         -ASSEMBLY => $config->{assembly},
         -OFFLINE => $config->{offline},
+        -SYNONYMS => $config->{chromosome_synonyms},
       ) if defined($config->{fasta});
     }
     
@@ -1583,16 +1588,23 @@ sub setup_cache() {
   if(defined($config->{assembly}) && defined($config->{cache_assembly}) && $config->{assembly} ne $config->{cache_assembly}) {
     die("ERROR: Mismatch in assembly versions from config (".$config->{assembly}.") and cache info.txt file (".$config->{cache_assembly}.")\n");
   }
+
+  opendir CACHE, $config->{dir};
+  my @cache_dir_files = readdir CACHE;
   
   # check if there's a FASTA file in there
   if(!defined($config->{fasta})) {
-    opendir CACHE, $config->{dir};
-    my ($fa) = grep {/\.fa(\.gz)?$/} readdir CACHE;
+    my ($fa) = grep {/\.fa(\.gz)?$/} @cache_dir_files;
     
     if(defined $fa) {
       $config->{fasta} = $config->{dir}.'/'.$fa;
       debug("Auto-detected FASTA file in cache directory") unless defined $config->{quiet};
     }
+  }
+  
+  # check if there's a synonyms file in there
+  if(my ($syn_file) = grep {$_ eq 'chr_synonyms.txt'} @cache_dir_files) {
+    read_chromosome_synonyms($config, $config->{dir}.'/'.$syn_file);
   }
   
   # disable HGVS if no FASTA file found and it was switched on by --everything
@@ -1723,6 +1735,34 @@ sub setup_forking {
       exit(0);
     }
   }
+}
+
+# get chromosome synonyms from a file
+sub read_chromosome_synonyms {
+  my $config = shift;
+  my $file = shift;
+
+  if($file) {
+    open IN, $file or die("ERROR: Could not read synonyms file $file: $!");
+
+    my $synonyms = $config->{chromosome_synonyms} ||= {};
+
+    while(<IN>) {
+      chomp;
+      my @split = split(/\s+/, $_);
+
+      my $ref = shift @split;
+
+      foreach my $syn(@split) {
+        $synonyms->{$ref}->{$syn} = 1;
+        $synonyms->{$syn}->{$ref} = 1;
+      }
+    }
+
+    close IN;
+  }
+
+  return $config->{chromosome_synonyms} ||= {};
 }
 
 # gets regulatory adaptors

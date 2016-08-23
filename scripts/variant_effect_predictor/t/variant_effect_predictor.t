@@ -196,6 +196,15 @@ $expected = "ENSG00000154719\tENST00000352957\tTranscript\tintron_variant";
 
 ok($output =~ /$expected/, "consequence type - intron_variant") or diag("Expected\n$expected\n\nGot\n$output");
 
+input(qq{NC_000021.9 25606454 25606454 G/C + test});
+$output = `$cmd`;
+$expected =
+  "ENSG00000154719\tENST00000307301\tTranscript\tmissense_variant\t".
+  "317\t275\t92\tA/G\tgCc/gGc";
+
+ok($output =~ /$expected/, "use synonym") or diag("Expected\n$expected\n\nGot\n$output");
+
+
 
 ## VARIANT TYPES
 ################
