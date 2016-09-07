@@ -144,12 +144,12 @@ while(<$in_file_handle>) {
   $data->{seqname} =~ s/chr//ig if !$config->{fasta_db}->length($data->{seqname});
 
   # check chr synonyms
-  unless(defined($config->{fasta_db}->length($data->{seqname}))) {
+  unless(defined($config->{fasta_db}->length($data->{seqname})) && $config->{fasta_db}->length($data->{seqname}) > 0) {
     my $synonyms = get_seq_region_synonyms($config);
     $data->{seqname} = $synonyms->{$data->{seqname}} if $synonyms->{$data->{seqname}};
   }
 
-  unless(defined($config->{fasta_db}->length($data->{seqname}))) {
+  unless(defined($config->{fasta_db}->length($data->{seqname})) && $config->{fasta_db}->length($data->{seqname}) > 0) {
     warn("WARNING: Could not find chromosome named ".$data->{seqname}." in FASTA file\n") unless $config->{missing_chromosomes}->{$data->{seqname}} || $config->{verbose};
     $config->{missing_chromosomes}->{$data->{seqname}} = 1;
     next;
@@ -782,11 +782,13 @@ sub get_seq_region_synonyms {
       -species    => $config->{species} =~ /^[a-z]+\_[a-z]+/i ? $config->{species} : undef,
     );
 
-    my $sa = $reg->get_adaptor($config->{species}, 'core', 'slice');
+    my $sa;
+
+    eval {$sa = $reg->get_adaptor($config->{species}, 'core', 'slice')};
 
     my %synonyms = ();
 
-    if($sa) {
+    if(!$@ && $sa) {
       my $slices = $sa->fetch_all('toplevel');
 
       foreach my $slice(@$slices) {
