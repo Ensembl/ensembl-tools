@@ -332,6 +332,9 @@ sub main {
   debug($config->{stats}->{filter_count}, "/$total_vf_count variants remain after filtering") if (defined($config->{check_frequency})) && !defined($config->{quiet});
     
   debug("Executed ", defined($Bio::EnsEMBL::DBSQL::StatementHandle::count_queries) ? $Bio::EnsEMBL::DBSQL::StatementHandle::count_queries : 'unknown number of', " SQL statements") if defined($config->{count_queries}) && !defined($config->{quiet});
+
+  # call finish method for each plugin
+  finish_plugins($config);
     
   # finalise run-time stats
   $config->{stats}->{var_count} = $total_vf_count;
@@ -1222,6 +1225,16 @@ sub configure_plugins {
         }
     }
 } 
+
+# call finish method if available for custom plugins
+sub finish_plugins {
+  my $config = shift;
+  foreach my $instance (@{$config->{plugins}}) {
+    if ($instance->can('finish')) {
+      $instance->finish();
+    }
+  }
+}
 
 # connects to DBs (not done in offline mode)
 sub connect_to_dbs {
