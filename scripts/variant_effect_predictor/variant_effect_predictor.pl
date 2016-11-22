@@ -35,7 +35,7 @@ Variant Effect Predictor - a script to predict the consequences of genomic varia
 
 http://www.ensembl.org/info/docs/tools/vep/script/index.html
 
-Version 86
+Version 87
 
 by Will McLaren (wm2@ebi.ac.uk)
 =cut
@@ -73,7 +73,7 @@ use Bio::EnsEMBL::Variation::Utils::VEP qw(
 use Bio::EnsEMBL::Variation::Utils::FastaSequence qw(setup_fasta);
 
 # global vars
-my $VERSION = '86';
+my $VERSION = '87';
 
 my %ts_tv = (
   'A/G' => 'Ts',
