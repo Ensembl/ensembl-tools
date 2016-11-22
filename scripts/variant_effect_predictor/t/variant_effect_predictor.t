@@ -341,7 +341,7 @@ ok($output =~ /1043\/1199\s+1001\/1062\s+334\/353/, "total length");
 input('21 25587736 esc C T . . .');
 $output = `$cmd --hgvs`;
 my $no_esc = `$cmd --hgvs --no_escape`;
-ok($no_esc =~ /p\.=/ && $output =~ /p\.\%3D/, "no escape");
+ok($no_esc =~ /p\.Ser341=/ && $output =~ /p\.Ser341\%3D/, "no escape");
 
 
 ## colocated stuff
