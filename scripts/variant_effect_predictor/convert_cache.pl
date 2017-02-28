@@ -184,14 +184,25 @@ sub main {
       
       # read cache info
       read_cache_info($config);
+
+      # work out which types we're processing based on cache info and user options
+      my @types;
+      push @types, '_var' unless ($config->{cache_var_type} || '') eq 'tabix' || !$config->{cache_variation_cols};
+      if($config->{sereal}) {
+        push @types, qw(_tr _reg) unless ($config->{cache_serialiser_type} || '') eq 'sereal';
+      }
+
+      unless(@types) {
+        debug($config, "No unprocessed types remaining, skipping");
+        next;
+      }
       
       # get pos col
       my @cols = @{$config->{cache_variation_cols}};
       my %var_cols = map {$cols[$_] => $_} (0..$#cols);
       $config->{pos_col} = $var_cols{start};
       
-      foreach my $t($config->{sereal} ? qw(_tr _reg _var) : qw(_var)) {
-      #foreach my $t(qw(_tr _reg _var)) {
+      foreach my $t(@types) {
         
         my %chr_files;
         my $total = 0;
