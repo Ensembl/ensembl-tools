@@ -35,7 +35,7 @@ use Bio::EnsEMBL::Variation::Utils::VariationEffect qw(overlap);
 use Bio::DB::Fasta;
 use Bio::EnsEMBL::Registry;
 
-our $VERSION = 87;
+our $VERSION = 88;
 
 
 # set defaults
