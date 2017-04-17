@@ -1274,13 +1274,13 @@ sub connect_to_dbs {
                 -pass       => $config->{password},
                 -port       => $config->{port},
                 -db_version => $config->{db_version},
-                -species    => $config->{species} =~ /^[a-z]+\_[a-z]+/i ? $config->{species} : undef,
+#                -species    => $config->{species} =~ /^[a-z]+\_[a-z]+/i ? $config->{species} : undef,
                 -verbose    => $config->{verbose},
                 -no_cache   => $config->{no_slice_cache},
             );
 	  }
         }
-        
+ 
         eval { $reg->set_reconnect_when_lost() };
         
         # get meta container adaptors to check version
