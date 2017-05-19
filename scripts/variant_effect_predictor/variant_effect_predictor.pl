@@ -2339,6 +2339,13 @@ sub summarise_stats {
     foreach my $chr(keys %{$config->{stats}->{chr}}) {
       $config->{stats}->{chr_totals}->{$chr} += $config->{stats}->{chr}->{$chr}->{$_} for keys %{$config->{stats}->{chr}->{$chr}};
       
+      # Fetch chromosome length when the script is not using cache
+      if (!$config->{stats}->{chr_lengths}->{$chr} && !$config->{offline}) {
+        my $coord_system = ($config->{slice_cache}->{$chr}) ? $config->{slice_cache}->{$chr}->coord_system->name : 'chromosome';
+        my $chr_slice = $config->{sa}->fetch_by_region($coord_system, $chr);
+        $config->{stats}->{chr_lengths}->{$chr} = $chr_slice->length if ($chr_slice);
+      }
+
       my $start = 0;
       my %tmp;
       
