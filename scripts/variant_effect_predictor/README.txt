@@ -1,40 +1,13 @@
-############################
-#                          #
-# Variant Effect Predictor #
-#                          #
-############################
+### IMPORTANT NOTICE ###
 
-Copyright (c) 1999-2015 The European Bioinformatics Institute and
-Genome Research Limited.  All rights reserved.
+As of Ensembl release 89 (May 2017), VEP is no longer available as part of the ensembl-tools repository.
 
-This software is distributed under a modified Apache license.
-For license details, please see
+VEP is now available in the ensembl-vep repository: https://github.com/Ensembl/ensembl-vep
 
-http://www.ensembl.org/info/about/legal/code_licence.html
+Documentation: http://www.ensembl.org/info/docs/tools/vep/script/index.html
 
-Please email comments or questions to the public Ensembl
-developers list at <http://lists.ensembl.org/mailman/listinfo/dev>.
+Previous versions of VEP are available in release branches of ensembl-tools:
 
-Questions may also be sent to the Ensembl help desk at
-<http://www.ensembl.org/Help/Contact>
-  
-Quickstart
-==========
-
-Install API and cache files, run in offline mode:
-
-perl INSTALL.pl
-perl variant_effect_predictor.pl --offline
-
-
-Documentation
-=============
-
-For a summary of command line flags, run:
-
-perl variant_effect_predictor.pl --help
-
-For full documentation see
-
-http://www.ensembl.org/info/docs/tools/vep/script/index.html
-
+git clone https://github.com/Ensembl/ensembl-tools.git
+cd ensembl-tools/scripts/variant_effect_predictor
+git checkout release/88
