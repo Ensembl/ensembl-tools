@@ -25,7 +25,7 @@
 # # chromosome:GRCh37:7:490000:500000:1
 # chromosome:GRCh37:7:490000:500000:1,chromosome:GRCh37:7:490000:500000:1
 
-:NCBI34:7:490000:500000:    # a slice on chromosome 7 on the NCBI34 assembly
-:NCBI35:7:490000:500000:    # a slice on the NCBI35 assembly
-:NCBI36:7:490000:500000:    # etc.
-:GRCh37:7:490000:500000:
+chromosome:NCBI34:7:490000:500000:    # a slice on chromosome 7 on the NCBI34 assembly
+chromosome:NCBI35:7:490000:500000:    # a slice on the NCBI35 assembly
+chromosome:NCBI36:7:490000:500000:    # etc.
+chromosome:GRCh37:7:490000:500000:
