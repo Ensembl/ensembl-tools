@@ -46,5 +46,7 @@ script: "./travisci/harness.sh"
 
 notifications:
   email:
-    on_success: always
-    on_failure: always
+    on_failure: change
+  slack:
+    secure: Bw+6bQcT0XiToZqT4ouNA9KRk9K8h+FG5bzDJkvl7d/oU1kxKCBy5BvZcrLDT3DpuMsFIZLhUPfjzRmOk5xH9D4da3PNB+SFPLZUtjhSozY9ky1KAIuHnXbJYkF84TSyeysVawPEGxDXa2O55jJzDYI9DOeXtQomucqLohip/O4=
+    on_failure: change
